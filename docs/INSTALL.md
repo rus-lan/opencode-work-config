@@ -63,7 +63,7 @@ npm install
 
 ```bash
 # mapps (multi-repo workspace)
-go install github.com/rus-lan/multiApps/cmd/mapps@latest
+curl -fsSL https://raw.githubusercontent.com/rus-lan/multiApps/main/install.sh | sh
 
 # graphify (knowledge graph) - опционально
 uv tool install graphifyy

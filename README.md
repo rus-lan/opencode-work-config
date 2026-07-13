@@ -17,7 +17,7 @@ cd ~/.config/opencode
 npm install
 
 # 4. Установить дополнительные утилиты
-go install github.com/rus-lan/multiApps/cmd/mapps@latest
+curl -fsSL https://raw.githubusercontent.com/rus-lan/multiApps/main/install.sh | sh
 
 # 5. Готово! Запустите opencode в любом проекте
 opencode
@@ -131,7 +131,7 @@ git clone git@github.com:rus-lan/opencode-work-config.git ~/.config/opencode
 cp ~/.config/opencode/.env.example ~/.config/opencode/.env
 # Отредактируйте .env
 cd ~/.config/opencode && npm install
-go install github.com/rus-lan/multiApps/cmd/mapps@latest
+curl -fsSL https://raw.githubusercontent.com/rus-lan/multiApps/main/install.sh | sh
 ```
 
 ## Лицензия
