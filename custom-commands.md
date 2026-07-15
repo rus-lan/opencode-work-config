@@ -25,3 +25,27 @@
 - `/caveman full` — полная краткость
 - `/caveman ultra` — максимальное сжатие
 - `/caveman stop` — вернуться к обычному режиму
+
+---
+
+## `/orchestrate <task>`
+
+Запускает полный workflow с оркестрацией через `@orchestrator`:
+
+1. **Grill-me + Research** — допрос плана + параллельный deep research (2-3 агента)
+2. **Implementation** — параллельная реализация (по 1 агенту на стек)
+3. **Review** — параллельные Standards + Spec review
+4. **Testing** — параллельные unit/integration/e2e тесты
+
+**Примеры:**
+- `/orchestrate добавить авторизацию через OAuth`
+- `/orchestrate рефакторинг модуля оплаты`
+- `/orchestrate мигрировать на React 19`
+
+**Как работает:**
+1. Активирует `@orchestrator` agent
+2. Запускает grill-me для проверки плана
+3. Спавнит параллельных research agents с разными углами
+4. После утверждения — параллельная реализация
+5. Review двумя параллельными агентами (Standards + Spec)
+6. Тестирование с автоматическим исправлением багов

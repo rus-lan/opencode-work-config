@@ -131,6 +131,7 @@
     "enabled": [
       "caveman",
       "grill-me",
+      "full-workflow",
       "config-pull",
       "project-pull",
       "project-push",
@@ -138,23 +139,33 @@
       "workspace-init",
       "design",
       "graphify",
-      "mapps"
+      "mapps",
+      "implement",
+      "code-review",
+      "research",
+      "grilling",
+      "diagnosing-bugs"
     ]
   },
 
-  "workflow": {
-    "maxParallelAgents": 3,
-    "reviewGate": {
-      "enabled": true,
-      "threshold": ["feature", "refactor", "bugfix-critical"],
-      "skipThreshold": ["docs", "test", "chore", "rename"]
-    },
-    "timeouts": {
-      "desearch-researcher": 300000,
-      "desearch-synthesizer": 180000,
-      "dev-agents": 600000,
-      "reviewer": 180000,
-      "explore": 60000
+  "agent": {
+    "orchestrator": {
+      "mode": "primary",
+      "model": "qwen3.5-122b",
+      "temperature": 0.2,
+      "permission": {
+        "task": {
+          "*": "allow",
+          "desearch-researcher": "allow",
+          "react-dev": "allow",
+          "go-dev": "allow",
+          "rust-dev": "allow",
+          "reviewer": "allow",
+          "general": "allow",
+          "explore": "allow",
+          "scout": "allow"
+        }
+      }
     }
   }
 }
