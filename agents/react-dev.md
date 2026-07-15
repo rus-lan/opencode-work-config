@@ -10,8 +10,8 @@ permissions:
   grep: allow
   bash: allow
   task: deny
-model: qwen3.6-35b
-fallback: qwen3.6-35b-no-think
+model: ecom-qwen36-35b/qwen3.6-35b
+fallback: ecom-qwen36-35b-no-think/qwen3.6-35b-no-think
 ---
 
 You are a React frontend specialist. You write clean, maintainable React code following modern patterns.

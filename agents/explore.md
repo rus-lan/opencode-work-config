@@ -10,7 +10,7 @@ permissions:
   grep: allow
   bash: allow
   task: deny
-model: qwen3.6-35b-no-think
+model: ecom-qwen36-35b/qwen3.6-35b-no-think
 fallback: giga3-10b
 ---
 

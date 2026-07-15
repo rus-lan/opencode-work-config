@@ -9,7 +9,6 @@
   },
 
   "provider": {
-
     "ecom-qwen35-122b": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "qwen3.5-122b",
@@ -149,22 +148,36 @@
   },
 
   "agent": {
-    "orchestrator": {
+    "build": {
       "mode": "primary",
-      "model": "qwen3.5-122b",
+      "model": "ecom-qwen35-122b/qwen3.5-122b",
       "temperature": 0.2,
+      "description": "Оркестратор полного workflow: grill-me → research → implement → review → testing",
       "permission": {
         "task": {
           "*": "allow",
           "desearch-researcher": "allow",
+          "desearch-synthesizer": "allow",
           "react-dev": "allow",
           "go-dev": "allow",
           "rust-dev": "allow",
           "reviewer": "allow",
           "general": "allow",
           "explore": "allow",
-          "scout": "allow"
-        }
+          "scout": "allow",
+          "diagnosing-bugs": "allow"
+        },
+        "skill": "allow",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "plan": {
+      "mode": "primary",
+      "description": "Агент для планирования без изменений кода",
+      "permission": {
+        "edit": "deny",
+        "bash": "ask"
       }
     }
   }
