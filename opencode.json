@@ -162,6 +162,9 @@
           "go-dev": "allow",
           "rust-dev": "allow",
           "reviewer": "allow",
+          "reviewer-standards": "allow",
+          "reviewer-spec": "allow",
+          "reviewer-arch": "allow",
           "general": "allow",
           "explore": "allow",
           "scout": "allow",
@@ -174,10 +177,11 @@
     },
     "plan": {
       "mode": "primary",
-      "description": "Агент для планирования без изменений кода",
+      "description": "Агент для планирования и план-ревью (edit deny)",
       "permission": {
         "edit": "deny",
-        "bash": "ask"
+        "bash": "ask",
+        "read": "allow"
       }
     }
   }
