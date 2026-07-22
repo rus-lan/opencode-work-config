@@ -10,6 +10,7 @@ permissions:
   grep: allow
   bash: deny
   task: deny
+mode: subagent
 model: ecom-qwen35-122b/qwen3.5-122b
 fallback: qwen3.5-122b-no-think
 ---

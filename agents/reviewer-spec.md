@@ -2,7 +2,7 @@
 name: reviewer-spec
 version: 1.0.0
 description: Spec reviewer - checks implementation against requirements (read-only)
-mode: parallel
+mode: subagent
 model: ecom-qwen35-122b/qwen3.5-122b
 ---
 

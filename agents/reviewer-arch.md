@@ -2,7 +2,7 @@
 name: reviewer-arch
 version: 1.0.0
 description: Architecture reviewer - checks design soundness, layering, scalability (read-only)
-mode: parallel
+mode: subagent
 model: ecom-qwen35-122b/qwen3.5-122b
 ---
 

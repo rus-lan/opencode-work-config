@@ -11,6 +11,7 @@ permissions:
   bash: allow
   WebSearch: allow
   WebFetch: allow
+mode: subagent
 model: ecom-deepseek4-flash-max/deepseek-v4-flash:max
 fallback: ecom-deepseek4-flash/deepseek-v4-flash
 ---
