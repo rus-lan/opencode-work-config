@@ -351,7 +351,7 @@ verify_installation() {
   log "Правила: ${rule_count} (авто-загружаются через instructions)"
 
   # Проверка MCP
-  log "MCP: aistats + playwright + context7"
+  log "MCP: aistats + playwright"
   if command -v aistats &>/dev/null; then
     log "aistats CLI: доступен"
   else
@@ -371,7 +371,7 @@ verify_installation() {
   echo -e "  ${BLUE}Правила:${NC}       ${rule_count} (авто-загружаются)"
   echo -e "  ${BLUE}Агенты:${NC}        ${agent_count}"
   echo -e "  ${BLUE}Скиллы:${NC}        ${skill_count}"
-  echo -e "  ${BLUE}MCP:${NC}           aistats, playwright, context7"
+  echo -e "  ${BLUE}MCP:${NC}           aistats, playwright"
   echo -e "  ${BLUE}Защита:${NC}        guard.sh (dangerous compound-команды)"
   echo -e "  ${BLUE}Запуск:${NC}        opencode"
 }

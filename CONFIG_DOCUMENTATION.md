@@ -476,17 +476,16 @@ SEO-писатель для генерации SEO-оптимизированн�
 
 ## 📋 3b. Правила (Rules)
 
-12 правил в `rules/`, авто-загружаются через `instructions: ["rules/*.md"]`:
+11 правил в `rules/`, авто-загружаются через `instructions: ["rules/*.md"]`:
 
 | Правило | Размер | Назначение |
 |---------|--------|------------|
-| frontend-components | 25 KB | Компонентная архитектура — ui-kit/ui/entity/widgets, CVA, cn(), Storybook |
+| frontend-components | 25 KB | Компонентная архитектура — ui-kit/entity/widgets, CVA, cn(), Storybook |
 | frontend-theme | 20 KB | Тема — CSS variables, data-theme, ThemeBox, генерация |
 | tauri-bridge | 18 KB | Tauri v2 — IPC, команды, события, безопасность |
 | frontend-zustand | 6.7 KB | Zustand — создание сторов, persist, partialize |
 | bmad-impl-story-cycle | 5.8 KB | BMAD цикл реализации — эпики, ревью, Fable-гейт |
 | opencode-implementer | 7.2 KB | Как opencode работает как executor под оркестрацией |
-| context7 | 3 KB | Использование context7 MCP для проверки API |
 | frontend-hooks | 1.5 KB | Паттерны хуков — one per concern, return pattern |
 | go-backend | 1.8 KB | Go — структура, ошибки, middleware |
 | go-observability | 3.0 KB | Go — логгирование, метрики, трассировка, health checks |
@@ -570,7 +569,6 @@ void $`aistats ingest --tool opencode`.quiet().catch(() => {});
 | Сервер | Тип | Команда | Назначение |
 |--------|-----|---------|------------|
 | aistats | local | `aistats mcp` | Сбор метрик токенов и стоимости |
-| context7 | remote | `https://mcp.context7.com/mcp` | Проверка API библиотек — получение актуальной, версионно-специфичной документации |
 | playwright | local | `@playwright/mcp@latest` | E2E тестирование (headless chromium) |
 
 ### aistats MCP
@@ -580,9 +578,6 @@ void $`aistats ingest --tool opencode`.quiet().catch(() => {});
 - Мониторить расходы по моделям
 - Получать рекомендации по эффективности
 Запускается автоматически opencode при старте через секцию `mcp` в `opencode.json`.
-
-### context7 MCP
-Context7 — удалённый MCP-сервер для проверки документации библиотек. Используется оркестратором и Honesty Protocol для верификации API-сигнатур вместо гадания. Не требует установки, не создаёт дочерних процессов (в отличие от local/npx MCP).
 
 ---
 

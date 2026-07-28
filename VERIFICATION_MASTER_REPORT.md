@@ -29,7 +29,7 @@
 | 4 | CRITICAL | opencode.json | Опечатка в имени переменной окружения: `ECOM_DEEPSEEL4_FLASH_TOKEN` → должно быть `ECOM_DEEPSEEK4_FLASH_TOKEN` | `opencode.json` | строки 95, 112 | Исправить `DEEPSEEL4` → `DEEPSEEK4` во всех упоминаниях (2 раза) |
 | 5 | CRITICAL | opencode.json | Мёртвый путь в Playwright MCP: `${HOME}/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome` может не существовать | `opencode.json` | строка 69 | Заменить на `playwright` команду без жёсткого пути или проверить существование |
 | **HIGH** |
-| 6 | HIGH | Правила | Правило `go-observability.md` не включено в README rules index (строка 176 перечисляет 11 правил без него) | `README.md` | строка 176 | Добавить `go-observability` в список правил в README |
+| 6 | HIGH | Правила | Правило `go-observability.md` не включено в README rules index (строка 176 перечисляет 10 правил без него) | `README.md` | строка 176 | Добавить `go-observability` в список правил в README |
 | 7 | HIGH | Правила | Правило `go-observability.md` не включено в CONFIG_DOCUMENTATION.md rules section | `CONFIG_DOCUMENTATION.md` | строки 478-490 | Добавить `go-observability` в таблицу правил CONFIG_DOCUMENTATION |
 | 8 | HIGH | Агенты | Агент `seo-writer` имеет mode/permissions mismatch: в agents/ есть `seo-writer.md` но в opencode.json описан с `bash: ask` вместо `bash: deny` | `agents/seo-writer.md`, `opencode.json` | opencode.json:130 | Синхронизировать permissions: установить `bash: deny` в opencode.json или обновить файл агента |
 | 9 | HIGH | Файловая система | Директория `commands/` содержит `.md` файлы без соответствующих `.sh` скриптов: `context.md`, `grill-me.md`, `mapps.md`, `m.md` | `commands/` | N/A | Создать `.sh` скрипты для каждой команды или убрать `.md` файлы если команды не нужны |
@@ -138,8 +138,8 @@ mkdir -p skills/implement
 **Действие:** Добавить `go-observability` в список правил
 
 ```diff
-- `rules/` — 11 правил для сабагентов: frontend-components, frontend-hooks, frontend-theme, frontend-zustand, go-backend, rust-errors, tauri-bridge, context7, opencode-implementer, bmad-impl-story-cycle.
-+ `rules/` — 12 правил для сабагентов: frontend-components, frontend-hooks, frontend-theme, frontend-zustand, go-backend, go-observability, rust-errors, tauri-bridge, context7, opencode-implementer, bmad-impl-story-cycle.
+- `rules/` — 11 правил для сабагентов: frontend-components, frontend-hooks, frontend-theme, frontend-zustand, go-backend, rust-errors, tauri-bridge, opencode-implementer, bmad-impl-story-cycle.
++ `rules/` — 12 правил для сабагентов: frontend-components, frontend-hooks, frontend-theme, frontend-zustand, go-backend, go-observability, rust-errors, tauri-bridge, opencode-implementer, bmad-impl-story-cycle.
 ```
 
 #### 7. Добавить `go-observability` в CONFIG_DOCUMENTATION.md

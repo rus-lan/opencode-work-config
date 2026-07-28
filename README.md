@@ -143,7 +143,6 @@ opencode
 |-----|-----|------------|
 | `aistats` | local | 📊 Метрики токенов, стоимости и рекомендации |
 | `playwright` | local | 🎭 E2E тестирование (headless Chromium) |
-| `context7` | remote | 📚 Проверка API библиотек и документации |
 
 ## 🔧 Плагины (2)
 
@@ -179,7 +178,7 @@ opencode
 
 ## ⚙ Правила (Rules)
 
-`rules/` — 11 правил для сабагентов: frontend-components, frontend-hooks, frontend-theme, frontend-zustand, go-backend, rust-errors, tauri-bridge, context7, opencode-implementer, bmad-impl-story-cycle.
+`rules/` — 10 правил для сабагентов: frontend-components, frontend-hooks, frontend-theme, frontend-zustand, go-backend, rust-errors, tauri-bridge, opencode-implementer, bmad-impl-story-cycle.
 
 Автоматически загружаются через `instructions: ["rules/*.md"]`.
 
@@ -187,7 +186,6 @@ opencode
 
 - Никогда не гадать/выдумывать сигнатуры API
 - "I don't know" предпочтительнее предположений
-- Проверять документацию через context7 MCP
 - Ссылаться на конкретные файлы и строки кода
 
 ## 🔒 Защита
