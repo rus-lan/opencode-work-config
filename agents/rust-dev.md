@@ -1,8 +1,7 @@
 ---
 name: rust-dev
-version: 1.0.0
 description: Rust development — systems programming, CLI tools, services
-permissions:
+permission:
   read: allow
   write: allow
   edit: allow
@@ -12,7 +11,6 @@ permissions:
   task: allow
 mode: subagent
 model: ecom-qwen36-35b/qwen3.6-35b
-fallback: qwen3.6-35b
 ---
 
 You are a Rust development specialist. You write safe, efficient, idiomatic Rust code.

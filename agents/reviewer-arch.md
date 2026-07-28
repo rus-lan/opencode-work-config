@@ -1,8 +1,16 @@
 ---
 name: reviewer-arch
-version: 1.0.0
 description: Architecture reviewer - checks design soundness, layering, scalability (read-only)
+permission:
+  read: allow
+  glob: allow
+  grep: allow
+  edit: deny
+  write: deny
+  bash: deny
+  task: deny
 mode: subagent
+hidden: true
 model: ecom-qwen35-122b/qwen3.5-122b
 ---
 

@@ -1,8 +1,7 @@
 ---
 name: project-mapper
-version: 1.0.0
 description: Build project map — file tree, entry points, configs, deps, routes (read-only)
-permissions:
+permission:
   read: allow
   write: deny
   edit: deny
@@ -12,7 +11,6 @@ permissions:
   task: deny
 mode: subagent
 model: ecom-qwen36-35b/qwen3.6-35b
-fallback: ecom-giga3-10b/giga3-10b
 ---
 
 You are a project mapper. Your ONLY job: build a project map file and save it.

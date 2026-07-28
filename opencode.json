@@ -1,27 +1,27 @@
 {
   "$schema": "https://opencode.ai/config.json",
-
   "model": "ecom-qwen35-122b/qwen3.5-122b",
-
   "default_agent": "orchestrator",
-
   "permission": {
     "bash": "allow",
     "edit": "allow"
   },
-
   "provider": {
     "ecom-qwen35-122b": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "qwen3.5-122b",
       "options": {
         "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_QWEN35_122b_TOKEN}"
+        "apiKey": "{env:ECOM_QWEN35_122b_TOKEN}",
+        "timeout": 120000,
+        "chunkTimeout": 60000,
+        "headerTimeout": 30000,
+        "setCacheKey": true
       },
       "models": {
         "qwen3.5-122b": {
           "name": "qwen3.5-122b",
-          "description": "QWEN 3.5 122B (локальный)",
+          "description": "QWEN 3.5 122B (\u043b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0439)",
           "limit": {
             "context": 128000,
             "output": 8192
@@ -33,18 +33,21 @@
         }
       }
     },
-
     "ecom-qwen36-35b": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "qwen3.6-35b",
       "options": {
         "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_QWEN36_35b_TOKEN}"
+        "apiKey": "{env:ECOM_QWEN36_35b_TOKEN}",
+        "timeout": 120000,
+        "chunkTimeout": 60000,
+        "headerTimeout": 30000,
+        "setCacheKey": true
       },
       "models": {
         "qwen3.6-35b": {
           "name": "qwen3.6-35b",
-          "description": "QWEN 3.6 35B (локальный)",
+          "description": "QWEN 3.6 35B (\u043b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0439)",
           "limit": {
             "context": 128000,
             "output": 8192
@@ -56,13 +59,16 @@
         }
       }
     },
-
     "ecom-deepseek4-flash-max": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "deepseek-v4-flash:max",
       "options": {
         "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_DEEPSEEL4_FLASH_MAX_TOKEN}"
+        "apiKey": "{env:ECOM_DEEPSEEL4_FLASH_MAX_TOKEN}",
+        "timeout": 120000,
+        "chunkTimeout": 60000,
+        "headerTimeout": 30000,
+        "setCacheKey": true
       },
       "models": {
         "deepseek-v4-flash:max": {
@@ -82,51 +88,68 @@
         }
       }
     },
-
     "ecom-qwen35-122b-no-think": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "qwen3.5-122b",
       "options": {
         "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_QWEN35_122b_NO_THINK_TOKEN}"
+        "apiKey": "{env:ECOM_QWEN35_122b_NO_THINK_TOKEN}",
+        "timeout": 120000,
+        "chunkTimeout": 60000,
+        "headerTimeout": 30000,
+        "setCacheKey": true
       },
       "models": {
         "qwen3.5-122b": {
           "name": "qwen3.5-122b",
-          "description": "QWEN 3.5 122B (апи no-think, алиас)",
+          "description": "QWEN 3.5 122B (\u0430\u043f\u0438 no-think, \u0430\u043b\u0438\u0430\u0441)",
           "limit": {
             "context": 128000,
             "output": 8192
+          },
+          "effort": {
+            "current": "medium",
+            "limit": "high"
           }
         }
       }
     },
-
     "ecom-qwen36-35b-no-think": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "qwen3.6-35b",
       "options": {
         "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_QWEN36_35b_NO_THINK_TOKEN}"
+        "apiKey": "{env:ECOM_QWEN36_35b_NO_THINK_TOKEN}",
+        "timeout": 120000,
+        "chunkTimeout": 60000,
+        "headerTimeout": 30000,
+        "setCacheKey": true
       },
       "models": {
         "qwen3.6-35b": {
           "name": "qwen3.6-35b",
-          "description": "QWEN 3.6 35B (апи no-think, алиас)",
+          "description": "QWEN 3.6 35B (\u0430\u043f\u0438 no-think, \u0430\u043b\u0438\u0430\u0441)",
           "limit": {
             "context": 128000,
             "output": 8192
+          },
+          "effort": {
+            "current": "medium",
+            "limit": "high"
           }
         }
       }
     },
-
     "ecom-deepseek4-flash": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "deepseek-v4-flash",
       "options": {
         "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_DEEPSEEL4_FLASH_TOKEN}"
+        "apiKey": "{env:ECOM_DEEPSEEL4_FLASH_TOKEN}",
+        "timeout": 120000,
+        "chunkTimeout": 60000,
+        "headerTimeout": 30000,
+        "setCacheKey": true
       },
       "models": {
         "deepseek-v4-flash": {
@@ -146,13 +169,16 @@
         }
       }
     },
-
     "ecom-giga3-10b": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "giga3-10b",
       "options": {
         "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_GIGA3_10b_TOKEN}"
+        "apiKey": "{env:ECOM_GIGA3_10b_TOKEN}",
+        "timeout": 120000,
+        "chunkTimeout": 60000,
+        "headerTimeout": 30000,
+        "setCacheKey": true
       },
       "models": {
         "giga3-10b": {
@@ -166,7 +192,6 @@
       }
     }
   },
-
   "mcp": {
     "aistats": {
       "type": "local",
@@ -175,16 +200,36 @@
         "mcp"
       ],
       "enabled": true
+    },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@playwright/mcp@latest",
+        "--executable-path",
+        "${HOME}/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome",
+        "--headless",
+        "--no-sandbox",
+        "--isolated"
+      ],
+      "environment": {
+        "PLAYWRIGHT_HOST_PLATFORM_OVERRIDE": "ubuntu24.04-x64"
+      },
+      "enabled": true
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true
     }
   },
-
   "agent": {
     "build": {
       "mode": "primary",
       "model": "ecom-qwen35-122b/qwen3.5-122b",
       "temperature": 0.15,
       "color": "success",
-      "description": "Агент-исполнитель с полным доступом для реализации задач",
+      "description": "\u0410\u0433\u0435\u043d\u0442-\u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c \u0441 \u043f\u043e\u043b\u043d\u044b\u043c \u0434\u043e\u0441\u0442\u0443\u043f\u043e\u043c \u0434\u043b\u044f \u0440\u0435\u0430\u043b\u0438\u0437\u0430\u0446\u0438\u0438 \u0437\u0430\u0434\u0430\u0447",
       "permission": {
         "task": {
           "*": "allow"
@@ -198,22 +243,18 @@
         "grep": "allow",
         "webfetch": "allow",
         "websearch": "allow"
-      }
+      },
+      "steps": 50
     },
     "orchestrator": {
       "mode": "primary",
       "model": "ecom-qwen35-122b/qwen3.5-122b",
       "temperature": 0.15,
       "color": "#FF5733",
-      "description": "Строгий оркестратор. НИЧЕГО не делает сам — только спавнит сабагентов с простыми задачами.",
+      "description": "\u0421\u0442\u0440\u043e\u0433\u0438\u0439 \u043e\u0440\u043a\u0435\u0441\u0442\u0440\u0430\u0442\u043e\u0440. \u041d\u0418\u0427\u0415\u0413\u041e \u043d\u0435 \u0434\u0435\u043b\u0430\u0435\u0442 \u0441\u0430\u043c \u2014 \u0442\u043e\u043b\u044c\u043a\u043e \u0441\u043f\u0430\u0432\u043d\u0438\u0442 \u0441\u0430\u0431\u0430\u0433\u0435\u043d\u0442\u043e\u0432 \u0441 \u043f\u0440\u043e\u0441\u0442\u044b\u043c\u0438 \u0437\u0430\u0434\u0430\u0447\u0430\u043c\u0438.\n\n## Honesty Protocol (\u043d\u0438\u043a\u043e\u0433\u0434\u0430 \u043d\u0435 \u043d\u0430\u0440\u0443\u0448\u0430\u0442\u044c!)\n- \u041d\u0438\u043a\u043e\u0433\u0434\u0430 \u043d\u0435 \u0441\u043f\u0435\u043a\u0443\u043b\u0438\u0440\u0443\u0439 \u043e \u043a\u043e\u0434\u0435, \u043a\u043e\u0442\u043e\u0440\u044b\u0439 \u043d\u0435 \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043b. \u041e\u0442\u043a\u0440\u043e\u0439 \u0438 \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u0439 \u0444\u0430\u0439\u043b\u044b \u043f\u0440\u0435\u0436\u0434\u0435 \u0447\u0435\u043c \u0434\u0435\u043b\u0430\u0442\u044c \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u044f.\n- \u0415\u0441\u043b\u0438 \u043d\u0435 \u0443\u0432\u0435\u0440\u0435\u043d \u2014 \u0441\u043a\u0430\u0436\u0438 \"I don't know\" \u0438\u043b\u0438 \"\u043d\u0435 \u0443\u0432\u0435\u0440\u0435\u043d\". \u042d\u0442\u043e \u0432\u0441\u0435\u0433\u0434\u0430 \u043f\u0440\u0435\u0434\u043f\u043e\u0447\u0442\u0438\u0442\u0435\u043b\u044c\u043d\u0435\u0435 \u0433\u0430\u0434\u0430\u043d\u0438\u044f.\n- \u041d\u0438\u043a\u043e\u0433\u0434\u0430 \u043d\u0435 \u0432\u044b\u0434\u0443\u043c\u044b\u0432\u0430\u0439 \u0441\u0438\u0433\u043d\u0430\u0442\u0443\u0440\u044b \u0444\u0443\u043d\u043a\u0446\u0438\u0439, API endpoints, CLI \u0444\u043b\u0430\u0433\u0438 \u0438\u043b\u0438 \u043a\u043e\u043d\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u043e\u043d\u043d\u044b\u0435 \u043e\u043f\u0446\u0438\u0438.\n- \u041f\u0440\u043e\u0432\u0435\u0440\u044f\u0439 \u0444\u0430\u043a\u0442\u044b \u0447\u0435\u0440\u0435\u0437 \u0447\u0442\u0435\u043d\u0438\u0435 \u0438\u0441\u0445\u043e\u0434\u043d\u043e\u0433\u043e \u043a\u043e\u0434\u0430 \u0438\u043b\u0438 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u0438. \u041d\u0435 \u043f\u043e\u043b\u0430\u0433\u0430\u0439\u0441\u044f \u043d\u0430 training data \u0434\u043b\u044f \u0432\u0435\u0440\u0441\u0438\u043e\u043d\u043d\u043e-\u0437\u0430\u0432\u0438\u0441\u0438\u043c\u044b\u0445 \u0434\u0435\u0442\u0430\u043b\u0435\u0439.\n- \u041e\u0442\u0434\u0435\u043b\u044f\u0439 \u0444\u0430\u043a\u0442\u044b \u043e\u0442 \u043f\u0440\u0435\u0434\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0439 \u044f\u0432\u043d\u043e. \u0415\u0441\u043b\u0438 \u043f\u0440\u0435\u0434\u043f\u043e\u043b\u0430\u0433\u0430\u0435\u0448\u044c \u2014 \u043f\u0440\u0435\u0444\u0438\u043a\u0441 \"I believe\" / \"\u041f\u043e\u043b\u0430\u0433\u0430\u044e\".",
       "permission": {
         "task": {
-          "*": "allow",
-          "project-mapper": "allow",
-          "test-agent": "allow",
-          "security-check": "allow",
-          "soc-check": "allow",
-          "diagnosing-bugs": "allow"
+          "*": "allow"
         },
         "skill": "allow",
         "read": "deny",
@@ -221,19 +262,50 @@
         "edit": "deny",
         "bash": "deny",
         "glob": "deny",
-        "grep": "deny"
-      }
+        "grep": "deny",
+        "todowrite": "allow",
+        "question": "allow"
+      },
+      "steps": 30
     },
     "plan": {
       "mode": "primary",
       "model": "ecom-qwen35-122b/qwen3.5-122b",
       "color": "info",
-      "description": "Агент для планирования и план-ревью (edit deny)",
+      "description": "\u0410\u0433\u0435\u043d\u0442 \u0434\u043b\u044f \u043f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f \u0438 \u043f\u043b\u0430\u043d-\u0440\u0435\u0432\u044c\u044e (edit deny)",
       "permission": {
         "edit": "deny",
         "bash": "ask",
         "read": "allow"
-      }
+      },
+      "steps": 30
     }
+  },
+  "small_model": "ecom-qwen36-35b/qwen3.6-35b",
+  "instructions": [
+    "rules/*.md"
+  ],
+  "subagent_depth": 2,
+  "watcher": {
+    "ignore": [
+      "node_modules/**",
+      ".git/**",
+      ".bmad/**",
+      ".research/**",
+      "*.log",
+      "dist/**",
+      ".next/**",
+      ".cache/**"
+    ]
+  },
+  "compaction": {
+    "auto": true,
+    "reserved": 8000,
+    "tail_turns": 3,
+    "prune": true
+  },
+  "tool_output": {
+    "max_lines": 2000,
+    "max_bytes": 51200
   }
 }

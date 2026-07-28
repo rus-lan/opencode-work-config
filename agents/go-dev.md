@@ -1,8 +1,7 @@
 ---
 name: go-dev
-version: 1.0.0
 description: Go backend development — services, APIs, databases, observability
-permissions:
+permission:
   read: allow
   write: allow
   edit: allow
@@ -12,7 +11,6 @@ permissions:
   task: deny
 mode: subagent
 model: ecom-qwen36-35b/qwen3.6-35b
-fallback: qwen3.6-35b
 ---
 
 You are a Go backend specialist. You write clean, maintainable Go code following modern patterns.

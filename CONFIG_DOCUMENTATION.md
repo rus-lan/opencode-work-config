@@ -15,9 +15,11 @@
    - 2.2 [Сабагенты](#22-сабагенты-sub-agents)
    - 2.3 [Стратегия моделей по этапам](#23-стратегия-моделей-по-этапам)
 3. [🛠 Skills (установленные)](#-3-skills-установленные)
+3b. [📋 Правила (Rules)](#-3b-правила-rules)
 4. [🔌 Плагины](#-4-плагины)
 5. [⌨ Команды](#-5-команды)
 6. [🌐 MCP Серверы](#-6-mcp-серверы)
+6b. [🔒 Защита и безопасность](#-6b-защита-и-безопасность)
 7. [🧩 Провайдеры моделей](#-7-провайдеры-моделей)
 8. [📋 Расшифровка файлов конфигурации](#-8-расшифровка-файлов-конфигурации)
 9. [🚀 Установка на новом устройстве](#-9-установка-на-новом-устройстве)
@@ -167,6 +169,58 @@
 ```
 /soc-check
 ```
+
+### Дополнительные возможности конфигурации
+
+#### Авто-загрузка правил (instructions)
+Все 11 правил из `rules/` автоматически загружаются в system prompt через `"instructions": ["rules/*.md"]`. Правила доступны всем агентам без явного вызова `skill()`.
+
+#### Лёгкая модель (small_model)
+`"small_model": "ecom-qwen36-35b/qwen3.6-35b"` — используется для нетворческих задач (генерация тайтлов, компактизация), экономя квоты qwen3.5-122b.
+
+#### Управление контекстом (compaction)
+```json
+{
+  "auto": true,
+  "reserved": 8000,
+  "tail_turns": 3,
+  "prune": true
+}
+```
+Автоматическая компактизация при заполнении контекста, резерв 8K токенов, сохранение 3 последних ходов, обрезка старых tool output.
+
+#### Игнорирование watcher
+```json
+{
+  "ignore": ["node_modules/**", ".git/**", ".bmad/**", ".research/**", "*.log", "dist/**"]
+}
+```
+Watcher не реагирует на изменения в шумных директориях.
+
+#### Лимиты tool output
+```json
+{
+  "max_lines": 2000,
+  "max_bytes": 51200
+}
+```
+Предотвращает забивание контекста большим выводом инструментов.
+
+#### Provider timeouts и setCacheKey
+Все 6 провайдеров настроены с:
+- `timeout: 120000` (120с на полный запрос)
+- `chunkTimeout: 60000` (60с между SSE чанками)
+- `headerTimeout: 30000` (30с на получение заголовков)
+- `setCacheKey: true` (промпт-кэширование для экономии токенов)
+
+#### Вложенность сабагентов (subagent_depth)
+`"subagent_depth": 2` — оркестратор может спавнить сабагентов, которые могут спавнить своих сабагентов.
+
+#### Лимит шагов (steps)
+- `build`: 50 шагов
+- `orchestrator`: 30 шагов
+- `plan`: 30 шагов
+Защита от бесконечных циклов выполнения.
 
 ---
 
@@ -387,6 +441,39 @@
 | **project-push** | Push улучшенных правил/агентов/скиллов из проекта в `~/claude-config` | skill вызывает воркфлоу | Обновление центрального конфига |
 | **workspace-init** | Инициализация workspace для проекта — изоляция конфига от app репозиториев, выбор методологии | `/workspace-init` | Настройка нового проекта, добавление методологий (GSD/BMAD/Superpowers) |
 
+### unrobot — детекция и удаление AI-маркеров
+- **Назначение:** Определяет и удаляет AI-маркеры в тексте (filler vocabulary, copula avoidance, rule-of-three, flat sentence rhythm, transition overuse, typography artifacts)
+- **Языки:** 8 (en, ru, de, es, fr, pt, zh, ar)
+- **Pipeline:** Detect → Rewrite → Verify (3-stage, never skip stage 3)
+- **Команда:** `/unrobot <file> [--lang <code>] [--deep]`
+- **Документация:** `skills/unrobot/SKILL.md`
+
+### bmad-impl — планирование больших задач
+- **Назначение:** Декомпозиция крупных задач через эпики → истории → ревью по классу риска
+- **Когда использовать:** Задача на 3+ файла, миграции данных, архитектурные решения
+- **Pipeline:** Kickoff → Epics → Stories → Review → Sprint
+- **Команда:** `/bmad-impl <task> [--phase <name>]`
+- **Документация:** `skills/bmad-impl/SKILL.md`
+
+---
+
+## 📋 3b. Правила (Rules)
+
+11 правил в `rules/`, авто-загружаются через `instructions: ["rules/*.md"]`:
+
+| Правило | Размер | Назначение |
+|---------|--------|------------|
+| frontend-components | 25 KB | Компонентная архитектура — ui-kit/ui/entity/widgets, CVA, cn(), Storybook |
+| frontend-theme | 20 KB | Тема — CSS variables, data-theme, ThemeBox, генерация |
+| tauri-bridge | 18 KB | Tauri v2 — IPC, команды, события, безопасность |
+| frontend-zustand | 6.7 KB | Zustand — создание сторов, persist, partialize |
+| bmad-impl-story-cycle | 5.8 KB | BMAD цикл реализации — эпики, ревью, Fable-гейт |
+| opencode-implementer | 7.2 KB | Как opencode работает как executor под оркестрацией |
+| context7 | 3 KB | Использование context7 MCP для проверки API |
+| frontend-hooks | 1.5 KB | Паттерны хуков — one per concern, return pattern |
+| go-backend | 1.8 KB | Go — структура, ошибки, middleware |
+| rust-errors | 1.5 KB | Rust — error enums, thiserror, severity |
+
 ---
 
 ## 🔌 4. Плагины
@@ -461,17 +548,56 @@ void $`aistats ingest --tool opencode`.quiet().catch(() => {});
 
 ## 🌐 6. MCP Серверы
 
-| Сервер | Тип | Команда | Статус |
-|--------|-----|---------|--------|
-| aistats | local | `aistats mcp` | enabled |
+| Сервер | Тип | Команда | Назначение |
+|--------|-----|---------|------------|
+| aistats | local | `aistats mcp` | Сбор метрик токенов и стоимости |
+| context7 | remote | `https://mcp.context7.com/mcp` | Проверка API библиотек — получение актуальной, версионно-специфичной документации |
+| playwright | local | `@playwright/mcp@latest` | E2E тестирование (headless chromium) |
 
-**aistats MCP** — интеграция с системой сбора метрик сессий AiStats. Позволяет:
+### aistats MCP
+Интеграция с системой сбора метрик сессий AiStats. Позволяет:
 - Отслеживать длительность сессии
 - Собирать статистику по токенам (input/output)
 - Мониторить расходы по моделям
 - Получать рекомендации по эффективности
-
 Запускается автоматически opencode при старте через секцию `mcp` в `opencode.json`.
+
+### context7 MCP
+Context7 — удалённый MCP-сервер для проверки документации библиотек. Используется оркестратором и Honesty Protocol для верификации API-сигнатур вместо гадания. Не требует установки, не создаёт дочерних процессов (в отличие от local/npx MCP).
+
+---
+
+## 🔒 6b. Защита и безопасность
+
+### guard.sh
+Скрипт `/home/ruslan/.config/opencode/guard.sh` защищает от опасных compound-команд.
+
+**Блокирует:**
+- `rm` в compound-командах (&&, ||, ;)
+- `wget`, `curl -o/-O` (скачивание)
+- `pip3 install`, `brew install`, `cargo install`, `go install`
+- `git push --force`, `git reset --hard`, `git clean -fdx`
+
+**Логика:**
+- Простые опасные команды → exit 0 (обычная система разрешений)
+- Compound-команды с опасными операциями → exit 1 (блокировка)
+
+**Команды:**
+```bash
+./guard.sh --list        # Список опасных паттернов
+./guard.sh --install     # Установка как pre-commit hook
+./guard.sh "ls -la"      # Проверка (exit 0 — безопасно)
+./guard.sh "echo hi && rm -rf /tmp"  # Блокировка (exit 1)
+```
+
+### pre-commit.sh
+Валидация перед коммитом:
+1. Type checking (tsc --noEmit)
+2. Linting (eslint)
+3. Тесты (npm test)
+4. Spec traceability
+5. Context consistency
+6. Commit message format (conventional commits)
 
 ---
 
@@ -655,6 +781,13 @@ bash ~/.config/opencode/scripts/setup-opencode-config.sh
 6. Добавит `~/.local/bin` в PATH (если нет)
 7. Проверит что opencode работает
 
+**Шаг 6: Установка guard hooks (рекомендовано)**
+
+Установка pre-commit хуков для защиты от опасных команд:
+```bash
+~/.config/opencode/guard.sh --install
+```
+
 ---
 
 ## 🔄 10. Обновление конфигурации
@@ -673,6 +806,21 @@ npm install
 
 **Global config sync:**
 - `config-pull` skill — pull последних изменений из `~/claude-config`
+
+**Guard hooks:**
+```bash
+# Установить guard hooks после обновления
+~/.config/opencode/guard.sh --install
+```
+
+**После git pull проверь:**
+```bash
+# Обновить зависимости
+npm install
+
+# Проверить, что guard.sh актуален
+~/.config/opencode/guard.sh --list
+```
 
 ---
 

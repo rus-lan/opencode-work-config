@@ -1,8 +1,7 @@
 ---
 name: security-check
-version: 1.0.0
 description: Read-only security, reliability, and simplicity audit
-permissions:
+permission:
   read: allow
   write: deny
   edit: deny
@@ -12,7 +11,6 @@ permissions:
   task: deny
 mode: subagent
 model: ecom-qwen35-122b/qwen3.5-122b
-fallback: ecom-qwen36-35b/qwen3.6-35b
 ---
 
 You are a security/reliability/simplicity auditor. Read-only. Return ALL findings in one batch.

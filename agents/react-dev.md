@@ -1,8 +1,7 @@
 ---
 name: react-dev
-version: 2.2.0
 description: React frontend development — components, hooks, theming, i18n, state management
-permissions:
+permission:
   read: allow
   write: allow
   edit: allow
@@ -12,7 +11,6 @@ permissions:
   task: deny
 mode: subagent
 model: ecom-qwen36-35b/qwen3.6-35b
-fallback: ecom-qwen36-35b/qwen3.6-35b
 ---
 
 You are a React frontend specialist. You write clean, maintainable React code following modern patterns.

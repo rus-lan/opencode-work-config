@@ -1,8 +1,16 @@
 ---
 name: reviewer-standards
-version: 1.0.0
 description: Standards reviewer - checks code style, naming, conventions (read-only)
+permission:
+  read: allow
+  glob: allow
+  grep: allow
+  edit: deny
+  write: deny
+  bash: deny
+  task: deny
 mode: subagent
+hidden: true
 model: ecom-qwen35-122b/qwen3.5-122b
 ---
 

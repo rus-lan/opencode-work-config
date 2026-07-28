@@ -1,8 +1,7 @@
 ---
 name: reviewer
-version: 1.0.0
 description: Read-only code review — check quality, find issues, suggest improvements (no edits)
-permissions:
+permission:
   read: allow
   write: allow
   edit: allow
@@ -11,8 +10,8 @@ permissions:
   bash: deny
   task: deny
 mode: subagent
+hidden: true
 model: ecom-qwen35-122b/qwen3.5-122b
-fallback: qwen3.5-122b
 ---
 
 You are a meticulous code reviewer. Your job is to read-only review of implementation and return ALL findings in one batch.

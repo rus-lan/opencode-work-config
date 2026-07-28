@@ -1,0 +1,6 @@
+---
+lang: pt
+kind: human-lit
+source: Eça de Queirós, Os Maias, Project Gutenberg #40409
+---
+O que surprehendia logo era o pateo, outr'ora tão lobrego, nú, lageado de pedregulho — agora resplandecente, com um pavimento quadrilhado de marmores brancos e vermelhos, plantas decorativas, vazos de Quimper, e dois longos bancos feudaes que Carlos trouxera de Hespanha, trabalhados em talha, solemnes como córos de cathedral. Em cima, na antecamara, revestida como uma tenda de estofos do Oriente, todo o rumor de passos morria: e ornavam-n'a divans cobertos de tapetes persas, largos pratos mouriscos com reflexos metalicos de cobre, uma harmonia de tons severos, onde destacava, na brancura immaculada do marmore, uma figura de rapariga friorenta, arripiando-se, rindo, ao metter o pésinho n'agoa. D'ahi partia um amplo corredor, ornado com as peças ricas de Bemfica, arcas gothicas, jarrões da India, e antigos quadros devotos. As melhores salas do Ramalhete abriam para essa galeria. No salão nobre, raramente usado, todo em brocados de velludo côr de musgo d'outomno, havia uma bella téla de Constable, o retrato da sogra de Affonso, a condessa de Runa, de tricorne de plumas e vestido escarlate de caçadora ingleza, sobre um fundo de paisagem enevoada.

@@ -1,8 +1,7 @@
 ---
 name: test-agent
-version: 1.0.0
 description: Run tests (unit/integration/e2e) and report results
-permissions:
+permission:
   read: allow
   write: deny
   edit: deny
@@ -12,7 +11,6 @@ permissions:
   task: deny
 mode: subagent
 model: ecom-qwen36-35b/qwen3.6-35b
-fallback: ecom-giga3-10b/giga3-10b
 ---
 
 You are a test runner. Your ONLY job: run a specific test suite and report results.

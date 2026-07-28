@@ -194,6 +194,33 @@ install_deps() {
   fi
 }
 
+# ---- step 4b: install guard hooks ----
+setup_hooks() {
+  section "4b/7 — Установка guard-хуков"
+
+  # Install guard pre-commit hook
+  if [ -d "$CONFIG_DIR/.git" ]; then
+    local hooks_dir="$CONFIG_DIR/.git/hooks"
+    if [ -f "$CONFIG_DIR/guard.sh" ]; then
+      chmod +x "$CONFIG_DIR/guard.sh"
+      log "guard.sh: установлен"
+    fi
+  fi
+
+  if command -v git &>/dev/null; then
+    # Install pre-commit.sh as git hook if in a git repo
+    if git rev-parse --git-dir 2>/dev/null; then
+      local hook_path
+      hook_path="$(git rev-parse --git-dir)/hooks/pre-commit"
+      if [ -f "$CONFIG_DIR/pre-commit.sh" ]; then
+        cp "$CONFIG_DIR/pre-commit.sh" "$hook_path"
+        chmod +x "$hook_path"
+        log "pre-commit hook: установлен"
+      fi
+    fi
+  fi
+}
+
 # ---- step 5: create .env file ----
 
 setup_env() {
@@ -221,8 +248,8 @@ setup_env() {
   echo ""
   echo -e "  ${BLUE}ECOM_QWEN35_122b_TOKEN${NC}         — Qwen 3.5 122B"
   echo -e "  ${BLUE}ECOM_QWEN36_35b_TOKEN${NC}           — Qwen 3.6 35B"
-  echo -e "  ${BLUE}ECOM_DEEPSEEL4_FLASH_MAX_TOKEN${NC}  — DeepSeek v4 flash max"
-  echo -e "  ${BLUE}ECOM_DEEPSEEL4_FLASH_TOKEN${NC}      — DeepSeek v4 flash"
+  echo -e "  ${BLUE}ECOM_DEEPSEEK4_FLASH_MAX_TOKEN${NC}  — DeepSeek v4 flash max"
+  echo -e "  ${BLUE}ECOM_DEEPSEEK4_FLASH_TOKEN${NC}      — DeepSeek v4 flash"
   echo -e "  ${BLUE}ECOM_GIGA3_10b_TOKEN${NC}            — Giga v3 10B"
   echo -e "  ${BLUE}ECOM_QWEN35_122b_NO_THINK_TOKEN${NC} — Qwen 3.5 122B (no-think)"
   echo -e "  ${BLUE}ECOM_QWEN36_35b_NO_THINK_TOKEN${NC}  — Qwen 3.6 35B (no-think)"
@@ -329,22 +356,24 @@ verify_installation() {
   # Проверка агентов
   local agent_count
   agent_count=$(find "$CONFIG_DIR/agents" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-  if [ "$agent_count" -gt 0 ]; then
-    log "Агенты: ${agent_count} файлов"
-  fi
+  log "Агенты: ${agent_count} (3 primary + $((agent_count - 3)) subagent types)"
 
   # Проверка скиллов
   local skill_count
   skill_count=$(find "$CONFIG_DIR/skills" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
-  if [ "$skill_count" -gt 0 ]; then
-    log "Скиллы: ${skill_count} установлено"
-  fi
+  log "Скиллы: ${skill_count}"
+
+  # Проверка правил
+  local rule_count
+  rule_count=$(find "$CONFIG_DIR/rules" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+  log "Правила: ${rule_count} (авто-загружаются через instructions)"
 
   # Проверка MCP
+  log "MCP: aistats + playwright + context7"
   if command -v aistats &>/dev/null; then
     log "aistats CLI: доступен"
   else
-    warn "aistats CLI не найден (необходим для MCP-сервера aistats)"
+    warn "aistats CLI не найден — установи для трекинга метрик: https://github.com/t34-dev/aistats"
   fi
 
   echo ""
@@ -355,9 +384,14 @@ verify_installation() {
   fi
 
   echo ""
-  info "Тестовый запуск: opencode run \"Привет!\""
-  info "Для просмотра документации: cat ${CONFIG_DIR}/CONFIG_DOCUMENTATION.md"
-  info "Для полного workflow: /start <задача>"
+  echo -e "  ${BLUE}Конфигурация:${NC}  ${CONFIG_DIR}"
+  echo -e "  ${BLUE}Документация:${NC}  ${CONFIG_DIR}/CONFIG_DOCUMENTATION.md"
+  echo -e "  ${BLUE}Правила:${NC}       ${rule_count} (авто-загружаются)"
+  echo -e "  ${BLUE}Агенты:${NC}        ${agent_count}"
+  echo -e "  ${BLUE}Скиллы:${NC}        ${skill_count}"
+  echo -e "  ${BLUE}MCP:${NC}           aistats, playwright, context7"
+  echo -e "  ${BLUE}Защита:${NC}        guard.sh (dangerous compound-команды)"
+  echo -e "  ${BLUE}Запуск:${NC}        opencode"
 }
 
 # ---- main ----
@@ -374,6 +408,7 @@ main() {
   check_opencode || warn "Продолжаем без opencode (установи позже)"
   setup_config_repo
   install_deps
+  setup_hooks
   setup_env
   setup_path
   verify_installation
