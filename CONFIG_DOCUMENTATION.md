@@ -120,7 +120,7 @@
 
 **Что делает:** Параллельный запуск тестов. При падениях — диагностика и исправление.
 
-**Запускаемый сабагент:** `test-agent` (qwen3.6-35b, fallback: giga3-10b)
+**Запускаемый сабагент:** `test-agent` (qwen3.6-35b, fallback: qwen3.6-35b)
 
 **Процесс:**
 1. Запуск unit + integration + e2e тестов параллельно
@@ -283,7 +283,7 @@ SEO-писатель для генерации SEO-оптимизированн�
 | Параметр | Значение |
 |----------|----------|
 | **Модель** | qwen3.6-35b |
-| **Fallback** | giga3-10b |
+| **Fallback** | qwen3.6-35b |
 | **Роль** | Быстрое исследование кодовой базы — поиск файлов, структуры, usages |
 | **Разрешения** | read/glob/grep/bash=allow, write/edit/task=deny |
 | **Когда вызывает оркестратор** | Для поиска файлов, структуры, usages перед имплементацией |
@@ -293,7 +293,7 @@ SEO-писатель для генерации SEO-оптимизированн�
 | Параметр | Значение |
 |----------|----------|
 | **Модель** | qwen3.6-35b |
-| **Fallback** | giga3-10b |
+| **Fallback** | qwen3.6-35b |
 | **Роль** | Построение карты проекта — file tree, entry points, configs, deps, routes |
 | **Разрешения** | read/glob/grep/bash=allow, write/task=deny |
 | **Когда вызывает оркестратор** | Этап 0 — перед любой работой по проекту |
@@ -390,7 +390,7 @@ SEO-писатель для генерации SEO-оптимизированн�
 | Параметр | Значение |
 |----------|----------|
 | **Модель** | qwen3.6-35b |
-| **Fallback** | giga3-10b |
+| **Fallback** | qwen3.6-35b |
 | **Роль** | Запуск тестов (unit/integration/e2e) и отчёт |
 | **Разрешения** | read/glob/grep/bash=allow, write/edit/task=deny |
 | **Когда вызывает оркестратор** | Этап 4 — параллельный запуск unit/integration/e2e |
@@ -489,6 +489,7 @@ SEO-писатель для генерации SEO-оптимизированн�
 | context7 | 3 KB | Использование context7 MCP для проверки API |
 | frontend-hooks | 1.5 KB | Паттерны хуков — one per concern, return pattern |
 | go-backend | 1.8 KB | Go — структура, ошибки, middleware |
+| go-observability | 3.0 KB | Go — логгирование, метрики, трассировка, health checks |
 | rust-errors | 1.5 KB | Rust — error enums, thiserror, severity |
 
 ---

@@ -1,5 +1,6 @@
 ---
 name: context-metrics
+version: 1.0.0
 description: Мониторинг и отображение метрик использования контекста, лимитов и effort
 compatibility: opencode
 metadata:

@@ -1,5 +1,6 @@
 ---
 name: full-workflow
+version: 1.0.0
 description: Запускает полный workflow через @orchestrator: map → grill-me → research → implement → review → testing → safety-check → soc-check
 ---
 

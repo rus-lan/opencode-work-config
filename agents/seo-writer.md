@@ -1,15 +1,15 @@
 ---
 name: seo-writer
 description: SEO-optimized content writer — keyword research, meta descriptions, heading structure, readability
-mode: subagent
+mode: primary
 model: ecom-qwen35-122b/qwen3.5-122b
 permission:
   read: allow
-  write: allow
-  edit: allow
+  write: deny
+  edit: deny
   glob: allow
   grep: allow
-  bash: allow
+  bash: ask
   task: allow
   webfetch: allow
 ---

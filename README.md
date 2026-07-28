@@ -1,8 +1,8 @@
 # ⚡ Opencode Work Configuration
 
-![Version](https://img.shields.io/badge/version-2.0-blue) ![Model](https://img.shields.io/badge/model-qwen3.5--122b-green) ![Agents](https://img.shields.io/badge/agents-21-orange) ![Skills](https://img.shields.io/badge/skills-21-purple) ![OpenCode](https://img.shields.io/badge/opencode-1.18.7-red)
+![Version](https://img.shields.io/badge/version-2.0-blue) ![Model](https://img.shields.io/badge/model-qwen3.5--122b-green) ![Agents](https://img.shields.io/badge/agents-23-orange) ![Skills](https://img.shields.io/badge/skills-22-purple) ![OpenCode](https://img.shields.io/badge/opencode-1.18.7-red)
 
-Готовая конфигурация opencode с тремя primary агентами, 15 сабагентами, оркестратором, полным CI-воркфлоу из 7 этапов и 21 скиллом.
+Готовая конфигурация opencode с тремя primary агентами, 17 сабагентами, оркестратором, полным CI-воркфлоу из 7 этапов и 22 скиллами.
 
 ## 🚀 Быстрая установка
 
@@ -34,7 +34,7 @@ opencode
 | `@plan` | qwen3.5-122b | 📋 Планирование и ревью (read-only, bash=ask) |
 | `seo-writer` | qwen3.5-122b | ✍️ SEO-писатель (read-only, write=deny) |
 
-### Сабагенты (15)
+### Сабагенты (17)
 
 | Агент | Модель | Роль |
 |-------|--------|------|
@@ -53,6 +53,7 @@ opencode
 | `reviewer-standards` | qwen3.5-122b | 📏 Ревью по кодстайлу |
 | `security-check` | qwen3.5-122b | 🔒 Аудит безопасности (fallback: qwen3.6-35b) |
 | `soc-check` | qwen3.5-122b | ✅ Проверка SOC/контрактов (fallback: qwen3.6-35b) |
+| `implement` | qwen3.6-35b | 🔨 Реализация задач по спецификации |
 
 ### Workflow
 
@@ -95,7 +96,7 @@ opencode
 | `ecom-qwen36-35b-no-think` | qwen3.6-35b (no-think) | 128K | 8K |
 | `ecom-giga3-10b` | giga3-10b | 64K | 4K |
 
-## 🛠 Skills (21)
+## 🛠 Skills (22)
 
 | Skill | Описание |
 |-------|----------|

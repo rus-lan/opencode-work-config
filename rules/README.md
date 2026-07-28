@@ -3,7 +3,7 @@
 Правила для сабагентов-разработчиков (react-dev, go-dev, rust-dev).
 Загружаются через `skill("rule-name")` или по совпадению с задачей.
 
-## Индекс
+## Индекс (10 правил)
 
 | Правило | Для кого | Описание |
 |---------|----------|----------|
@@ -12,6 +12,7 @@
 | frontend-theme | react-dev | Тема — CSS variables, data-theme, ThemeBox, генерация |
 | frontend-zustand | react-dev | Zustand — создание сторов, persist, partialize, actions |
 | go-backend | go-dev | Go — структура, ошибки, middleware, HTTP, тесты |
+| go-observability | go-dev | Go — логгирование, метрики, трассировка, health checks |
 | rust-errors | rust-dev | Rust — error enums, thiserror, severity, Mutex |
 | tauri-bridge | rust-dev/react-dev | Tauri v2 — IPC, команды, события, безопасность |
 | opencode-implementer | orchestrator | Как opencode работает как executor под оркестрацией |

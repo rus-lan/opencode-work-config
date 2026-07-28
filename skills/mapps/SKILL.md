@@ -1,5 +1,6 @@
 ---
 name: mapps
+version: 1.0.0
 description: Multi-repo workspace management — clone repos, generate Makefile, build project maps
 ---
 
