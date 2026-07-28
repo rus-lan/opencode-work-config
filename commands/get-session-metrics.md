@@ -1,13 +1,14 @@
-# /get-session-metrics
-
-Получение метрик текущей сессии из aistats.
+---
+name: get-session-metrics
+description: Получение метрик текущей сессии из aistats.
+agent: build
+subtask: true
+---
 
 ## Использование
 
-```
 /get-session-metrics
 /get-session-metrics --verbose
-```
 
 ## Описание
 

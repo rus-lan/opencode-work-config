@@ -41,3 +41,13 @@ Default: ecom-qwen35-122b/qwen3.5-122b
 
 ## Notes
 Orchestrator never executes tasks directly — it only delegates. All actual work is performed by specialized sub-agents. Temperature: 0.15. Steps: 30.
+
+## Git Commit/Push
+
+**НИКОГДА не делай git commit или git push без явного разрешения пользователя.**
+
+- Показывай `git status` и `git diff --stat` когда есть изменения
+- Спрашивай явно: "Закоммитить эти изменения?"
+- Жди явного ответа "да", "закоммить", "пуш"
+- Не предполагай что "пользователь хочет закоммитить"
+- В конце сессии НАПОМНИ о незакоммиченных изменениях

@@ -179,6 +179,22 @@
       ],
       "enabled": true
     },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@playwright/mcp@latest",
+        "--executable-path",
+        "${HOME}/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome",
+        "--headless",
+        "--no-sandbox",
+        "--isolated"
+      ],
+      "environment": {
+        "PLAYWRIGHT_HOST_PLATFORM_OVERRIDE": "ubuntu24.04-x64"
+      },
+      "enabled": true
+    },
     "context7": {
       "type": "remote",
       "url": "https://mcp.context7.com/mcp",

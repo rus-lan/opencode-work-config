@@ -13,3 +13,24 @@ This command delegates to the grill-me skill. See the skill for full trigger ins
 
 ## Usage
 Invoke via /grill-me or ask the agent to "grill my plan" or "допроси мой план".
+
+## triggers
+
+Скилл также активируется при фразах:
+- "прогони меня через grill-me"
+- "запусти допрос"
+- "grill my plan"
+- "допроси мой план"
+
+## Example
+
+```
+/grill-me
+/grill-me мой план архитектуры
+/grill-me решение использовать PostgreSQL
+```
+
+## Связанные скиллы
+
+- `bmad-impl` — планирование больших задач
+- `desearch` — глубокий веб-ресёрч после допроса
