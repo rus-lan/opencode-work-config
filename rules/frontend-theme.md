@@ -490,17 +490,7 @@ The module owns its own external store (`store.ts`). `useSyncExternalStore` brid
 
 Only the renderer loads CSS and runs Vite's dev server with file watching. `main` and `preload` are server-side build targets — the plugin would never trigger there.
 
-### Color replacement validation (MANDATORY)
-
-When replacing hardcoded hex colors with CSS variables:
-
-1. **Find BASE_THEME** — read `theme/config.ts` to get `BASE_THEME`. This is the source of truth — all other themes inherit from it. Always validate colors against this theme first.
-2. **Read `{BASE_THEME}/_base.css`** — find the variable and trace its resolved value through all `var()` references to the final concrete hex/rgb.
-3. **Compare values** — the resolved value must visually match the color being replaced. If `--color-card` resolves to `#141414` but you're replacing `#1e2329` — that's a mismatch.
-4. **Fix mismatches** — update the variable value in `{BASE_THEME}/_base.css`, OR add a new variable, OR pick a different existing variable.
-5. **Check other themes** — if the variable is overridden in `light/_base.css` etc., verify those values make sense for that theme.
-
-**Never assume a variable name matches its actual value.** Variable names can be misleading — always verify by reading the CSS.
+Color replacement validation — see `rules/frontend-components.md`
 
 ## Portability Checklist
 

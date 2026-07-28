@@ -251,7 +251,7 @@ cd <workspace-root> && npx bmad-method install
 Creates `_bmad/` and `_bmad-output/` directories. When prompted for IDE, select "Claude Code". Follow any interactive prompts.
 
 ### Superpowers (plugin — not an npx install)
-Superpowers is a Claude Code **plugin**, installed **globally** (`~/.claude/plugins/`), not scaffolded into the workspace dir. It cannot be installed via bash — tell the user to run these inside Claude Code:
+Superpowers is a Claude Code **plugin**, installed **globally** (`~/.config/opencode/plugins/`), not scaffolded into the workspace dir. It cannot be installed via bash — tell the user to run these inside Claude Code:
 ```
 /plugin marketplace add obra/superpowers-marketplace
 /plugin install superpowers@superpowers-marketplace

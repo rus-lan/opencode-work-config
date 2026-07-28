@@ -3,36 +3,13 @@ name: grill-me
 description: Интерактивный режим допроса, разбирающий дерево решений шаг за шагом
 ---
 
-# /grill-me
+# grill-me
 
-Интерактивный допрос вашего плана/решения. Агент задаёт провокационные вопросы, выявляет слабые места и не даёт пройти мимо непроверенных допущений.
+A relentless question-based interview to stress-test a plan or design.
+
+**Source of truth:** `skills/grill-me/SKILL.md`
+
+This command delegates to the grill-me skill. See the skill for full trigger instructions and workflow details.
 
 ## Usage
-
-```
-/grill-me                              # запустить в текущем контексте
-/grill-me <тема>                       # допросить по конкретной теме
-```
-
-## Примеры
-
-```
-/grill-me                              # допрос в текущем контексте разговора
-/grill-me мой план архитектуры         # допросить архитектурный план
-/grill-me решение использовать PostgreSQL  # проверить решение
-```
-
-## Как работает
-
-1. Агент активирует скилл `grill-me`
-2. Задаёт провокационные вопросы по теме
-3. Выявляет слабые места в решениях
-4. Не останавливается пока не доберётся до сути
-
-## Триггеры
-
-Скилл активируется также при фразе:
-- "прогони меня через grill-me"
-- "запусти допрос"
-- "grill my plan"
-- "допроси мой план"
+Invoke via /grill-me or ask the agent to "grill my plan" or "допроси мой план".

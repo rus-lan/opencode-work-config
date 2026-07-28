@@ -1,7 +1,7 @@
 ---
 name: config-pull
 version: 1.0.0
-description: Pull latest changes from ~/claude-config remote and install globally to ~/.claude/
+description: Pull latest changes from ~/claude-config remote and install globally to ~/.config/opencode/
 user-invocable: true
 ---
 
@@ -57,7 +57,7 @@ Pulled N new commits:
 
 Execute `~/claude-config/install.sh` to apply changes globally.
 
-This installs to `~/.claude/`:
+This installs to `~/.config/opencode/`:
 - `settings.json`
 - `CLAUDE.md`
 - hooks

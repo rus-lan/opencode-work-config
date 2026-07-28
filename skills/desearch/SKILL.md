@@ -12,11 +12,11 @@ Research the topic: "$ARGUMENTS"
 ## Step 0 — Ensure Agents Are Available
 
 Check that `desearch-researcher` and `desearch-synthesizer` agents are installed:
-1. Check `~/.claude/agents/desearch-researcher.md` exists
-2. Check `~/.claude/agents/desearch-synthesizer.md` exists
+1. Check `~/.config/opencode/agents/desearch-researcher.md` exists
+2. Check `~/.config/opencode/agents/desearch-synthesizer.md` exists
 
 If either is missing, check if `~/claude-config/` exists:
-- **If yes**: Run `cp ~/claude-config/agents/desearch-*.md ~/.claude/agents/`
+- **If yes**: Run `cp ~/claude-config/agents/desearch-*.md ~/.config/opencode/agents/`
 - **If no**: Clone it: `git clone git@github.com:rus-lan/claude-config.git ~/claude-config` (fallback to HTTPS if SSH fails), then copy agents.
 
 ## Step 1 — Create Output Directory

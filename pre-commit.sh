@@ -32,7 +32,7 @@ fi
 
 # 2. Lint
 echo -n "  [2/6] Linting... "
-if command -v npx &> /dev/null && [ -f "package.json" ]; then
+if command -v npx &> /dev/null && [ -f "package.json" ] && ls eslint.config.* .eslintrc.* 2>/dev/null | grep -q .; then
   if npx eslint --quiet . 2>/dev/null; then
     echo -e "${GREEN}✓${NC}"
   else
@@ -46,7 +46,7 @@ fi
 
 # 3. Test
 echo -n "  [3/6] Running tests... "
-if command -v npx &> /dev/null && [ -f "package.json" ]; then
+if command -v npx &> /dev/null && [ -f "package.json" ] && grep -q '"test"' package.json; then
   if npm test -- --passWithNoTests --maxWorkers=2 2>/dev/null; then
     echo -e "${GREEN}✓${NC}"
   else
@@ -60,8 +60,8 @@ fi
 
 # 4. Spec traceability
 echo -n "  [4/6] Checking spec coverage... "
-if [ -f ".opencode/traceability-check.sh" ]; then
-  if bash .opencode/traceability-check.sh 2>/dev/null; then
+if [ -f "traceability-check.sh" ]; then
+  if bash traceability-check.sh 2>/dev/null; then
     echo -e "${GREEN}✓${NC}"
   else
     echo -e "${YELLOW}⚠ issues found${NC}"
@@ -74,8 +74,8 @@ fi
 
 # 5. Context consistency
 echo -n "  [5/6] Validating context persistence... "
-if [ -f ".opencode/context-check.sh" ]; then
-  if bash .opencode/context-check.sh 2>/dev/null; then
+if [ -f "context-check.sh" ]; then
+  if bash context-check.sh 2>/dev/null; then
     echo -e "${GREEN}✓${NC}"
   else
     echo -e "${YELLOW}⚠ context issues${NC}"

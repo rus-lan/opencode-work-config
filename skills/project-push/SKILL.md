@@ -39,9 +39,9 @@ This ensures we don't push against stale central data.
 
 Compare local project files against central repo:
 
-- **Rules**: Compare content (not `paths:`) of `.claude/rules/*.md` vs `~/claude-config/rules/*.md`
-- **Agents**: Compare `.claude/agents/*.md` vs `~/claude-config/agents/*.md`
-- **Skills**: Compare `.claude/skills/*/SKILL.md` vs `~/claude-config/skills/*/SKILL.md`
+- **Rules**: Compare content (not `paths:`) of `.opencode/rules/*.md` vs `~/claude-config/rules/*.md`
+- **Agents**: Compare `.opencode/agents/*.md` vs `~/claude-config/agents/*.md`
+- **Skills**: Compare `.opencode/skills/*/SKILL.md` vs `~/claude-config/skills/*/SKILL.md`
 
 For each file that exists in both locations, extract content (strip frontmatter paths for rules) and diff.
 List files where content differs. Skip files that are identical.

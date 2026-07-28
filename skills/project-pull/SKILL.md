@@ -43,9 +43,9 @@ If pull fails due to network issues, warn but continue with local version.
 
 Check all files in the current project against central:
 
-- **Rules** (`.claude/rules/*.md`): Compare `version:` in frontmatter. If central is newer, mark for update.
-- **Agents** (`.claude/agents/*.md`): Compare `version:` in frontmatter.
-- **Skills** (`.claude/skills/*/SKILL.md`): Compare `version:` in frontmatter.
+- **Rules** (`.opencode/rules/*.md`): Compare `version:` in frontmatter. If central is newer, mark for update.
+- **Agents** (`.opencode/agents/*.md`): Compare `version:` in frontmatter.
+- **Skills** (`.opencode/skills/*/SKILL.md`): Compare `version:` in frontmatter.
 
 Also check for new files in central that are not installed locally.
 
@@ -108,7 +108,7 @@ For each `path_hints:` entry in the central rule:
 1. Read the central file content
 2. Remove the `path_hints:` block from frontmatter
 3. Insert a `paths:` block with the resolved paths
-4. Write to `.claude/rules/<name>.md`
+4. Write to `.opencode/rules/<name>.md`
 
 ### Example
 

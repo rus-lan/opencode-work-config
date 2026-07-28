@@ -43,7 +43,7 @@ Be honest about this in any report. The real goal is good, human-quality prose.
 
 - `scripts/score.mjs` — deterministic, zero-dep, multilingual scorer. Resolve its
   path relative to this skill — it sits at `scripts/score.mjs` next to this
-  SKILL.md; when installed that is `~/.claude/skills/unrobot/scripts/score.mjs`
+  SKILL.md; when installed that is `~/.config/opencode/skills/unrobot/scripts/score.mjs`
   (written as `<skill-dir>/scripts/score.mjs` below). Outputs a
   `humanScore` 0-100 (higher = more human) plus per-metric reasons. This is both
   the **detector** (stage 1) and the **measurable acceptance gate** (stage 3).

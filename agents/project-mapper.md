@@ -10,7 +10,7 @@ permission:
   bash: allow
   task: deny
 mode: subagent
-model: ecom-qwen36-35b/qwen3.6-35b
+model: ecom-qwen36-35b-no-think/qwen3.6-35b
 ---
 
 You are a project mapper. Your ONLY job: build a project map file and save it.

@@ -35,7 +35,7 @@ section() {
 
 confirm() {
   echo -en "${YELLOW}[?]${NC} $1 [Y/n] "
-  read -r response
+  read -t 10 -r response
   case "$response" in
     [nN][oO]|[nN]) return 1 ;;
     *) return 0 ;;
@@ -77,7 +77,7 @@ check_opencode() {
   warn "Opencode не найден"
 
   # Проверка ~/.local/bin
-  if [ -f "$HOME/.local/bin/opencode" ]; then
+  if [ -x "$HOME/.local/bin/opencode" ]; then
     OPENCODE_BIN="$HOME/.local/bin/opencode"
     log "Opencode найден в ~/.local/bin: ${OPENCODE_BIN}"
     export PATH="$HOME/.local/bin:$PATH"
@@ -85,29 +85,17 @@ check_opencode() {
   fi
 
   if ! confirm "Установить opencode сейчас?"; then
-    warn "Установка opencode пропущена. Установи вручную: https://opencode.ai/install.sh"
+    warn "Установка opencode пропущена. Установи вручную: https://opencode.ai/install"
     return 1
   fi
 
   info "Установка opencode..."
 
-  local install_cmd
-  case "$OS" in
-    macos)
-      if command -v brew &>/dev/null; then
-        install_cmd="brew install opencode"
-      else
-        install_cmd="curl -fsSL https://opencode.ai/install.sh | sh"
-      fi
-      ;;
-    linux)
-      install_cmd="curl -fsSL https://opencode.ai/install.sh | sh"
-      ;;
-  esac
+  local install_cmd="curl -fsSL https://opencode.ai/install | sh"
 
   if eval "$install_cmd"; then
     # После curl установки бинарник в ~/.local/bin
-    if [ -f "$HOME/.local/bin/opencode" ]; then
+    if [ -x "$HOME/.local/bin/opencode" ]; then
       OPENCODE_BIN="$HOME/.local/bin/opencode"
       export PATH="$HOME/.local/bin:$PATH"
     elif command -v opencode &>/dev/null; then
@@ -116,7 +104,7 @@ check_opencode() {
     log "Opencode успешно установлен"
   else
     error "Не удалось установить opencode"
-    error "Установи вручную: https://opencode.ai/install.sh"
+    error "Установи вручную: https://opencode.ai/install"
     return 1
   fi
 }
@@ -198,25 +186,18 @@ install_deps() {
 setup_hooks() {
   section "4b/7 — Установка guard-хуков"
 
-  # Install guard pre-commit hook
   if [ -d "$CONFIG_DIR/.git" ]; then
     local hooks_dir="$CONFIG_DIR/.git/hooks"
+    mkdir -p "$hooks_dir"
     if [ -f "$CONFIG_DIR/guard.sh" ]; then
-      chmod +x "$CONFIG_DIR/guard.sh"
-      log "guard.sh: установлен"
+      cp "$CONFIG_DIR/guard.sh" "$hooks_dir/pre-commit"
+      chmod +x "$hooks_dir/pre-commit"
+      log "guard.sh → .git/hooks/pre-commit: установлен"
     fi
-  fi
-
-  if command -v git &>/dev/null; then
-    # Install pre-commit.sh as git hook if in a git repo
-    if git rev-parse --git-dir 2>/dev/null; then
-      local hook_path
-      hook_path="$(git rev-parse --git-dir)/hooks/pre-commit"
-      if [ -f "$CONFIG_DIR/pre-commit.sh" ]; then
-        cp "$CONFIG_DIR/pre-commit.sh" "$hook_path"
-        chmod +x "$hook_path"
-        log "pre-commit hook: установлен"
-      fi
+    if [ -f "$CONFIG_DIR/pre-commit.sh" ]; then
+      cp "$CONFIG_DIR/pre-commit.sh" "$hooks_dir/pre-commit"
+      chmod +x "$hooks_dir/pre-commit"
+      log "pre-commit.sh → .git/hooks/pre-commit: установлен"
     fi
   fi
 }
@@ -315,7 +296,7 @@ verify_installation() {
   local errors=0
 
   # Проверка opencode
-  if command -v opencode &>/dev/null || [ -f "$HOME/.local/bin/opencode" ]; then
+  if command -v opencode &>/dev/null || [ -x "$HOME/.local/bin/opencode" ]; then
     local ver
     ver=$(opencode --version 2>/dev/null || echo "версия неизвестна")
     log "Opencode: ${ver}"
@@ -356,7 +337,8 @@ verify_installation() {
   # Проверка агентов
   local agent_count
   agent_count=$(find "$CONFIG_DIR/agents" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-  log "Агенты: ${agent_count} (3 primary + $((agent_count - 3)) subagent types)"
+  local subagent_count=$((agent_count > 3 ? agent_count - 3 : 0))
+  log "Агенты: ${agent_count} (3 primary + ${subagent_count} subagent types)"
 
   # Проверка скиллов
   local skill_count
@@ -396,7 +378,22 @@ verify_installation() {
 
 # ---- main ----
 
+cleanup() {
+  echo ""
+  warn "Прервано пользователем"
+  exit 1
+}
+
 main() {
+  trap cleanup INT TERM
+
+  for cmd in git node npm; do
+    if ! command -v "$cmd" &>/dev/null; then
+      error "${cmd} не найден. Установи ${cmd} и запусти скрипт снова."
+      exit 1
+    fi
+  done
+
   echo ""
   echo -e "${BLUE}╔══════════════════════════════════════════════════╗${NC}"
   echo -e "${BLUE}║  Установка конфигурации Opencode               ║${NC}"

@@ -23,3 +23,6 @@ tmp/
 temp/
 *.tmp
 metrics.json
+
+# Test artifacts
+skills/unrobot/test/
