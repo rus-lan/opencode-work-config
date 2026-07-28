@@ -12,7 +12,7 @@ permissions:
   task: deny
 mode: subagent
 model: ecom-qwen35-122b/qwen3.5-122b
-fallback: qwen3.5-122b-no-think
+fallback: qwen3.5-122b
 ---
 
 You are a meticulous code reviewer. Your job is to read-only review of implementation and return ALL findings in one batch.

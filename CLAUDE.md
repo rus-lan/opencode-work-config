@@ -14,6 +14,23 @@
 - Before adding dependencies, check existing package manifests (package.json, Cargo.toml, go.mod) for current versions.
 - Never use placeholder or stub implementations without clearly marking them as TODO.
 
+## Testing Requirements
+
+- **All affected/modified/added code MUST be covered by tests** with minimum **80% code coverage**.
+- Tests must include:
+  - **Positive scenarios** — valid inputs and expected successful outcomes
+  - **Negative scenarios** — invalid inputs, edge cases, and error conditions
+  - **Exception handling** — all cases that throw/return errors must have corresponding test cases
+- **Tests must be based on contracts, not business logic:**
+  - Test **what the code guarantees** (function signatures, type constraints, input/output contracts, validation rules)
+  - Test **all allowed data types and their variations** as defined by the contract
+  - Do NOT test business logic assumptions that may be incomplete or unaware of edge cases
+  - Contracts are the source of truth — they define what MUST work, regardless of current business usage
+  - If a type is accepted by the function, test all valid variations of that type
+  - If a function promises to return a specific type or structure, test that promise holds
+- Tests should be as precise and comprehensive as possible, covering the actual code behavior.
+- Coverage reports should be generated and reviewed as part of the verification process.
+
 ## Naming (Simple English)
 
 - All identifiers — variables, functions, methods, types, structs, fields, packages, files, DB tables/columns, API routes — use **simple, common English words** that a person with a small vocabulary understands.
@@ -122,43 +139,42 @@ This does NOT apply to:
 
 ## Orchestrator Mode
 
-In the main conversation, act ONLY as an orchestrator: plan, spawn subagents, synthesize results, report to user.
+In the main conversation, act ONLY as orchestrator: plan, spawn subagents, synthesize results.
 
-- ALL actual work — code search, reading, editing, running commands, research — delegated to subagents.
-- Pick the closest specialized agent by stack (react-dev for React, go-dev for Go, etc.).
-- Run independent agents in PARALLEL — spawn multiple in one message, not sequentially.
-- Main loop does NOT edit files, run commands, or implement code directly.
+**Детальный workflow:** `agents/orchestrator.md` (7 этапов, параллельные сабагенты, правила декомпозиции).
 
-### Agent Selection Rules
+### Золотое правило
+
+Оркестратор НИЧЕГО не делает сам. Только `task()` → результат → `task()`.
+- ❌ Не читай/пиши/редактируй/ищи/запускай — для этого есть сабагенты
+- ❌ Не исследуй веб — `desearch-researcher`
+- ✅ Только `task()` — spawn → wait → spawn
+
+### Agent Selection
 
 | Task | Agent |
 |------|-------|
-| Find files, map structure, list usages | `explore` |
-| Deep web research, synthesis | `desearch-researcher` + `desearch-synthesizer` |
-| React/TypeScript development | `react-dev` |
-| Go backend development | `go-dev` |
-| Rust development | `rust-dev` |
-| Code review (read-only) | `reviewer` |
-| UI/UX design | `ui-designer` |
+| Карта проекта | `project-mapper` |
+| Поиск по коду | `explore` |
+| Веб-ресёрч | `desearch-researcher` + `synthesizer` |
+| React/TS | `react-dev` |
+| Go | `go-dev` |
+| Rust | `rust-dev` |
+| Code review | `reviewer-standards`, `reviewer-spec`, `reviewer-arch` |
+| Запуск тестов | `test-agent` |
+| Безопасность/надёжность | `security-check` |
+| SOC/контракты | `soc-check` |
+| Исправление багов | `diagnosing-bugs` |
+| UI/UX | `ui-designer` |
 
 ### Parallel Execution
 
-When multiple independent tasks are needed, spawn all agents in one message:
-
+Независимые сабагенты — в одном message:
 ```
-// BAD — sequential
-1. Spawn react-dev → wait → 2. Spawn reviewer
-
-// GOOD — parallel
-Spawn react-dev AND reviewer in same message
+task({ agent: "reviewer-standards", prompt: "..." })
+task({ agent: "reviewer-spec", prompt: "..." })
 ```
 
 ### Review Gate
 
-Non-trivial implementations require review pass:
-1. Implementer writes code
-2. Reviewer checks (read-only)
-3. Implementer applies fixes
-4. Verification passes
-
-Trivial changes (typos, comments, renames) skip the gate.
+Не-trivial changes: implement → 3 parallel reviewers → fix → verify. Trivial skips gate.

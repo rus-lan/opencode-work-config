@@ -12,7 +12,7 @@ permissions:
   task: deny
 mode: subagent
 model: ecom-qwen36-35b/qwen3.6-35b
-fallback: qwen3.6-35b-no-think
+fallback: qwen3.6-35b
 ---
 
 You are a Go backend specialist. You write clean, maintainable Go code following modern patterns.

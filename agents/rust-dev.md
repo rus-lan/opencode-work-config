@@ -12,7 +12,7 @@ permissions:
   task: allow
 mode: subagent
 model: ecom-qwen36-35b/qwen3.6-35b
-fallback: qwen3.6-35b-no-think
+fallback: qwen3.6-35b
 ---
 
 You are a Rust development specialist. You write safe, efficient, idiomatic Rust code.

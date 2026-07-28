@@ -3,6 +3,8 @@
 
   "model": "ecom-qwen35-122b/qwen3.5-122b",
 
+  "default_agent": "orchestrator",
+
   "permission": {
     "bash": "allow",
     "edit": "allow"
@@ -19,7 +21,15 @@
       "models": {
         "qwen3.5-122b": {
           "name": "qwen3.5-122b",
-          "description": "QWEN 3.5 122B (локальный)"
+          "description": "QWEN 3.5 122B (локальный)",
+          "limit": {
+            "context": 128000,
+            "output": 8192
+          },
+          "effort": {
+            "current": "high",
+            "limit": "max"
+          }
         }
       }
     },
@@ -34,7 +44,15 @@
       "models": {
         "qwen3.6-35b": {
           "name": "qwen3.6-35b",
-          "description": "QWEN 3.6 35B (локальный)"
+          "description": "QWEN 3.6 35B (локальный)",
+          "limit": {
+            "context": 128000,
+            "output": 8192
+          },
+          "effort": {
+            "current": "medium",
+            "limit": "high"
+          }
         }
       }
     },
@@ -49,37 +67,56 @@
       "models": {
         "deepseek-v4-flash:max": {
           "name": "deepseek-v4-flash:max",
-          "description": "Deepseek v4 flash (max)"
+          "description": "Deepseek v4 flash (max)",
+          "limit": {
+            "context": 256000,
+            "output": 16384,
+            "daily": 100000,
+            "weekly": 500000,
+            "monthly": 2000000
+          },
+          "effort": {
+            "current": "high",
+            "limit": "max"
+          }
         }
       }
     },
 
     "ecom-qwen35-122b-no-think": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "qwen3.5-122b-no-think",
+      "name": "qwen3.5-122b",
       "options": {
         "baseURL": "https://llm-core-olap.samokat.ru/v1",
         "apiKey": "{env:ECOM_QWEN35_122b_NO_THINK_TOKEN}"
       },
       "models": {
-        "qwen3.5-122b-no-think": {
-          "name": "qwen3.5-122b-no-think",
-          "description": "QWEN 3.5 122B no think (локальный)"
+        "qwen3.5-122b": {
+          "name": "qwen3.5-122b",
+          "description": "QWEN 3.5 122B (апи no-think, алиас)",
+          "limit": {
+            "context": 128000,
+            "output": 8192
+          }
         }
       }
     },
 
     "ecom-qwen36-35b-no-think": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "qwen3.6-35b-no-think",
+      "name": "qwen3.6-35b",
       "options": {
         "baseURL": "https://llm-core-olap.samokat.ru/v1",
         "apiKey": "{env:ECOM_QWEN36_35b_NO_THINK_TOKEN}"
       },
       "models": {
-        "qwen3.6-35b-no-think": {
-          "name": "qwen3.6-35b-no-think",
-          "description": "QWEN 3.6 35B no think (локальный)"
+        "qwen3.6-35b": {
+          "name": "qwen3.6-35b",
+          "description": "QWEN 3.6 35B (апи no-think, алиас)",
+          "limit": {
+            "context": 128000,
+            "output": 8192
+          }
         }
       }
     },
@@ -94,7 +131,18 @@
       "models": {
         "deepseek-v4-flash": {
           "name": "deepseek-v4-flash",
-          "description": "Deepseek v4 flash"
+          "description": "Deepseek v4 flash",
+          "limit": {
+            "context": 256000,
+            "output": 16384,
+            "hourly": 50000,
+            "daily": 200000,
+            "weekly": 1000000
+          },
+          "effort": {
+            "current": "medium",
+            "limit": "high"
+          }
         }
       }
     },
@@ -109,7 +157,11 @@
       "models": {
         "giga3-10b": {
           "name": "giga3-10b",
-          "description": "Giga v3 10B"
+          "description": "Giga v3 10B",
+          "limit": {
+            "context": 64000,
+            "output": 4096
+          }
         }
       }
     }
@@ -126,57 +178,56 @@
     }
   },
 
-  "skills": {
-    "enabled": [
-      "caveman",
-      "grill-me",
-      "full-workflow",
-      "config-pull",
-      "project-pull",
-      "project-push",
-      "desearch",
-      "workspace-init",
-      "design",
-      "graphify",
-      "mapps",
-      "implement",
-      "code-review",
-      "research",
-      "grilling",
-      "diagnosing-bugs"
-    ]
-  },
-
   "agent": {
     "build": {
       "mode": "primary",
       "model": "ecom-qwen35-122b/qwen3.5-122b",
-      "temperature": 0.2,
-      "description": "Оркестратор полного workflow: grill-me → research → implement → review → testing",
+      "temperature": 0.15,
+      "color": "success",
+      "description": "Агент-исполнитель с полным доступом для реализации задач",
       "permission": {
         "task": {
-          "*": "allow",
-          "desearch-researcher": "allow",
-          "desearch-synthesizer": "allow",
-          "react-dev": "allow",
-          "go-dev": "allow",
-          "rust-dev": "allow",
-          "reviewer": "allow",
-          "reviewer-standards": "allow",
-          "reviewer-spec": "allow",
-          "reviewer-arch": "allow",
-          "general": "allow",
-          "explore": "allow",
-          "scout": "allow",
-          "diagnosing-bugs": "allow"
+          "*": "allow"
         },
         "skill": "allow",
+        "read": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
         "webfetch": "allow",
         "websearch": "allow"
       }
     },
+    "orchestrator": {
+      "mode": "primary",
+      "model": "ecom-qwen35-122b/qwen3.5-122b",
+      "temperature": 0.15,
+      "color": "#FF5733",
+      "description": "Строгий оркестратор. НИЧЕГО не делает сам — только спавнит сабагентов с простыми задачами.",
+      "permission": {
+        "task": {
+          "*": "allow",
+          "project-mapper": "allow",
+          "test-agent": "allow",
+          "security-check": "allow",
+          "soc-check": "allow",
+          "diagnosing-bugs": "allow"
+        },
+        "skill": "allow",
+        "read": "deny",
+        "write": "deny",
+        "edit": "deny",
+        "bash": "deny",
+        "glob": "deny",
+        "grep": "deny"
+      }
+    },
     "plan": {
       "mode": "primary",
+      "model": "ecom-qwen35-122b/qwen3.5-122b",
+      "color": "info",
       "description": "Агент для планирования и план-ревью (edit deny)",
       "permission": {
         "edit": "deny",

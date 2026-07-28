@@ -12,7 +12,7 @@ permissions:
   task: deny
 mode: subagent
 model: ecom-qwen36-35b/qwen3.6-35b
-fallback: qwen3.6-35b-no-think
+fallback: qwen3.6-35b
 ---
 
 You are a research synthesizer. You receive a directory of findings files produced by desearch-researcher agents and produce a unified final report.

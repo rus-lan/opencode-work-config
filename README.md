@@ -1,6 +1,6 @@
 # Opencode Work Configuration
 
-Рабочая конфигурация opencode с агентами, скиллами и workflow.
+Рабочая конфигурация opencode с агентами, скиллами и полным workflow оркестрации.
 
 ## Быстрая установка
 
@@ -8,132 +8,80 @@
 # 1. Клонировать конфигурацию
 git clone git@github.com:rus-lan/opencode-work-config.git ~/.config/opencode
 
-# 2. Установить переменные окружения (см. .env.example)
+# 2. Установить переменные окружения
 cp ~/.config/opencode/.env.example ~/.config/opencode/.env
 # Отредактируйте .env с вашими API ключами
 
 # 3. Установить зависимости
-cd ~/.config/opencode
-npm install
+cd ~/.config/opencode && npm install
 
-# 4. Установить дополнительные утилиты
-curl -fsSL https://raw.githubusercontent.com/rus-lan/multiApps/main/install.sh | sh
-
-# 5. Готово! Запустите opencode в любом проекте
+# 4. Готово!
 opencode
 ```
 
-## Структура
-
-```
-~/.config/opencode/
-├── opencode.json           # Основная конфигурация
-├── agents/                 # Конфигурация агентов
-│   ├── desearch-researcher.md
-│   ├── desearch-synthesizer.md
-│   ├── explore.md
-│   ├── go-dev.md
-│   ├── react-dev.md
-│   ├── reviewer.md
-│   ├── rust-dev.md
-│   └── ui-designer.md
-├── skills/                 # Встроенные скиллы
-│   ├── caveman/
-│   ├── desearch/
-│   ├── design/
-│   ├── graphify/
-│   ├── grill-me/
-│   └── ...
-├── commands/               # Кастомные команды
-│   └── mapps.md
-└── CLAUDE.md               # Глобальные правила
-```
-
-## Переменные окружения
-
-Создайте `~/.config/opencode/.env`:
-
-```bash
-# Qwen models
-ECOM_QWEN35_122b_TOKEN=your_token_here
-ECOM_QWEN36_35b_TOKEN=your_token_here
-
-# DeepSeek models
-ECOM_DEEPSEEL4_FLASH_MAX_TOKEN=your_token_here
-ECOM_DEEPSEEL4_FLASH_TOKEN=your_token_here
-
-# Other models
-ECOM_QWEN35_122b_NO_THINK_TOKEN=your_token_here
-ECOM_QWEN36_35b_NO_THINK_TOKEN=your_token_here
-ECOM_GIGA3_10b_TOKEN=your_token_here
-```
-
-## Агенты
+## Основные агенты
 
 | Агент | Модель | Назначение |
 |-------|--------|------------|
-| reviewer | qwen3.5-122b | Code review |
-| desearch-researcher | deepseek-v4-flash:max | Веб-исследования |
-| desearch-synthesizer | qwen3.6-35b | Синтез исследований |
-| go-dev | qwen3.6-35b | Go разработка |
-| react-dev | qwen3.6-35b | React разработка |
-| rust-dev | qwen3.6-35b | Rust разработка |
-| ui-designer | qwen3.6-35b | UI дизайн |
-| explore | qwen3.6-35b-no-think | Поиск по коду |
+| `@orchestrator` | qwen3.5-122b | **Строгий оркестратор.** Ничего не делает сам — только спавнит сабагентов |
+| `@build` | qwen3.5-122b | Исполнитель с полным доступом (код, bash, тесты) |
+| `@plan` | qwen3.5-122b | Планирование и план-ревью (read-only, edit deny) |
 
-## Скиллы
+### Сабагенты
 
-| Скилл | Команда | Назначение |
-|-------|---------|------------|
-| caveman | `/caveman` | Режим кратких ответов |
-| grill-me | `/grill-me` | Интерактивный допрос |
-| mapps | `/mapps` | Много-репозиторный workspace |
-| graphify | `/graphify` | Knowledge graph |
-| desearch | `/desearch` | Веб-исследование |
-| design | `/design` | UI/UX дизайн |
+| Агент | Модель | Назначение |
+|-------|--------|------------|
+| `project-mapper` | qwen3.6-35b | Построение карты проекта (PROJECT_MAP.md) |
+| `explore` | qwen3.6-35b | Поиск файлов, структуры, usages (read-only) |
+| `react-dev` | qwen3.6-35b | React/TypeScript разработка |
+| `go-dev` | qwen3.6-35b | Go backend разработка |
+| `rust-dev` | qwen3.6-35b | Rust разработка |
+| `reviewer-standards` | qwen3.5-122b | Code review по стандартам (read-only) |
+| `reviewer-spec` | qwen3.5-122b | Code review по спецификации (read-only) |
+| `reviewer-arch` | qwen3.5-122b | Архитектурное ревью (read-only) |
+| `test-agent` | qwen3.6-35b | Запуск тестов (unit/integration/e2e) |
+| `security-check` | qwen3.5-122b | Аудит безопасности/надёжности/простоты |
+| `soc-check` | qwen3.5-122b | Проверка SOC/контрактов/тестового покрытия |
+| `diagnosing-bugs` | qwen3.6-35b | Диагностика и исправление багов |
+| `desearch-researcher` | deepseek-v4-flash:max | Глубокий веб-ресёрч |
+| `desearch-synthesizer` | qwen3.6-35b | Синтез результатов ресёрча |
+| `ui-designer` | qwen3.6-35b | UI/UX дизайн |
 
-## Workflow
+## Полный Workflow (7 этапов)
+
+При запуске `/start <задача>` через `@orchestrator`:
 
 ```
-Phase 1: Research (parallel)
-  ├─ desearch-researcher (angle 1)
-  ├─ desearch-researcher (angle 2)
-  └─ explore (codebase mapping)
-           ↓
-Phase 2: Synthesis
-  └─ desearch-synthesizer
-           ↓
-Phase 3: Implementation (parallel)
-  ├─ react-dev (frontend)
-  ├─ go-dev (backend)
-  └─ ui-designer (design)
-           ↓
-Phase 4: Review Gate
-  └─ reviewer (blocking)
+Этап 0: Project Map — карта проекта (PROJECT_MAP.md)
+Этап 1: Grill-me + Deep Research — допрос плана + параллельный ресёрч
+Этап 2: Implementation — параллельная разработка (react/go/rust)
+Этап 3: Code Review — 3 параллельных ревьюера (standards + spec + arch)
+Этап 4: Testing — unit + integration + e2e тесты
+Этап 5: Security / Reliability / Simplicity Check
+Этап 6: SOC / Contracts / Test Coverage Check
 ```
 
-## Обновление конфигурации
+**Золотое правило:** Оркестратор НИЧЕГО не делает сам. Каждый сабагент получает одну атомарную задачу.
+
+## Команды
+
+| Команда | Назначение |
+|---------|-----------|
+| `/start <задача>` | Полный 7-этапный workflow |
+| `/workflow <задача>` | То же самое |
+| `/build <задача>` | Без грилла/ресерча, сразу имплементация |
+| `/grill-me <тема>` | Только интерактивный допрос |
+| `/map` | Только карта проекта |
+| `/safety-check` | Только проверка безопасности |
+| `/soc-check` | Только проверка SOC/контрактов |
+| `/caveman [уровень]` | Режим кратких ответов |
+| `/m` | Метрики сессии |
+| `/mapps` | Multi-repo workspace |
+
+## Обновление
 
 ```bash
-# Обновить из remote
-cd ~/.config/opencode
-git pull origin main
-
-# Переустановить зависимости
-npm install
+cd ~/.config/opencode && git pull && npm install
 ```
-
-## Перенос на новый компьютер
-
-```bash
-# Полный перенос
-git clone git@github.com:rus-lan/opencode-work-config.git ~/.config/opencode
-cp ~/.config/opencode/.env.example ~/.config/opencode/.env
-# Отредактируйте .env
-cd ~/.config/opencode && npm install
-curl -fsSL https://raw.githubusercontent.com/rus-lan/multiApps/main/install.sh | sh
-```
-
-## Лицензия
 
 MIT
