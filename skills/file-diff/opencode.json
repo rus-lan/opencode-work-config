@@ -1,0 +1,17 @@
+{
+  "name": "file-diff",
+  "description": "Compare two files and show differences",
+  "version": "1.0.0",
+  "entrypoint": {
+    "type": "bash",
+    "command": "file-diff"
+  },
+  "triggers": [
+    "diff",
+    "compare",
+    "разница",
+    "сравнить",
+    "file-diff"
+  ],
+  "usage": "file-diff <file1> <file2>"
+}

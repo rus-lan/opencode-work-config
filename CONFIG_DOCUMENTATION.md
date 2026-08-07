@@ -67,7 +67,7 @@
 
 **Модели:**
 - Grill-me: qwen3.5-122b
-- Research: deepseek-v4-flash:max (основная), qwen3.6-35b (синтез)
+- Research: deepseek-v4-flash (основная), qwen3.6-35b (синтез)
 
 **Ручной запуск:**
 ```
@@ -302,8 +302,7 @@ SEO-писатель для генерации SEO-оптимизированн�
 #### 3. desearch-researcher
 | Параметр | Значение |
 |----------|----------|
-| **Модель** | deepseek-v4-flash:max |
-| **Fallback** | deepseek-v4-flash |
+| **Модель** | deepseek-v4-flash |
 | **Роль** | Глубокий веб-ресёрч — ищет, фетчит, пишет structured findings |
 | **Разрешения** | read/write/edit/glob/grep/bash/WebSearch/WebFetch=allow |
 | **Когда вызывает оркестратор** | Этап 1 — после grill-me, 2-3 параллельных исследователя |
@@ -432,7 +431,7 @@ SEO-писатель для генерации SEO-оптимизированн�
 |------|--------|
 | Этап 0: Project Map | qwen3.6-35b |
 | Этап 1: Grill-me | qwen3.5-122b |
-| Этап 1: Research | deepseek-v4-flash:max |
+| Этап 1: Research | deepseek-v4-flash |
 | Этап 2: Implementation | qwen3.6-35b |
 | Этап 3: Code Review | qwen3.5-122b |
 | Этап 4: Testing | qwen3.6-35b |
@@ -621,8 +620,7 @@ void $`aistats ingest --tool opencode`.quiet().catch(() => {});
 |-----------|--------|---------------|-------------|-------------------|-------------|
 | **ecom-qwen35-122b** | qwen3.5-122b | 128K | 8K | high | `ECOM_QWEN35_122b_TOKEN` |
 | **ecom-qwen36-35b** | qwen3.6-35b | 128K | 8K | medium | `ECOM_QWEN36_35b_TOKEN` |
-| **ecom-deepseek4-flash-max** | deepseek-v4-flash:max | 256K | 16K | high | `ECOM_DEEPSEEL4_FLASH_MAX_TOKEN` |
-| **ecom-deepseek4-flash** | deepseek-v4-flash | 256K | 16K | medium | `ECOM_DEEPSEEL4_FLASH_TOKEN` |
+| **ecom-deepseek4-flash** | deepseek-v4-flash | 256K | 16K | medium | `ECOM_DEEPSEEK4_FLASH_TOKEN` |
 | **ecom-giga3-10b** | giga3-10b | 64K | 4K | — | `ECOM_GIGA3_10b_TOKEN` |
 | **ecom-qwen35-122b-no-think** | qwen3.5-122b (no-think) | 128K | 8K | — | `ECOM_QWEN35_122b_NO_THINK_TOKEN` |
 | **ecom-qwen36-35b-no-think** | qwen3.6-35b (no-think) | 128K | 8K | — | `ECOM_QWEN36_35b_NO_THINK_TOKEN` |
@@ -633,15 +631,13 @@ void $`aistats ingest --tool opencode`.quiet().catch(() => {});
 |-----------|----------|-----------|
 | ecom-qwen35-122b | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
 | ecom-qwen36-35b | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
-| ecom-deepseek4-flash-max | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
 | ecom-deepseek4-flash | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
 | ecom-giga3-10b | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
 | ecom-qwen35-122b-no-think | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
 | ecom-qwen36-35b-no-think | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
 
 **Rate limits (DeepSeek):**
-- `deepseek-v4-flash:max`: daily 100K, weekly 500K, monthly 2M
-- `deepseek-v4-flash`: hourly 50K, daily 200K, weekly 1M
+- `deepseek-v4-flash`: daily 100K, weekly 500K, monthly 2M
 
 ---
 
@@ -762,8 +758,7 @@ cp ~/.config/opencode/.env.example ~/.config/opencode/.env
 | `ECOM_QWEN36_35b_TOKEN` | Токен для Qwen 3.6 35B | Инфраструктура компании (llm-core-olap) |
 | `ECOM_QWEN35_122b_NO_THINK_TOKEN` | Токен для Qwen 3.5 122B (no-think режим) | Инфраструктура компании (llm-core-olap) |
 | `ECOM_QWEN36_35b_NO_THINK_TOKEN` | Токен для Qwen 3.6 35B (no-think режим) | Инфраструктура компании (llm-core-olap) |
-| `ECOM_DEEPSEEL4_FLASH_MAX_TOKEN` | Токен для DeepSeek v4 flash (max) | Инфраструктура компании (llm-core-olap) |
-| `ECOM_DEEPSEEL4_FLASH_TOKEN` | Токен для DeepSeek v4 flash | Инфраструктура компании (llm-core-olap) |
+| `ECOM_DEEPSEEK4_FLASH_TOKEN` | Токен для DeepSeek v4 flash | Инфраструктура компании (llm-core-olap) |
 | `ECOM_GIGA3_10b_TOKEN` | Токен для Giga v3 10B | Инфраструктура компании (llm-core-olap) |
 
 Все провайдеры используют единый base URL: `https://llm-core-olap.samokat.ru/v1`

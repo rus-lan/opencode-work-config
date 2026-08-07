@@ -21,7 +21,7 @@ cp .env.example .env
 opencode
 ```
 
-> **Важно:** Конфигурация использует несколько провайдеров (qwen3.5-122b, qwen3.6-35b, deepseek-v4-flash, deepseek-v4-flash:max, giga3-10b). Убедитесь что все API-ключи указаны в `.env`.
+> **Важно:** Конфигурация использует несколько провайдеров (qwen3.5-122b, qwen3.6-35b, deepseek-v4-flash, giga3-10b). Убедитесь что все API-ключи указаны в `.env`.
 
 ## 🏗 Архитектура
 
@@ -44,7 +44,7 @@ opencode
 | `go-dev` | qwen3.6-35b | 🔵 Go backend разработка |
 | `rust-dev` | qwen3.6-35b | 🦀 Rust разработка |
 | `ui-designer` | qwen3.6-35b | 🎨 UI/UX дизайн |
-| `desearch-researcher` | deepseek-v4-flash:max | 🌐 Глубокий веб-ресёрч |
+| `desearch-researcher` | deepseek-v4-flash | 🌐 Глубокий веб-ресёрч |
 | `desearch-synthesizer` | qwen3.6-35b | 📄 Синтез ресёрч-отчётов |
 | `test-agent` | giga3-10b | 🧪 Запуск тестов (fallback: qwen3.6-35b) |
 | `reviewer` | qwen3.5-122b | 👀 Code review |
@@ -61,7 +61,7 @@ opencode
 
 ```
   0: Project Map         → giga3-10b
-  1: Grill-me + Research  → deepseek-v4-flash:max × 2-3 + qwen3.6-35b (synthesizer)
+  1: Grill-me + Research  → deepseek-v4-flash × 2-3 + qwen3.6-35b (synthesizer)
   2: Implementation       → react-dev / go-dev / rust-dev (qwen3.6-35b)
   3: Code Review          → reviewer-standards + reviewer-spec + reviewer-arch (qwen3.5-122b)
   4: Testing              → test-agent (giga3-10b / qwen3.6-35b)
@@ -75,7 +75,7 @@ opencode
 |------|--------|
 | Project Map | giga3-10b |
 | Grill-me | qwen3.5-122b |
-| Research | deepseek-v4-flash:max |
+| Research | deepseek-v4-flash |
 | Synthesis | qwen3.6-35b |
 | Implementation | qwen3.6-35b |
 | Code Review | qwen3.5-122b |
@@ -90,7 +90,6 @@ opencode
 |-----------|--------|----------|--------|
 | `ecom-qwen35-122b` | qwen3.5-122b | 128K | 8K |
 | `ecom-qwen36-35b` | qwen3.6-35b | 128K | 8K |
-| `ecom-deepseek4-flash-max` | deepseek-v4-flash:max | 256K | 16K |
 | `ecom-deepseek4-flash` | deepseek-v4-flash | 256K | 16K |
 | `ecom-qwen35-122b-no-think` | qwen3.5-122b (no-think) | 128K | 8K |
 | `ecom-qwen36-35b-no-think` | qwen3.6-35b (no-think) | 128K | 8K |

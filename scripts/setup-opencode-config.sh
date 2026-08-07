@@ -229,7 +229,6 @@ setup_env() {
   echo ""
   echo -e "  ${BLUE}ECOM_QWEN35_122b_TOKEN${NC}         — Qwen 3.5 122B"
   echo -e "  ${BLUE}ECOM_QWEN36_35b_TOKEN${NC}           — Qwen 3.6 35B"
-  echo -e "  ${BLUE}ECOM_DEEPSEEK4_FLASH_MAX_TOKEN${NC}  — DeepSeek v4 flash max"
   echo -e "  ${BLUE}ECOM_DEEPSEEK4_FLASH_TOKEN${NC}      — DeepSeek v4 flash"
   echo -e "  ${BLUE}ECOM_GIGA3_10b_TOKEN${NC}            — Giga v3 10B"
   echo -e "  ${BLUE}ECOM_QWEN35_122b_NO_THINK_TOKEN${NC} — Qwen 3.5 122B (no-think)"

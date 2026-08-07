@@ -26,7 +26,7 @@
 | 1 | CRITICAL | Агенты | Отсутствует файл агента `build.md` — агент `build` не может работать без промпта | `agents/build.md` | N/A | Создать файл `agents/build.md` с frontmatter и описанием роли исполнителя |
 | 2 | CRITICAL | Агенты | Отсутствует файл агента `plan.md` — агент `plan` не может работать без промпта | `agents/plan.md` | N/A | Создать файл `agents/plan.md` с frontmatter и описанием роли планировщика |
 | 3 | CRITICAL | Скиллы | Skill `implement` упоминается в CONFIG_DOCUMENTATION.md (строка 88) но директории нет | `skills/implement/` | N/A | Создать директорию `skills/implement/` с SKILL.md или убрать упоминание из документации |
-| 4 | CRITICAL | opencode.json | Опечатка в имени переменной окружения: `ECOM_DEEPSEEL4_FLASH_TOKEN` → должно быть `ECOM_DEEPSEEK4_FLASH_TOKEN` | `opencode.json` | строки 95, 112 | Исправить `DEEPSEEL4` → `DEEPSEEK4` во всех упоминаниях (2 раза) |
+| 4 | CRITICAL | opencode.json | Опечатка в имени переменной окружения: `ECOM_DEEPSEEK4_FLASH_TOKEN` → должно быть `ECOM_DEEPSEEK4_FLASH_TOKEN` | `opencode.json` | строки 95, 112 | Исправить `DEEPSEEK4` → `DEEPSEEK4` во всех упоминаниях (2 раза) |
 | 5 | CRITICAL | opencode.json | Мёртвый путь в Playwright MCP: `${HOME}/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome` может не существовать | `opencode.json` | строка 69 | Заменить на `playwright` команду без жёсткого пути или проверить существование |
 | **HIGH** |
 | 6 | HIGH | Правила | Правило `go-observability.md` не включено в README rules index (строка 176 перечисляет 10 правил без него) | `README.md` | строка 176 | Добавить `go-observability` в список правил в README |
@@ -82,16 +82,13 @@ description: Агент для планирования и план-ревью (
 
 Добавить описание роли, разрешений (edit: deny, bash: ask, read: allow), шагов (30).
 
-#### 3. Исправить опечатку `DEEPSEEL4` → `DEEPSEEK4`
+#### 3. Исправить опечатку `DEEPSEEK4` → `DEEPSEEK4`
 **Файл:** `opencode.json`  
 **Строки:** 95, 112  
-**Действие:** Заменить все упоминания `DEEPSEEL4` на `DEEPSEEK4`
+**Действие:** Заменить все упоминания `DEEPSEEK4` на `DEEPSEEK4`
 
 ```diff
-- "apiKey": "{env:ECOM_DEEPSEEL4_FLASH_MAX_TOKEN}"
-+ "apiKey": "{env:ECOM_DEEPSEEK4_FLASH_MAX_TOKEN}"
-
-- "apiKey": "{env:ECOM_DEEPSEEL4_FLASH_TOKEN}"
+- "apiKey": "{env:ECOM_DEEPSEEK4_FLASH_TOKEN}"
 + "apiKey": "{env:ECOM_DEEPSEEK4_FLASH_TOKEN}"
 ```
 
@@ -260,7 +257,7 @@ description: Мониторинг и отображение метрик исп�
 | 1 | CRITICAL | build.md отсутствует | ⏳ TODO | |
 | 2 | CRITICAL | plan.md отсутствует | ⏳ TODO | |
 | 3 | CRITICAL | skill("implement") отсутствует | ⏳ TODO | |
-| 4 | CRITICAL | Опечатка DEEPSEEL4 | ⏳ TODO | |
+| 4 | CRITICAL | Опечатка DEEPSEEK4 | ⏳ TODO | |
 | 5 | CRITICAL | Playwright MCP путь | ⏳ TODO | |
 | 6 | HIGH | go-observability в README | ⏳ TODO | |
 | 7 | HIGH | go-observability в CONFIG_DOCUMENTATION | ⏳ TODO | |

@@ -1,0 +1,39 @@
+#!/bin/zsh
+# file-diff: Compare two files and show differences
+
+if [ $# -ne 2 ]; then
+    echo "Usage: file-diff <file1> <file2>"
+    echo "Example: file-diff old.go new.go"
+    exit 1
+fi
+
+FILE1="$1"
+FILE2="$2"
+
+if [ ! -f "$FILE1" ]; then
+    echo "Error: File '$FILE1' not found"
+    exit 1
+fi
+
+if [ ! -f "$FILE2" ]; then
+    echo "Error: File '$FILE2' not found"
+    exit 1
+fi
+
+echo "=== Comparing: $FILE1 vs $FILE2 ==="
+echo ""
+diff -u "$FILE1" "$FILE2"
+EXIT_CODE=$?
+
+echo ""
+echo "=== Summary ==="
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✓ Files are identical"
+else
+    echo "✗ Files differ (exit code: $EXIT_CODE)"
+    echo ""
+    echo "Lines added/removed:"
+    diff <(wc -l < "$FILE1") <(wc -l < "$FILE2") | grep -E '^[<>]' || true
+fi
+
+exit $EXIT_CODE
