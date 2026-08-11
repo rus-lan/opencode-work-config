@@ -26,7 +26,7 @@
 - plan: for planning, reviewing, analyzing
 
 ## Model
-Default: ecom-qwen35-122b/qwen3.5-122b
+Default: ecom-deepseek4-flash/deepseek-v4-flash
 
 ## Prompt
 
