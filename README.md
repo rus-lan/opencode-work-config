@@ -1,8 +1,8 @@
 # ⚡ Opencode Work Configuration
 
-![Version](https://img.shields.io/badge/version-2.0-blue) ![Model](https://img.shields.io/badge/model-qwen3.5--122b-green) ![Agents](https://img.shields.io/badge/agents-23-orange) ![Skills](https://img.shields.io/badge/skills-22-purple) ![OpenCode](https://img.shields.io/badge/opencode-1.18.7-red)
+![Version](https://img.shields.io/badge/version-2.0-blue) ![Model](https://img.shields.io/badge/model-glm--5.2-green) ![Agents](https://img.shields.io/badge/agents-19-orange) ![Skills](https://img.shields.io/badge/skills-23-purple) ![OpenCode](https://img.shields.io/badge/opencode-1.18.7-red)
 
-Готовая конфигурация opencode с тремя primary агентами, 17 сабагентами, оркестратором, полным CI-воркфлоу из 7 этапов и 22 скиллами.
+Готовая конфигурация opencode с 3 primary агентами, 16 сабагентами, полным CI-воркфлоу из 7 этапов и 23 скиллами.
 
 ## 🚀 Быстрая установка
 
@@ -21,7 +21,7 @@ cp .env.example .env
 opencode
 ```
 
-> **Важно:** Конфигурация использует несколько провайдеров (qwen3.5-122b, qwen3.6-35b, deepseek-v4-flash, giga3-10b). Убедитесь что все API-ключи указаны в `.env`.
+> **Важно:** Конфигурация использует несколько провайдеров (qwen3.5-122b, qwen3.6-35b, deepseek-v4-flash, glm-5.2). Убедитесь что все API-ключи указаны в `.env`.
 
 ## 🏗 Архитектура
 
@@ -29,43 +29,42 @@ opencode
 
 | Агент | Модель | Роль |
 |-------|--------|------|
-| `@orchestrator` | qwen3.5-122b (max effort) | 🧠 Оркестратор — ничего не делает сам, только спавнит сабагентов |
-| `@build` | qwen3.5-122b | 🔧 Исполнитель с полным доступом (пишет код, запускает команды) |
-| `@plan` | qwen3.5-122b | 📋 Планирование и ревью (read-only, bash=ask) |
-| `seo-writer` | qwen3.5-122b | ✍️ SEO-писатель (read-only, write=deny) |
+| `@orchestrator` | glm-5.2 | 🧠 Оркестратор — ничего не делает сам, только спавнит сабагентов |
+| `@build` | deepseek-v4-flash | 🔧 Исполнитель с полным доступом (пишет код, запускает команды) |
+| `@plan` | deepseek-v4-flash | 📋 Планирование и ревью (read-only, bash=ask) |
 
-### Сабагенты (17)
+### Сабагенты (16)
 
 | Агент | Модель | Роль |
 |-------|--------|------|
-| `explore` | qwen3.6-35b | 🔍 Поиск файлов и структуры (read-only) |
-| `project-mapper` | giga3-10b | 🗺 Построение карты проекта |
+| `seo-writer` | qwen3.5-122b | ✍️ SEO-писатель (read-only, write=deny) |
+| `explore` | qwen3.5-122b (no-think) | 🔍 Поиск файлов и структуры (read-only) |
+| `project-mapper` | qwen3.6-35b (no-think) | 🗺 Построение карты проекта |
 | `react-dev` | qwen3.6-35b | ⚛ React/TS разработка |
 | `go-dev` | qwen3.6-35b | 🔵 Go backend разработка |
 | `rust-dev` | qwen3.6-35b | 🦀 Rust разработка |
-| `ui-designer` | qwen3.6-35b | 🎨 UI/UX дизайн |
-| `desearch-researcher` | deepseek-v4-flash | 🌐 Глубокий веб-ресёрч |
-| `desearch-synthesizer` | qwen3.6-35b | 📄 Синтез ресёрч-отчётов |
-| `test-agent` | giga3-10b | 🧪 Запуск тестов (fallback: qwen3.6-35b) |
-| `reviewer` | qwen3.5-122b | 👀 Code review |
-| `reviewer-arch` | qwen3.5-122b | 🏛 Архитектурное ревью |
-| `reviewer-spec` | qwen3.5-122b | 📐 Ревью по спецификации |
-| `reviewer-standards` | qwen3.5-122b | 📏 Ревью по кодстайлу |
-| `security-check` | qwen3.5-122b | 🔒 Аудит безопасности (fallback: qwen3.6-35b) |
-| `soc-check` | qwen3.5-122b | ✅ Проверка SOC/контрактов (fallback: qwen3.6-35b) |
-| `implement` | qwen3.6-35b | 🔨 Реализация задач по спецификации |
+| `ui-designer` | deepseek-v4-flash | 🎨 UI/UX дизайн |
+| `desearch-researcher` | glm-5.2 | 🌐 Глубокий веб-ресёрч |
+| `desearch-synthesizer` | glm-5.2 | 📄 Синтез ресёрч-отчётов |
+| `test-agent` | qwen3.6-35b | 🧪 Запуск тестов |
+| `reviewer` *(hidden)* | deepseek-v4-flash | 👀 Code review |
+| `reviewer-arch` *(hidden)* | deepseek-v4-flash | 🏛 Архитектурное ревью |
+| `reviewer-spec` *(hidden)* | deepseek-v4-flash | 📐 Ревью по спецификации |
+| `reviewer-standards` *(hidden)* | deepseek-v4-flash | 📏 Ревью по кодстайлам |
+| `security-check` | deepseek-v4-flash | 🔒 Аудит безопасности |
+| `soc-check` | qwen3.5-122b | ✅ Проверка SOC/контрактов |
 
 ### Workflow
 
 При запуске `/start <задача>` через `@orchestrator` выполняется 7-этапный пайплайн:
 
 ```
-  0: Project Map         → giga3-10b
-  1: Grill-me + Research  → deepseek-v4-flash × 2-3 + qwen3.6-35b (synthesizer)
+  0: Project Map         → qwen3.6-35b (no-think)
+  1: Grill-me + Research  → glm-5.2 × 2-3 + glm-5.2 (synthesizer)
   2: Implementation       → react-dev / go-dev / rust-dev (qwen3.6-35b)
-  3: Code Review          → reviewer-standards + reviewer-spec + reviewer-arch (qwen3.5-122b)
-  4: Testing              → test-agent (giga3-10b / qwen3.6-35b)
-  5: Security Check       → security-check (qwen3.5-122b)
+  3: Code Review          → reviewer-standards + reviewer-spec + reviewer-arch (deepseek-v4-flash)
+  4: Testing              → test-agent (qwen3.6-35b)
+  5: Security Check       → security-check (deepseek-v4-flash)
   6: SOC / Contracts      → soc-check (qwen3.5-122b)
 ```
 
@@ -73,14 +72,14 @@ opencode
 
 | Этап | Модель |
 |------|--------|
-| Project Map | giga3-10b |
+| Project Map | qwen3.6-35b (no-think) |
 | Grill-me | qwen3.5-122b |
-| Research | deepseek-v4-flash |
-| Synthesis | qwen3.6-35b |
+| Research | glm-5.2 |
+| Synthesis | glm-5.2 |
 | Implementation | qwen3.6-35b |
-| Code Review | qwen3.5-122b |
-| Testing | giga3-10b / qwen3.6-35b |
-| Security Check | qwen3.5-122b |
+| Code Review | deepseek-v4-flash |
+| Testing | qwen3.6-35b |
+| Security Check | deepseek-v4-flash |
 | SOC Check | qwen3.5-122b |
 | Titles / Compaction | qwen3.6-35b (`small_model`) |
 
@@ -88,14 +87,15 @@ opencode
 
 | Провайдер | Модель | Контекст | Output |
 |-----------|--------|----------|--------|
+| `zai-coding-plan` | glm-5.2 | 1M | 128K |
 | `ecom-qwen35-122b` | qwen3.5-122b | 128K | 8K |
 | `ecom-qwen36-35b` | qwen3.6-35b | 128K | 8K |
 | `ecom-deepseek4-flash` | deepseek-v4-flash | 256K | 16K |
 | `ecom-qwen35-122b-no-think` | qwen3.5-122b (no-think) | 128K | 8K |
 | `ecom-qwen36-35b-no-think` | qwen3.6-35b (no-think) | 128K | 8K |
-| `ecom-giga3-10b` | giga3-10b | 64K | 4K |
+| `ecom-glm-52` | glm-5.2 | 256K | 16K |
 
-## 🛠 Skills (22)
+## 🛠 Skills (23)
 
 | Skill | Описание |
 |-------|----------|
@@ -111,10 +111,12 @@ opencode
 | `context-metrics` | Мониторинг метрик контекста |
 | `desearch` | Параллельный глубокий веб-ресёрч |
 | `design` | UI дизайн из скриншотов и промптов |
+| `file-diff` | Сравнение двух файлов (unified diff) |
 | `full-workflow` | Полный 7-этапный workflow |
 | `graphify` | Построение графа знаний кодовой базы |
 | `grill-me` | Интерактивный допрос плана/решения |
 | `impl-kickoff` | Валидация и запуск разработки |
+| `implement` | Реализация задач по спецификации |
 | `mapps` | Multi-repo workspace management |
 | `project-pull` | Пулл правил/агентов в проект |
 | `project-push` | Пуш правил/агентов из проекта |
@@ -136,7 +138,7 @@ opencode
 
 Скиллы также доступны как команды: `/unrobot`, `/bmad-impl` и др.
 
-## 🔌 MCP Серверы (3)
+## 🔌 MCP Серверы (2)
 
 | MCP | Тип | Назначение |
 |-----|-----|------------|
@@ -177,7 +179,7 @@ opencode
 
 ## ⚙ Правила (Rules)
 
-`rules/` — 10 правил для сабагентов: frontend-components, frontend-hooks, frontend-theme, frontend-zustand, go-backend, rust-errors, tauri-bridge, opencode-implementer, bmad-impl-story-cycle.
+`rules/` — 11 правил для сабагентов: frontend-components, frontend-hooks, frontend-theme, frontend-zustand, go-backend, go-observability, rust-errors, tauri-bridge, opencode-implementer, bmad-impl-story-cycle, git-commit-push.
 
 Автоматически загружаются через `instructions: ["rules/*.md"]`.
 

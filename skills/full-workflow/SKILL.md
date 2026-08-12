@@ -12,5 +12,4 @@ description: Запускает полный workflow через @orchestrator: 
 
 ## Ссылки
 
-- Описание агента: `agents/orchestrator.md`
-- Описание workflow: `CLAUDE.md` → Orchestrator Mode
+- Описание агента и workflow: `agents/orchestrator.md`

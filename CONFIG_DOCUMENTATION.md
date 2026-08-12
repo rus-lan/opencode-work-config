@@ -2,592 +2,374 @@
 
 **Репозиторий:** `git@github.com:rus-lan/opencode-work-config.git`
 **Версия opencode:** 1.18.7
-**Модель по умолчанию:** `ecom-qwen35-122b/qwen3.5-122b`
+**Модель по умолчанию:** `ecom-glm-52/glm-5.2`
 **Агент по умолчанию:** `orchestrator`
+
+> Документация обновлена на основе фактического состояния файлов конфигурации.
 
 ---
 
 ## 📋 Содержание
 
-1. [🏗 Архитектура глобального воркфлоу](#-1-архитектура-глобального-воркфлоу)
-2. [🤖 Агенты и сабагенты](#-2-агенты-и-сабагенты)
-   - 2.1 [Три основных агента](#21-три-основных-агента-primary)
-   - 2.2 [Сабагенты](#22-сабагенты-sub-agents)
-   - 2.3 [Стратегия моделей по этапам](#23-стратегия-моделей-по-этапам)
-3. [🛠 Skills (установленные)](#-3-skills-установленные)
-3b. [📋 Правила (Rules)](#-3b-правила-rules)
-4. [🔌 Плагины](#-4-плагины)
-5. [⌨ Команды](#-5-команды)
-6. [🌐 MCP Серверы](#-6-mcp-серверы)
-6b. [🔒 Защита и безопасность](#-6b-защита-и-безопасность)
-7. [🧩 Провайдеры моделей](#-7-провайдеры-моделей)
-8. [📋 Расшифровка файлов конфигурации](#-8-расшифровка-файлов-конфигурации)
-9. [🚀 Установка на новом устройстве](#-9-установка-на-новом-устройстве)
-10. [🔄 Обновление конфигурации](#-10-обновление-конфигурации)
-11. [🛠 Расширение конфигурации](#-11-расширение-конфигурации)
+1. [🏗 Структура каталогов](#-1-структура-каталогов)
+2. [📜 opencode.json — главный конфиг](#-2-opencodejson--главный-конфиг)
+3. [🤖 Агенты](#-3-агенты)
+   - 3.1 [Primary-агенты](#31-primary-агенты)
+   - 3.2 [Subagents](#32-subagents)
+4. [📋 Правила (Rules)](#-4-правила-rules)
+5. [🛠 Skills](#-5-skills)
+6. [⌨ Команды](#-6-команды)
+7. [🌐 MCP Серверы](#-7-mcp-серверы)
+8. [🔌 Плагины](#-8-плагины)
+9. [🧩 Провайдеры моделей](#-9-провайдеры-моделей)
+10. [🔒 Защита и безопасность](#-10-защита-и-безопасность)
+11. [📜 Скрипты](#-11-скрипты)
+12. [🧪 Тесты](#-12-тесты)
+13. [📚 Документы](#-13-документы)
+14. [🚀 Установка на новом устройстве](#-14-установка-на-новом-устройстве)
+15. [🔄 Обновление конфигурации](#-15-обновление-конфигурации)
+16. [⚠️ Известные расхождения и проблемы](#-16-известные-расхождения-и-проблемы)
 
 ---
 
-## 🏗 1. Архитектура глобального воркфлоу
-
-Полный цикл разработки состоит из **7 этапов**. Оркестратор (`orchestrator`) строго следует золотому правилу: **НИЧЕГО не делает сам** — только спавнит сабагентов через `task()`.
+## 🏗 1. Структура каталогов
 
 ```
-/start <задача>  →  Полный 7-этапный workflow
+~/.config/opencode/
+├── .env.example              # Шаблон API-токенов
+├── .gitignore
+├── opencode.json             # Главный конфиг (модели, провайдеры, MCP, permissions)
+├── package.json              # npm-зависимости
+├── package-lock.json
+├── README.md                 # Быстрый старт
+├── CONFIG_DOCUMENTATION.md   # Этот файл
+├── guard.sh                  # Защита от опасных compound-команд
+├── pre-commit.sh             # Pre-commit валидация (Zero-Rework Protocol)
+├── context-check.sh          # Проверка consistency контекста сессии
+├── aistats.js                # Копия плагина aistats (см. §8 — дубликат)
+├── herdr-agent-state.js      # Копия плагина herdr (см. §8 — дубликат)
+├── metrics.json              # Метрики последней сессии (gitignored)
+├── agents/                   # 19 файлов описаний агентов (.md)
+├── commands/                 # 6 команд (.md) + herdr-status.sh
+├── skills/                   # 23 директории скиллов (SKILL.md + ресурсы)
+├── plugins/                  # JS-плагины (aistats.js, herdr-agent-state.js)
+├── rules/                    # 11 правил (.md) + README.md
+├── scripts/                  # setup-opencode-config.sh
+├── docs/                     # HERDR_METRICS_INTEGRATION.md
+├── tests/                    # test-orchestrator-grillme.sh
+├── prompts/                  # Пусто (только .gitignore — заглушка)
+└── node_modules/             # npm-зависимости (gitignored)
 ```
 
-### Этап 0: Карта проекта
+---
 
-**Что делает:** Построение карты проекта перед любой работой. Создаёт `PROJECT_MAP.md` в корне проекта.
+## 📜 2. opencode.json — главный конфиг
 
-**Запускаемый сабагент:** `project-mapper`
-- Сканирует дерево файлов (исключая `.git/`, `node_modules/`, `dist/`)
-- Определяет entry points (`package.json`, `go.mod`, `Cargo.toml`, `Dockerfile`, `main.ts`)
-- Определяет стек технологий, тестовые фреймворки
-- Сохраняет карту в `PROJECT_MAP.md`
+Файл `opencode.json` (220 строк). Схема: `https://opencode.ai/config.json`.
 
-**Модель:** qwen3.6-35b
+### 2.1 Корневые поля
 
-**Условия пропуска:** Если `PROJECT_MAP.md` уже существует и сессия < 1 часа — можно пропустить.
+| Поле | Значение | Описание |
+|------|----------|----------|
+| `$schema` | `https://opencode.ai/config.json` | Ссылка на JSON-схему |
+| `model` | `ecom-glm-52/glm-5.2` | Модель по умолчанию |
+| `default_agent` | `orchestrator` | Агент, запускаемый по умолчанию |
+| `small_model` | `ecom-qwen36-35b/qwen3.6-35b` | Лёгкая модель для нетворческих задач (тайтлы, компактизация) |
+| `subagent_depth` | `2` | Максимальная вложенность сабагентов |
 
-**Ручной запуск:**
-```
-/map
-```
+### 2.2 Глобальные permissions
 
-### Этап 1: Grill-me + Deep Research
-
-**Что делает:** Интерактивный допрос плана пользователем + параллельное веб-исследование.
-
-**Подэтапы:**
-
-1. **Grill-me** — загружается `skill("grill-me")`. Оркестратор только передаёт вопросы от skill пользователю и ответы обратно. Не ведёт диалог сам.
-2. **Deep Research** — после грилла запускаются 2-3 `desearch-researcher` с разными углами исследования + 1 `research` для primary source investigation.
-3. **Синтез** — результаты сохраняются в `.research/<topic>/`.
-
-**Модели:**
-- Grill-me: qwen3.5-122b
-- Research: deepseek-v4-flash (основная), qwen3.6-35b (синтез)
-
-**Ручной запуск:**
-```
-/grill-me <тема>
-```
-
-### Этап 2: Имплементация
-
-**Что делает:** Декомпозиция задачи на атомарные подзадачи и параллельная разработка.
-
-**Загружаемый skill:** `skill("implement")`
-
-**Правила декомпозиции:**
-- Одна задача = один файл (макс 2, если тесно связаны)
-- Сабагент получает ТОЧНУЮ спецификацию: типы, сигнатуры, расположение
-- Сабагент НЕ принимает архитектурных решений
-- Сабагент НЕ выбирает, где разместить файл
-
-**Запускаемые сабагенты:**
-- React/TS → `react-dev` (qwen3.6-35b)
-- Go → `go-dev` (qwen3.6-35b)
-- Rust → `rust-dev` (qwen3.6-35b)
-- Mixed → `general` (qwen3.6-35b)
-
-**Ручной запуск:**
-```
-/build <задача>
-```
-
-### Этап 3: Ревью
-
-**Что делает:** 3 параллельных ревью. Все findings возвращаются одним батчем.
-
-**Запускаемые сабагенты (параллельно в одном message):**
-
-| Ревьюер | Фокус | Модель |
-|---------|-------|--------|
-| `reviewer-standards` | Кодстайл, нейминг, конвенции | qwen3.5-122b |
-| `reviewer-spec` | Соответствие требованиям | qwen3.5-122b |
-| `reviewer-arch` | Архитектурная целостность | qwen3.5-122b |
-
-**Процесс:**
-1. Спавнить 3 параллельных ревьюера
-2. Дождаться всех
-3. Агрегировать findings
-4. Если есть блокирующие issues — исправить через сабагентов-разработчиков
-5. Максимум 2 раунда ревью на задачу
-
-### Этап 4: Тестирование
-
-**Что делает:** Параллельный запуск тестов. При падениях — диагностика и исправление.
-
-**Запускаемый сабагент:** `test-agent` (qwen3.6-35b, fallback: qwen3.6-35b)
-
-**Процесс:**
-1. Запуск unit + integration + e2e тестов параллельно
-2. Если тесты падают — `diagnosing-bugs` с конкретным списком упавших тестов
-3. Исправление → перезапуск → повтор до полного прохождения
-
-**Правила test-agent:**
-- ❌ Не редактирует сорцы/тесты
-- ❌ Не устанавливает зависимости
-- ❌ Не исправляет баги
-- ✅ Только запускает и отчитывается
-
-### Этап 5: Security/Reliability/Simplicity Check
-
-**Что делает:** Аудит безопасности, надёжности и простоты кода.
-
-**Запускаемый сабагент:** `security-check` (qwen3.5-122b, fallback: qwen3.6-35b)
-
-**Три оси проверки:**
-1. **Security** — хардкод секретов, SQL injection, XSS, input validation, auth, CORS
-2. **Reliability** — обработка ошибок, timeouts, retry, graceful shutdown, health checks
-3. **Simplicity** — сложность кода, абстракции, размер функций/файлов
-
-**Процесс:**
-1. Спавнить `security-check` с задачей сканировать код
-2. Если критические проблемы — исправить через сабагентов
-3. Перезапустить проверку
-
-**Ручной запуск:**
-```
-/safety-check
-```
-
-### Этап 6: SOC/Contracts/Tests Coverage Check
-
-**Что делает:** Проверка Single Source of Truth, контрактов между слоями и тестового покрытия.
-
-**Запускаемый сабагент:** `soc-check` (qwen3.5-122b, fallback: qwen3.6-35b)
-
-**Три оси проверки:**
-1. **SST** — дублирование логики, конфигов, типов, магических чисел
-2. **Contracts** — API контракты frontend ↔ backend, типы TypeScript ↔ Go/Rust
-3. **Test Coverage** — публичные функции без тестов, непротестированные error paths
-
-**Ручной запуск:**
-```
-/soc-check
-```
-
-### Дополнительные возможности конфигурации
-
-#### Авто-загрузка правил (instructions)
-Все 12 правил из `rules/` автоматически загружаются в system prompt через `"instructions": ["rules/*.md"]`. Правила доступны всем агентам без явного вызова `skill()`.
-
-#### Лёгкая модель (small_model)
-`"small_model": "ecom-qwen36-35b/qwen3.6-35b"` — используется для нетворческих задач (генерация тайтлов, компактизация), экономя квоты qwen3.5-122b.
-
-#### Управление контекстом (compaction)
 ```json
-{
+"permission": {
+  "bash": "allow",
+  "edit": "allow"
+}
+```
+
+Глобальный дефолт для всех агентов. Каждый агент может переопределять permissions в своём `.md` frontmatter — и большинство так и делает. См. §3.
+
+> **Важно:** В `opencode.json` **нет** блока `agent` — конфигурация агентов (модель, permissions, steps) живёт **исключительно** в frontmatter файлов `agents/*.md`. В `opencode.json` также нет блоков `command` и `plugin` — команды и плагины авто-обнаруживаются opencode из соответствующих директорий.
+
+### 2.3 Instructions (авто-загрузка правил)
+
+```json
+"instructions": ["rules/*.md"]
+```
+
+Все 11 правил из `rules/` автоматически загружаются в system prompt. Правила доступны всем агентам без явного вызова `skill()`.
+
+### 2.4 Watcher
+
+```json
+"watcher": {
+  "ignore": [
+    "node_modules/**", ".git/**", ".bmad/**", ".research/**",
+    "*.log", "dist/**", ".next/**", ".cache/**"
+  ]
+}
+```
+
+Watcher не реагирует на изменения в шумных директориях.
+
+### 2.5 Compaction (управление контекстом)
+
+```json
+"compaction": {
   "auto": true,
   "reserved": 8000,
   "tail_turns": 3,
   "prune": true
 }
 ```
-Автоматическая компактизация при заполнении контекста, резерв 8K токенов, сохранение 3 последних ходов, обрезка старых tool output.
 
-#### Игнорирование watcher
-```json
-{
-  "ignore": ["node_modules/**", ".git/**", ".bmad/**", ".research/**", "*.log", "dist/**"]
-}
-```
-Watcher не реагирует на изменения в шумных директориях.
+Автоматическая компактизация при заполнении контекста: резерв 8K токенов, сохранение 3 последних ходов, обрезка старых tool output.
 
-#### Лимиты tool output
+### 2.6 Tool output limits
+
 ```json
-{
+"tool_output": {
   "max_lines": 2000,
   "max_bytes": 51200
 }
 ```
+
 Предотвращает забивание контекста большим выводом инструментов.
 
-#### Provider timeouts и setCacheKey
-Все 6 провайдеров настроены с:
-- `timeout: 120000` (120с на полный запрос)
-- `chunkTimeout: 60000` (60с между SSE чанками)
-- `headerTimeout: 30000` (30с на получение заголовков)
-- `setCacheKey: true` (промпт-кэширование для экономии токенов)
-
-#### Вложенность сабагентов (subagent_depth)
-`"subagent_depth": 2` — оркестратор может спавнить сабагентов, которые могут спавнить своих сабагентов.
-
-#### Лимит шагов (steps)
-- `build`: 50 шагов
-- `orchestrator`: 30 шагов
-- `plan`: 30 шагов
-Защита от бесконечных циклов выполнения.
-
 ---
 
-## 🤖 2. Агенты и сабагенты
+## 🤖 3. Агенты
 
-### 2.1 Три основных агента (primary)
+Агенты определяются **только** в `agents/*.md` (19 файлов). Конфигурация — в YAML frontmatter каждого файла. Нет блока `agent` в `opencode.json`.
 
-| Агент | Модель | Роль | Разрешения |
-|-------|--------|------|------------|
-| **orchestrator** | qwen3.5-122b (temp 0.15) | Оркестратор — только спавнит сабагентов | task/skill/webfetch=allow, read/write/edit/bash=deny |
-| **build** | qwen3.5-122b (temp 0.2) | Исполнитель — пишет код, запускает команды | всё allow |
-| **plan** | qwen3.5-122b | Планировщик — read-only | edit=deny, bash=ask, read=allow |
-| **seo-writer** | ecom-qwen35-122b/qwen3.5-122b | SEO-писатель — генерация SEO-контента | read/task=allow, write/edit/bash=deny |
+### 3.1 Primary-агенты
 
-#### Orchestrator
-- **Роль:** Строгий оркестратор. НИЧЕГО не делает сам — только спавнит сабагентов с максимально простыми задачами.
-- **Модель:** `ecom-qwen35-122b/qwen3.5-122b`, temperature 0.15
-- **Цвет в UI:** `#FF5733`
-- **Разрешения:** `task.*=allow`, `skill=allow`, `webfetch=allow`, `websearch=allow`, всё остальное `deny`
+| Агент | Модель | Steps | Color | Temp | Роль |
+|-------|--------|-------|-------|------|------|
+| **orchestrator** | `ecom-glm-52/glm-5.2` | 30 | `#FF5733` | 0.15 | Оркестратор — только спавнит сабагентов |
+| **build** | `ecom-deepseek4-flash/deepseek-v4-flash` | 50 | `success` | 0.15 | Исполнитель — пишет код, запускает команды |
+| **plan** | `ecom-deepseek4-flash/deepseek-v4-flash` | 30 | `info` | — | Планировщик — read-only анализ и план-ревью |
+
+#### Orchestrator (`agents/orchestrator.md`)
+- **Роль:** Диспетчер — распределяет задачи между сабагентами. НИЧЕГО не делает сам.
+- **Модель:** `ecom-glm-52/glm-5.2`, temperature 0.15
+- **Permissions:** `task=allow`, `skill=allow`, `todowrite=allow`, `question=allow`, всё остальное `deny` (read/edit/write/bash/glob/grep = deny)
 - **Запуск:** Автоматически (агент по умолчанию)
-- **Когда использовать:** Всегда для старта полного workflow
 
-**Детальный промпт:** `agents/orchestrator.md` (271 строка)
-
-#### Build
-- **Роль:** Агент-исполнитель с полным доступом — пишет код, редактирует, запускает команды
-- **Модель:** `ecom-qwen35-122b/qwen3.5-122b`, temperature 0.2
-- **Цвет в UI:** `success` (зелёный)
-- **Разрешения:** Всё `allow`
+#### Build (`agents/build.md`)
+- **Роль:** Исполнитель с полным доступом — пишет код, запускает команды, редактирует файлы, спавнит сабагентов
+- **Модель:** `ecom-deepseek4-flash/deepseek-v4-flash`, temperature 0.15
+- **Permissions:** Всё `allow` (task, skill, read, write, edit, bash, glob, grep, webfetch, websearch, question)
 - **Запуск:** `/build <задача>` или через оркестратора
-- **Когда использовать:** Когда нужна прямая реализация без грилла и ресерча
 
-#### Plan
-- **Роль:** Планировщик — создаёт и ревьюит планы имплементации до написания кода
-- **Модель:** `ecom-qwen35-122b/qwen3.5-122b`
-- **Цвет в UI:** `info` (голубой)
-- **Разрешения:** `read=allow`, `edit=deny`, `bash=ask`
-- **Запуск:** Через `/build` или оркестратора для планирования
-- **Когда использовать:** Для создания implementation plan перед кодингом
+#### Plan (`agents/plan.md`)
+- **Роль:** Планировщик и ревьюер — read-only анализ кода, создание планов, архитектурное ревью. НЕ пишет код.
+- **Модель:** `ecom-deepseek4-flash/deepseek-v4-flash`
+- **Permissions:** `read=allow`, `glob=allow`, `grep=allow`, `question=allow`, `bash=ask`, `edit=deny`, `write=deny`, `task=deny`
 
-#### @seo-writer
+### 3.2 Subagents
 
-SEO-писатель для генерации SEO-оптимизированного контента.
+| # | Агент | Модель | Hidden | Роль | Ключевые permissions |
+|---|-------|--------|--------|------|---------------------|
+| 1 | `explore` | `ecom-qwen35-122b-no-think/qwen3.5-122b` | — | Быстрое исследование кодовой базы (read-only) | read/glob/grep/bash=allow, write/edit/task=deny |
+| 2 | `project-mapper` | `ecom-qwen36-35b-no-think/qwen3.6-35b` | — | Построение карты проекта | read/glob/grep/bash=allow, write/edit/task=deny |
+| 3 | `desearch-researcher` | `ecom-glm-52/glm-5.2` | — | Глубокий веб-ресёрч | read/write/edit/glob/grep/bash/websearch/webfetch=allow |
+| 4 | `desearch-synthesizer` | `ecom-glm-52/glm-5.2` | — | Синтез ресёрч-отчётов | read/write/edit/glob/grep/bash/websearch=allow, webfetch=deny |
+| 5 | `react-dev` | `ecom-qwen36-35b/qwen3.6-35b` | — | React/TS разработка | read/write/edit/glob/grep/bash=allow, task=deny |
+| 6 | `go-dev` | `ecom-qwen36-35b/qwen3.6-35b` | — | Go backend разработка | read/write/edit/glob/grep/bash=allow, task=deny |
+| 7 | `rust-dev` | `ecom-qwen36-35b/qwen3.6-35b` | — | Rust разработка | read/write/edit/glob/grep/bash/task=allow |
+| 8 | `seo-writer` | `ecom-qwen35-122b/qwen3.5-122b` | — | SEO-контент (read-only, через task) | read/glob/grep/task/webfetch=allow, write/edit=deny, bash=ask |
+| 9 | `reviewer` | `ecom-deepseek4-flash/deepseek-v4-flash` | ✅ hidden | Общий code review (standards + spec) | read/write/edit/glob/grep=allow, bash/task=deny |
+| 10 | `reviewer-standards` | `ecom-deepseek4-flash/deepseek-v4-flash` | ✅ hidden | Ревью кодстайла и конвенций | read/glob/grep=allow, edit/write/bash/task=deny |
+| 11 | `reviewer-spec` | `ecom-deepseek4-flash/deepseek-v4-flash` | ✅ hidden | Ревью соответствия спецификации | read/glob/grep=allow, edit/write/bash/task=deny |
+| 12 | `reviewer-arch` | `ecom-deepseek4-flash/deepseek-v4-flash` | ✅ hidden | Архитектурное ревью | read/glob/grep=allow, edit/write/bash/task=deny |
+| 13 | `test-agent` | `ecom-qwen36-35b/qwen3.6-35b` | — | Запуск тестов и отчёт | read/glob/grep/bash=allow, write/edit/task=deny |
+| 14 | `security-check` | `ecom-deepseek4-flash/deepseek-v4-flash` | — | Аудит security/reliability/simplicity | read/glob/grep/bash=allow, write/edit/task=deny |
+| 15 | `soc-check` | `ecom-qwen35-122b/qwen3.5-122b` | — | Проверка SOC/контрактов/покрытия | read/glob/grep/bash=allow, write/edit/task=deny |
+| 16 | `ui-designer` | `ecom-deepseek4-flash/deepseek-v4-flash` | — | UI/UX дизайн (только спецификации) | read/write/edit/glob/grep=allow, bash/task=deny |
 
-| Параметр | Значение |
-|----------|----------|
-| Модель | ecom-qwen35-122b/qwen3.5-122b |
-| Steps | 30 |
-| Permission: read | ✅ allow |
-| Permission: write | ❌ deny |
-| Permission: edit | ❌ deny |
-| Permission: bash | ❌ ask |
-| Permission: task | ✅ allow |
+> **Hidden-агенты** (`hidden: true` в frontmatter) — не появляются в списке доступных агентов UI, но могут вызываться оркестратором через `task()`.
 
-**Назначение:** Создание SEO-оптимизированного контента с правильной структурой заголовков, ключевыми словами, мета-описаниями. Работает в режиме read-only — генерирует контент через task, не редактирует файлы напрямую.
+### Модели по агентам — сводка
 
-### 2.2 Сабагенты (sub-agents)
-
-#### 1. explore
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.6-35b |
-| **Fallback** | qwen3.6-35b |
-| **Роль** | Быстрое исследование кодовой базы — поиск файлов, структуры, usages |
-| **Разрешения** | read/glob/grep/bash=allow, write/edit/task=deny |
-| **Когда вызывает оркестратор** | Для поиска файлов, структуры, usages перед имплементацией |
-| **Команда** | `task({ agent: "explore", prompt: "Найди все файлы, импортящие X" })` |
-
-#### 2. project-mapper
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.6-35b |
-| **Fallback** | qwen3.6-35b |
-| **Роль** | Построение карты проекта — file tree, entry points, configs, deps, routes |
-| **Разрешения** | read/glob/grep/bash=allow, write/task=deny |
-| **Когда вызывает оркестратор** | Этап 0 — перед любой работой по проекту |
-| **Команда** | `task({ agent: "project-mapper", prompt: "Построй карту проекта" })` |
-
-#### 3. desearch-researcher
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | deepseek-v4-flash |
-| **Роль** | Глубокий веб-ресёрч — ищет, фетчит, пишет structured findings |
-| **Разрешения** | read/write/edit/glob/grep/bash/WebSearch/WebFetch=allow |
-| **Когда вызывает оркестратор** | Этап 1 — после grill-me, 2-3 параллельных исследователя |
-| **Команда** | `task({ agent: "desearch-researcher", prompt: "Исследуй угол: <angle>" })` |
-
-#### 4. desearch-synthesizer
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.6-35b |
-| **Fallback** | qwen3.6-35b |
-| **Роль** | Синтез результатов нескольких desearch-researcher в единый отчёт |
-| **Разрешения** | read/write/edit/glob/grep=allow, bash/task=deny |
-| **Когда вызывает оркестратор** | После завершения всех desearch-researcher |
-| **Команда** | `task({ agent: "desearch-synthesizer", prompt: "Синтезируй findings из .research/<topic>/" })` |
-
-#### 5. react-dev
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.6-35b |
-| **Fallback** | qwen3.6-35b |
-| **Роль** | React/TS разработка (React 19, Vite 8, Tailwind v4, Radix, Zustand 5, TanStack Query 5) |
-| **Разрешения** | read/write/edit/glob/grep/bash=allow, task=deny |
-| **Когда вызывает оркестратор** | Этап 2 — для React/TypeScript задач |
-| **Команда** | `task({ agent: "react-dev", prompt: "Создай компонент X" })` |
-
-#### 6. go-dev
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.6-35b |
-| **Fallback** | qwen3.6-35b |
-| **Роль** | Go backend (Gin/Echo, pgx/GORM/sqlx, OpenTelemetry, testify) |
-| **Разрешения** | read/write/edit/glob/grep/bash=allow, task=deny |
-| **Когда вызывает оркестратор** | Этап 2 — для Go задач |
-| **Команда** | `task({ agent: "go-dev", prompt: "Создай handler X" })` |
-
-#### 7. rust-dev
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.6-35b |
-| **Fallback** | qwen3.6-35b |
-| **Роль** | Rust разработка (Axum/Actix, SQLx, tokio, serde, clap) |
-| **Разрешения** | read/write/edit/glob/grep/bash=allow, task=allow |
-| **Когда вызывает оркестратор** | Этап 2 — для Rust задач |
-| **Команда** | `task({ agent: "rust-dev", prompt: "Создай модуль X" })` |
-
-#### 8. reviewer (общий)
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.5-122b |
-| **Fallback** | qwen3.5-122b |
-| **Роль** | Общий code review по двум осям: standards + spec |
-| **Разрешения** | read/write/edit/glob/grep=allow, bash/task=deny |
-| **Когда вызывает оркестратор** | Для быстрого ревью (не критичного) |
-| **Команда** | `task({ agent: "reviewer", prompt: "Проверь код" })` |
-
-#### 9. reviewer-standards
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.5-122b |
-| **Роль** | Ревью кодстайла и конвенций — naming, structure, error handling, comments, commits |
-| **Разрешения** | read-only (edit/bash/task=deny) |
-| **Когда вызывает оркестратор** | Этап 3 — параллельно с reviewer-spec и reviewer-arch |
-| **Команда** | `task({ agent: "reviewer-standards", prompt: "Проверь кодстайл" })` |
-
-#### 10. reviewer-spec
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.5-122b |
-| **Роль** | Ревью соответствия спецификации — requirements coverage, scope creep, accuracy, DoD |
-| **Разрешения** | read-only (edit/bash/task=deny) |
-| **Когда вызывает оркестратор** | Этап 3 — параллельно с reviewer-standards и reviewer-arch |
-| **Команда** | `task({ agent: "reviewer-spec", prompt: "Проверь соответствие spec" })` |
-
-#### 11. reviewer-arch
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.5-122b |
-| **Роль** | Архитектурное ревью — layering, dependency graph, scalability, testability, code smells |
-| **Разрешения** | read-only (edit/bash/task=deny) |
-| **Когда вызывает оркестратор** | Этап 3 — параллельно с reviewer-standards и reviewer-spec |
-| **Команда** | `task({ agent: "reviewer-arch", prompt: "Проверь архитектуру" })` |
-
-#### 12. test-agent
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.6-35b |
-| **Fallback** | qwen3.6-35b |
-| **Роль** | Запуск тестов (unit/integration/e2e) и отчёт |
-| **Разрешения** | read/glob/grep/bash=allow, write/edit/task=deny |
-| **Когда вызывает оркестратор** | Этап 4 — параллельный запуск unit/integration/e2e |
-| **Команда** | `task({ agent: "test-agent", prompt: "Запусти unit tests" })` |
-
-#### 13. security-check
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.5-122b |
-| **Fallback** | qwen3.6-35b |
-| **Роль** | Аудит безопасности/надёжности/простоты |
-| **Разрешения** | read/glob/grep/bash=allow, write/edit/task=deny |
-| **Когда вызывает оркестратор** | Этап 5 |
-| **Команда** | `task({ agent: "security-check", prompt: "Проверь безопасность" })` |
-
-#### 14. soc-check
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.5-122b |
-| **Fallback** | qwen3.6-35b |
-| **Роль** | Проверка SOC/контрактов/тестового покрытия |
-| **Разрешения** | read/glob/grep/bash=allow, write/edit/task=deny |
-| **Когда вызывает оркестратор** | Этап 6 |
-| **Команда** | `task({ agent: "soc-check", prompt: "Проверь SOC" })` |
-
-#### 17. ui-designer
-| Параметр | Значение |
-|----------|----------|
-| **Модель** | qwen3.6-35b |
-| **Fallback** | qwen3.6-35b |
-| **Роль** | UI/UX дизайн — визуальный дизайн, layout, typography, color systems (только спецификации, не код) |
-| **Разрешения** | read/write/edit/glob/grep=allow, bash/task=deny |
-| **Когда вызывает оркестратор** | Когда нужен UI/UX дизайн |
-| **Команда** | `task({ agent: "ui-designer", prompt: "Спроектируй UI для X" })` |
-
-### 2.3 Стратегия моделей по этапам
-
-| Этап | Модель |
-|------|--------|
-| Этап 0: Project Map | qwen3.6-35b |
-| Этап 1: Grill-me | qwen3.5-122b |
-| Этап 1: Research | deepseek-v4-flash |
-| Этап 2: Implementation | qwen3.6-35b |
-| Этап 3: Code Review | qwen3.5-122b |
-| Этап 4: Testing | qwen3.6-35b |
-| Этап 5: Security Check | qwen3.5-122b |
-| Этап 6: SOC Check | qwen3.5-122b |
+| Модель | Агенты |
+|--------|--------|
+| `ecom-glm-52/glm-5.2` | orchestrator, desearch-researcher, desearch-synthesizer |
+| `ecom-deepseek4-flash/deepseek-v4-flash` | build, plan, reviewer, reviewer-standards, reviewer-spec, reviewer-arch, security-check, ui-designer |
+| `ecom-qwen36-35b/qwen3.6-35b` | react-dev, go-dev, rust-dev, test-agent |
+| `ecom-qwen35-122b/qwen3.5-122b` | seo-writer, soc-check |
+| `ecom-qwen35-122b-no-think/qwen3.5-122b` | explore |
+| `ecom-qwen36-35b-no-think/qwen3.6-35b` | project-mapper |
 
 ---
 
-## 🛠 3. Skills (установленные)
+## 📋 4. Правила (Rules)
 
-| Skill | Описание | Как вызвать | Сценарии использования |
-|-------|----------|-------------|----------------------|
-| **caveman** | Ultra-compressed communication. Сокращает токены ~75% с сохранением точности. Поддерживает уровни: lite (по умолчанию), full, ultra | user говорит "caveman mode"/"talk like caveman"/"less tokens"/"be brief", или `/caveman [lite\|full\|ultra]` | Длинные сессии, экономия токенов, быстрые ответы |
-| **config-pull** | Pull последних изменений из `~/claude-config` remote в `~/.claude/` | user говорит "pull config" | Синхронизация глобальной конфигурации |
-| **context-metrics** | Мониторинг и отображение метрик использования контекста, лимитов и effort | `/context` или skill вызывает | Отслеживание расходов токенов, проверка лимитов rate limiting |
-| **desearch** | Параллельный deep web research (3-5 углов) с синтезированным отчётом | user хочет исследовать тему | Любое исследование перед реализацией, анализ технологий |
-| **design** | UI/UX дизайн из скриншотов/промптов — анти-AI-slop, анимации, градиенты, distinctive typography | user просит дизайн | Создание UI спецификаций, design tokens, компонентных specs |
-| **full-workflow** | Запуск полного 7-этапного воркфлоу через `@orchestrator`: map → grill-me → research → implement → review → testing → safety-check → soc-check | `/start <задача>` или `/workflow <задача>` | Старт полного цикла разработки |
-| **graphify** | Построение графа знаний из кода/документов/изображений/видео с community detection и query tools | `/graphify <path>`, или вопрос по коду, или `/graphify query "<вопрос>"` | Анализ архитектуры, документация, исследование кодовой базы |
-| **grill-me** | Интерактивный допрос решений — разбирает дерево решений шаг за шагом, выявляет слабые места | `/grill-me <тема>`, или "прогони меня через grill-me"/"допроси мой план" | Стресс-тест плана перед реализацией, проверка решений |
-| **mapps** | Multi-repo workspace management — клонирование репозиториев, генерация Makefile, карты проектов | `/mapps init <url> [<url>...]`, `/mapps add <url>`, `/mapps rm <name>` | Работа с несколькими репозиториями, создание workspace |
-| **project-pull** | Pull правил/агентов/скиллов из `~/claude-config` в текущий проект | skill вызывает воркфлоу | Синхронизация project-level конфига |
-| **project-push** | Push улучшенных правил/агентов/скиллов из проекта в `~/claude-config` | skill вызывает воркфлоу | Обновление центрального конфига |
-| **workspace-init** | Инициализация workspace для проекта — изоляция конфига от app репозиториев, выбор методологии | `/workspace-init` | Настройка нового проекта, добавление методологий (GSD/BMAD/Superpowers) |
+11 правил в `rules/`, авто-загружаются через `instructions: ["rules/*.md"]`. Индекс — в `rules/README.md`.
 
-### unrobot — детекция и удаление AI-маркеров
-- **Назначение:** Определяет и удаляет AI-маркеры в тексте (filler vocabulary, copula avoidance, rule-of-three, flat sentence rhythm, transition overuse, typography artifacts)
-- **Языки:** 8 (en, ru, de, es, fr, pt, zh, ar)
-- **Pipeline:** Detect → Rewrite → Verify (3-stage, never skip stage 3)
-- **Команда:** `/unrobot <file> [--lang <code>] [--deep]`
-- **Документация:** `skills/unrobot/SKILL.md`
+| Правило | Версия | Для кого | Описание |
+|---------|--------|----------|----------|
+| frontend-components | 2.8.1 | react-dev | Компонентная архитектура — ui-kit/ui/entity/widgets, CVA, cn(), forwardRef, Storybook |
+| frontend-hooks | 1.3.0 | react-dev | Паттерны хуков — one per concern, return pattern, naming |
+| frontend-theme | 3.1.0 | react-dev | Тема — CSS variables, data-theme, ThemeBox, Vite plugin, генерация |
+| frontend-zustand | 1.2.0 | react-dev | Zustand — создание сторов, persist, partialize, actions |
+| go-backend | 1.2.1 | go-dev | Go — структура, ошибки, middleware, HTTP, тесты |
+| go-observability | 1.0.0 | go-dev | Go — логгирование, метрики, трассировка, health checks |
+| rust-errors | 1.1.0 | rust-dev | Rust — error enums, thiserror, severity, Mutex |
+| tauri-bridge | 1.1.0 | rust-dev / react-dev | Tauri v2 — IPC, команды, события, безопасность |
+| opencode-implementer | 1.0.0 | orchestrator | Как opencode работает как executor под оркестрацией |
+| bmad-impl-story-cycle | 1.0.0 | orchestrator | BMAD цикл реализации — эпики, ревью по классу, Fable-гейт |
+| git-commit-push | 1.0.0 | все | Глобальный запрет на git commit/push без явного разрешения |
 
-### bmad-impl — планирование больших задач
-- **Назначение:** Декомпозиция крупных задач через эпики → истории → ревью по классу риска
-- **Когда использовать:** Задача на 3+ файла, миграции данных, архитектурные решения
-- **Pipeline:** Kickoff → Epics → Stories → Review → Sprint
-- **Команда:** `/bmad-impl <task> [--phase <name>]`
-- **Документация:** `skills/bmad-impl/SKILL.md`
+> **Примечание:** `rules/README.md` заявляет «10 правил», но фактически в каталоге 11 `.md`-файлов (в индексе README не учтено правило `git-commit-push`).
 
 ---
 
-## 📋 3b. Правила (Rules)
+## 🛠 5. Skills
 
-11 правил в `rules/`, авто-загружаются через `instructions: ["rules/*.md"]`:
+23 скилла в `skills/`. Каждый — директория с `SKILL.md` (frontmatter: `name`, `description`) и опциональными ресурсами.
 
-| Правило | Размер | Назначение |
-|---------|--------|------------|
-| frontend-components | 25 KB | Компонентная архитектура — ui-kit/entity/widgets, CVA, cn(), Storybook |
-| frontend-theme | 20 KB | Тема — CSS variables, data-theme, ThemeBox, генерация |
-| tauri-bridge | 18 KB | Tauri v2 — IPC, команды, события, безопасность |
-| frontend-zustand | 6.7 KB | Zustand — создание сторов, persist, partialize |
-| bmad-impl-story-cycle | 5.8 KB | BMAD цикл реализации — эпики, ревью, Fable-гейт |
-| opencode-implementer | 7.2 KB | Как opencode работает как executor под оркестрацией |
-| frontend-hooks | 1.5 KB | Паттерны хуков — one per concern, return pattern |
-| go-backend | 1.8 KB | Go — структура, ошибки, middleware |
-| go-observability | 3.0 KB | Go — логгирование, метрики, трассировка, health checks |
-| rust-errors | 1.5 KB | Rust — error enums, thiserror, severity |
-| git-commit-push | 2.5 KB | Git commit/push — глобальный запрет без явного разрешения |
+| Skill | Описание |
+|-------|----------|
+| `bmad-check-implementation-readiness` | Проверка готовности фазы к реализации: acceptance criteria, зависимости, дизайн, test plan |
+| `bmad-create-epics` | Декомпозиция спеки в эпики с coverage mapping |
+| `bmad-create-story` | Создание user story из epic stub: AC, техн. заметки, risk class |
+| `bmad-dev-story` | Разработка BMAD-истории: код + тесты + ревью по risk class |
+| `bmad-impl` | Облегчённый BMAD-цикл для opencode — эпики → истории → ревью → Fable-гейт |
+| `bmad-retrospective` | Ретроспектива спринта/майлстоуна |
+| `bmad-sprint-planning` | Планирование спринта: приоритизация, оценки, sprint-status файл |
+| `caveman` | Ultra-compressed communication — сокращает токены ~75%, уровни lite/full/ultra |
+| `config-pull` | Pull последних изменений из `~/claude-config` в `~/.config/opencode/` |
+| `context-metrics` | Мониторинг метрик контекста, лимитов и effort |
+| `desearch` | Параллельный deep web research (3-5 углов) с синтезированным отчётом |
+| `design` | UI/UX дизайн из скриншотов и промптов — анти-AI-slop, анимации, градиенты |
+| `file-diff` | Сравнение двух файлов с выводом различий в формате unified diff |
+| `full-workflow` | Полный 7-этапный workflow через orchestrator: map → grill → research → implement → review → testing → safety → soc |
+| `graphify` | Построение графа знаний из кода/документов/изображений с query/path/explain tools |
+| `grill-me` | Интерактивный допрос плана/решения — разбирает дерево решений шаг за шагом |
+| `impl-kickoff` | Валидация readiness и запуск процесса разработки |
+| `implement` | Реализация работы по спеке/тикетам |
+| `mapps` | Multi-repo workspace management — клонирование, Makefile, карты проектов |
+| `project-pull` | Pull правил/агентов/скиллов из `~/claude-config` в текущий проект |
+| `project-push` | Push улучшенных правил/агентов/скиллов из проекта в `~/claude-config` |
+| `unrobot` | Детекция и удаление AI-маркеров в тексте, 8 языков, pipeline detect → rewrite → verify |
+| `workspace-init` | Создание workspace-обёртки для проекта — изоляция конфига от app репозиториев |
+
+> **Внешние скиллы** (авто-загружаются из других каталогов, не входят в этот репозиторий):
+> - `~/.agents/skills/` — ask-matt, code-review, codebase-design, diagnosing-bugs, domain-modeling, find-skills, grill-with-docs, grilling, handoff, improve-codebase-architecture, prototype, research, setup-matt-pocock-skills, tdd, teach, to-spec, to-tickets, triage, wayfinder, writing-great-skills
+> - `~/.claude/skills/` — team-metrics
 
 ---
 
-## 🔌 4. Плагины
+## ⌨ 6. Команды
 
-### aistats.js
+6 команд в `commands/` (каждая — `.md` с frontmatter `name`, `description`, опционально `agent`, `subtask`).
 
+| Команда | Agent | Subtask | Описание |
+|---------|-------|---------|----------|
+| `/context` | build | ✅ | Метрики контекста, лимиты, usage. Флаги: `--limits`, `--watch`, `--effort` |
+| `/get-session-metrics` | build | ✅ | Метрики текущей сессии из aistats (`aistats report --format json`). Флаг: `--verbose` |
+| `/grill-me` | — | — | Интерактивный допрос. Делегирует в `skills/grill-me/SKILL.md` |
+| `/herdr-status` | build | ✅ | Запускает `commands/herdr-status.sh` — метрики сессии в Herdr UI |
+| `/m` | — | — | Вызывает tool `get_metrics` — dashboard метрик сессии |
+| `/mapps` | build | ✅ | Multi-repo workspace management. Аргументы: `init <url>...`, `add <url>`, `rm <name>`, `--help` |
+
+> **Примечание:** Команды `/start`, `/workflow`, `/build`, `/map`, `/safety-check`, `/soc-check`, `/caveman`, `/unrobot`, `/bmad-impl` и др. — **не имеют** `.md`-файлов в `commands/`. Они реализуются через skills (`full-workflow`, `caveman`, `unrobot`, `bmad-impl`) или прямой вызов агентов оркестратором.
+
+---
+
+## 🌐 7. MCP Серверы
+
+2 MCP-сервера в `opencode.json` → секция `mcp`:
+
+| Сервер | Тип | Команда | Назначение |
+|--------|-----|---------|------------|
+| `aistats` | local | `aistats mcp` | Сбор метрик токенов, стоимости, рекомендации по эффективности |
+| `playwright` | local | `npx @playwright/mcp@latest --executable-path ${HOME}/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome --headless --no-sandbox --isolated` | E2E тестирование (headless Chromium) |
+
+Playwright MCP дополнительно настраивает environment: `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`.
+
+### aistats MCP — возможности
+- `aistats_aistats_projects` — список проектов с метриками (sessions, turns, time, tokens, cost)
+- `aistats_aistats_report` — отчёт по продуктивности (tokens, cost, time, phase breakdown)
+- `aistats_aistats_recommendations` — ранжированные рекомендации по эффективности
+
+---
+
+## 🔌 8. Плагины
+
+2 JS-плагина. В `opencode.json` **нет** секции `plugin` — плагины авто-обнаруживаются opencode из директории `plugins/`.
+
+> **Дубликат:** файлы `aistats.js` и `herdr-agent-state.js` существуют **одновременно** в корне конфига и в `plugins/`. См. §16 (Известные проблемы).
+
+### aistats.js (`plugins/aistats.js`)
 - **Назначение:** Ингест метрик сессии в aistats при idle
-- **Событие:** `session.idle` на root сессиях (проверяет `parentID`)
+- **Событие:** `session.idle` на root-сессиях (проверяет `parentID`)
 - **Fire-and-forget:** не ждёт результата, ошибки глотаются
 - **Команда:** `aistats ingest --tool opencode`
 - **Зависимость:** `aistats` CLI в PATH
 
-```javascript
-// Логика: проверить что это root сессия, запустить aistats ingest не дожидаясь
-void $`aistats ingest --tool opencode`.quiet().catch(() => {});
-```
-
-### herdr-agent-state.js (v14)
-
+### herdr-agent-state.js (`plugins/herdr-agent-state.js`)
 - **Назначение:** Отслеживание состояния агентов в Herdr UI + кастомный tool `get_metrics`
-- **Тул:** `get_metrics` — возвращает markdown dashboard с метриками сессии
+- **Tool:** `get_metrics` — возвращает markdown dashboard с метриками сессии (duration, tokens, cost, model, status, subagents)
 - **Состояния:** `working` | `idle` | `blocked`
-- **Фичи:**
-  - Обновление window title Herdr панели
-  - Debounced push (300ms)
-  - Refresh метрик каждые 10 секунд
-  - Запись в `~/.config/opencode/metrics.json`
-  - Отслеживание дочерних сессий (subagent sessions)
-  - Форматирование токенов (K/M), времени (h m s), стоимости ($)
+- **Фичи:** обновление window title Herdr панели, debounced push (300ms), refresh метрик каждые 10 секунд, запись в `metrics.json`, отслеживание дочерних сессий
 - **Зависимости:** `node:net`, `node:child_process`, `node:fs`, `node:path`, `@opencode-ai/plugin/tool`
-- **ID интеграции:** `HERDR_INTEGRATION_ID=opencode`, версия 14
 
 **События:**
+
 | Событие | Действие |
 |---------|----------|
-| `session.created` | Старт сессии, начало refresh метрик, report session в Herdr |
+| `session.created` | Старт сессии, начало refresh метрик, report в Herdr |
 | `session.updated` | Обновление model/tokens/cost из event data |
 | `session.idle` | Остановка refresh, финальные метрики, report idle |
 | `session.error` | Установка статуса blocked |
 | `session.deleted` | Очистка данных сессии |
 
-**Tool `get_metrics`:**
-```
-## Session Metrics
-● Status: working
-⏱ Duration: 12m 34s
-📥 Tokens in: 12K / 8K
-💰 Cost: $0.02
-🤖 Model: qwen3.5-122b
-```
+---
+
+## 🧩 9. Провайдеры моделей
+
+7 провайдеров в `opencode.json` → секция `provider`:
+
+| Провайдер | Модель | Context | Output | API Key Env | npm-пакет | Base URL |
+|-----------|--------|---------|--------|-------------|-----------|----------|
+| `zai-coding-plan` | GLM-5.2 | 1M | 131072 | — (подписка Z.AI) | — (built-in) | `https://api.z.ai/api/coding/paas/v4` |
+| `ecom-glm-52` | glm-5.2 | 256K | 16K | `ECOM_GLM52_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom-qwen35-122b` | qwen3.5-122b | 128K | 8K | `ECOM_QWEN35_122b_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom-qwen36-35b` | qwen3.6-35b | 128K | 8K | `ECOM_QWEN36_35b_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom-qwen35-122b-no-think` | qwen3.5-122b (no-think) | 128K | 8K | `ECOM_QWEN35_122b_NO_THINK_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom-qwen36-35b-no-think` | qwen3.6-35b (no-think) | 128K | 8K | `ECOM_QWEN36_35b_NO_THINK_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom-deepseek4-flash` | deepseek-v4-flash | 256K | 16K | `ECOM_DEEPSEEK4_FLASH_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+
+### Особенности провайдеров
+
+**zai-coding-plan** — провайдер подписки Z.AI Coding Plan. Не использует `npm`-пакет (встроенный в opencode) и не требует `apiKey` (авторизация через `~/.local/share/opencode/auth.json`). Контекст 1M, output 131K — самый большой контекст. Используется моделью по умолчанию (`ecom-glm-52/glm-5.2` — НЕ путать, `model` в конфиге указывает на `ecom-glm-52`, но `zai-coding-plan` тоже предоставляет `glm-5.2`).
+
+> **Внимание:** Поле `model` в `opencode.json` = `ecom-glm-52/glm-5.2` (провайдер `ecom-glm-52` — Samokat internal). Провайдер `zai-coding-plan` также предоставляет `glm-5.2` (Z.AI подписка), но не выбран как модель по умолчанию.
+
+**ecom-* провайдеры** (6 шт.) — все используют один base URL `https://llm-core-olap.samokat.ru/v1` и npm-пакет `@ai-sdk/openai-compatible`. Каждый настроен с:
+- `timeout: 120000` (120с на полный запрос)
+- `chunkTimeout: 60000` (60с между SSE чанками)
+- `headerTimeout: 30000` (30с на получение заголовков)
+- `setCacheKey: true` (промпт-кэширование для экономии токенов)
+
+**Rate limits** (в `limit` блоке модели):
+- `deepseek-v4-flash`: hourly 50K, daily 200K, weekly 1M токенов
+- `glm-5.2` (ecom-glm-52): hourly 50K, daily 200K, weekly 1M токенов
+- `qwen3.5-122b`: effort `current: high`, `limit: max`
+
+**No-think провайдеры** (`ecom-qwen35-122b-no-think`, `ecom-qwen36-35b-no-think`) — алиасы тех же моделей с отключённым thinking-режимом. Используются агентами `explore` и `project-mapper` для быстрых нетворческих задач.
 
 ---
 
-## ⌨ 5. Команды
+## 🔒 10. Защита и безопасность
 
-| Команда | Описание | Опции | Как вызвать |
-|---------|----------|-------|-------------|
-| `/start <задача>` | Полный workflow (grill → research → implement → review → test → safety → soc) | — | user |
-| `/workflow <задача>` | То же что `/start` | — | user |
-| `/grill-me <тема>` | Только интерактивный допрос | — | user |
-| `/build <задача>` | Без грилла/ресерча, сразу имплементация | — | user |
-| `/map` | Только построить карту проекта | — | user |
-| `/safety-check` | Только проверка безопасности | — | user |
-| `/soc-check` | Только проверка SOC/контрактов | — | user |
-| `/caveman [lite\|full\|ultra]` | Режим экономии токенов | lite/full/ultra | user |
-| `/m` | Показать метрики сессии (вызов `get_metrics` tool) | — | user |
-| `/mapps` | Multi-repo workspace management | init/add/rm/help | user |
-| `/context [--watch \| --limits \| --effort]` | Метрики контекста и лимиты | --watch, --interval, --limits, --effort | user |
-| `/herdr-status` | Показать и обновить метрики сессии в Herdr | — | user |
-
----
-
-## 🌐 6. MCP Серверы
-
-| Сервер | Тип | Команда | Назначение |
-|--------|-----|---------|------------|
-| aistats | local | `aistats mcp` | Сбор метрик токенов и стоимости |
-| playwright | local | `@playwright/mcp@latest` | E2E тестирование (headless chromium) |
-
-### aistats MCP
-Интеграция с системой сбора метрик сессий AiStats. Позволяет:
-- Отслеживать длительность сессии
-- Собирать статистику по токенам (input/output)
-- Мониторить расходы по моделям
-- Получать рекомендации по эффективности
-Запускается автоматически opencode при старте через секцию `mcp` в `opencode.json`.
-
----
-
-## 🔒 6b. Защита и безопасность
-
-### guard.sh
-Скрипт `/home/ruslan/.config/opencode/guard.sh` защищает от опасных compound-команд.
+### guard.sh (`/home/ruslan/.config/opencode/guard.sh`)
+Защита от опасных compound-команд (128 строк).
 
 **Блокирует:**
-- `rm` в compound-командах (&&, ||, ;)
-- `wget`, `curl -o/-O` (скачивание)
+- `rm` в compound-командах (`&&`, `||`, `;`)
+- `wget`, `curl -o`/`-O` (скачивание)
 - `pip3 install`, `brew install`, `cargo install`, `go install`
 - `git push --force`, `git reset --hard`, `git clean -fdx`
 
@@ -603,179 +385,96 @@ void $`aistats ingest --tool opencode`.quiet().catch(() => {});
 ./guard.sh "echo hi && rm -rf /tmp"  # Блокировка (exit 1)
 ```
 
-### pre-commit.sh
-Валидация перед коммитом:
-1. Type checking (tsc --noEmit)
-2. Linting (eslint)
-3. Тесты (npm test)
+### pre-commit.sh (`/home/ruslan/.config/opencode/pre-commit.sh`)
+Pre-commit валидация по Zero-Rework Protocol (123 строки). 6 этапов:
+1. Type checking (`tsc --noEmit`)
+2. Linting (`eslint`)
+3. Тесты (`npm test`)
 4. Spec traceability
 5. Context consistency
 6. Commit message format (conventional commits)
 
----
+### context-check.sh (`/home/ruslan/.config/opencode/context-check.sh`)
+Проверка consistency контекста сессии (59 строк). Валидирует файл `/tmp/opencode-session-context.md` — наличие секций: Session Context, Recent Error Patterns, Zero-Rework Protocol Checklist.
 
-## 🧩 7. Провайдеры моделей
-
-| Провайдер | Модели | Context Window | Output Limit | Effort по умолч. | API Key Env |
-|-----------|--------|---------------|-------------|-------------------|-------------|
-| **ecom-qwen35-122b** | qwen3.5-122b | 128K | 8K | high | `ECOM_QWEN35_122b_TOKEN` |
-| **ecom-qwen36-35b** | qwen3.6-35b | 128K | 8K | medium | `ECOM_QWEN36_35b_TOKEN` |
-| **ecom-deepseek4-flash** | deepseek-v4-flash | 256K | 16K | medium | `ECOM_DEEPSEEK4_FLASH_TOKEN` |
-| **ecom-giga3-10b** | giga3-10b | 64K | 4K | — | `ECOM_GIGA3_10b_TOKEN` |
-| **ecom-qwen35-122b-no-think** | qwen3.5-122b (no-think) | 128K | 8K | — | `ECOM_QWEN35_122b_NO_THINK_TOKEN` |
-| **ecom-qwen36-35b-no-think** | qwen3.6-35b (no-think) | 128K | 8K | — | `ECOM_QWEN36_35b_NO_THINK_TOKEN` |
-
-**Детали провайдеров:**
-
-| Провайдер | Base URL | Пакет npm |
-|-----------|----------|-----------|
-| ecom-qwen35-122b | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
-| ecom-qwen36-35b | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
-| ecom-deepseek4-flash | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
-| ecom-giga3-10b | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
-| ecom-qwen35-122b-no-think | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
-| ecom-qwen36-35b-no-think | `https://llm-core-olap.samokat.ru/v1` | `@ai-sdk/openai-compatible` |
-
-**Rate limits (DeepSeek):**
-- `deepseek-v4-flash`: daily 100K, weekly 500K, monthly 2M
+### Правило git-commit-push
+Глобальный запрет на `git commit`/`git push` без явного разрешения пользователя (см. §4, правило `git-commit-push` v1.0.0).
 
 ---
 
-## 📋 8. Расшифровка файлов конфигурации
+## 📜 11. Скрипты
 
-| Файл | Назначение |
-|------|-----------|
-| `opencode.json` | Главный конфиг — модели, провайдеры, агенты, MCP, permissions |
-| `CLAUDE.md` | Глобальные правила поведения агента (180 строк: honesty, quality, testing, naming, git, comments, tokens, research, orchestrator mode) |
-| `.env.example` | Шаблон переменных окружения для API-ключей (7 переменных для 5 провайдеров) |
-| `.gitignore` | Игнорируемые файлы: `node_modules/`, `.env`, `*.log`, `.DS_Store`, `.vscode/`, `metrics.json` |
-| `metrics.json` | Метрики последней сессии (state, model, duration, tokens, cost) |
-| `package.json` | npm-зависимости: `@ai-sdk/openai-compatible ^2.0.41`, `@opencode-ai/plugin ^1.18.7` |
-| `README.md` | Быстрый старт по конфигурации, команды, агенты |
-| `CONFIG_DOCUMENTATION.md` | Полная документация конфигурации (этот файл) |
+| Скрипт | Строк | Назначение |
+|--------|-------|------------|
+| `scripts/setup-opencode-config.sh` | 426 | Автоматическая установка конфигурации на новом устройстве (Linux/macOS): определение ОС, установка opencode, клон/pull репо, npm install, создание `.env`, добавление `~/.local/bin` в PATH |
+| `guard.sh` | 128 | Защита от опасных compound-команд (см. §10) |
+| `pre-commit.sh` | 123 | Pre-commit валидация Zero-Rework Protocol (см. §10) |
+| `context-check.sh` | 59 | Проверка consistency контекста сессии (см. §10) |
+| `commands/herdr-status.sh` | 82 | Скрипт для команды `/herdr-status` — вывод метрик сессии в Herdr UI |
 
-**Директории:**
+### package.json
 
-| Директория | Назначение |
-|------------|-----------|
-| `agents/` | Описания агентов (16 `.md` файлов) |
-| `commands/` | Команды opencode (9 файлов: context.json/md, m.md, grill-me.md, mapps.md, herdr-status.*) |
-| `skills/` | Скиллы (12 директорий с SKILL.md + ресурсы) |
-| `plugins/` | Плагины opencode (aistats.js, herdr-agent-state.js) |
-| `scripts/` | Вспомогательные скрипты (setup-opencode-config.sh) |
-| `docs/` | Документация (HERDR_METRICS_INTEGRATION.md) |
-| `node_modules/` | npm-зависимости |
+```json
+{
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.41",
+    "@opencode-ai/plugin": "^1.18.7"
+  }
+}
+```
 
 ---
 
-## 🚀 9. Установка на новом устройстве
+## 🧪 12. Тесты
 
-### Быстрая установка (Linux/macOS)
+### test-orchestrator-grillme.sh (`tests/test-orchestrator-grillme.sh`)
+Test suite для проверки конфигурации orchestrator + grill-me интеграции (153 строки). 4 тест-кейса:
+1. Orchestrator конфигурация
+2. Grill-me конфигурация
+3. Интеграция
+4. Sanity checks
 
+Запуск:
 ```bash
-# 1. Установить opencode (если ещё не установлен)
-curl -fsSL https://opencode.ai/install.sh | sh
-
-# ИЛИ через Homebrew (macOS)
-brew install opencode
-
-# 2. Склонировать конфигурацию
-git clone git@github.com:rus-lan/opencode-work-config.git ~/.config/opencode
-
-# 3. Установить зависимости
-cd ~/.config/opencode && npm install
-
-# 4. Настроить переменные окружения (см. .env.example)
-cp .env.example ~/.config/opencode/.env
-# Отредактируй .env и вставь свои API-ключи
-
-# 5. Убедись что ~/.local/bin в PATH (для opencode)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc  # или ~/.bashrc
-
-# 6. Проверка
-opencode --version
-opencode run "Hello"  # тестовый запрос
+bash ~/.config/opencode/tests/test-orchestrator-grillme.sh
 ```
 
-### Ручная установка (детально)
+---
 
-**Шаг 1: Установка opencode**
+## 📚 13. Документы
 
-Вариант A — curl (Linux/macOS):
-```bash
-curl -fsSL https://opencode.ai/install.sh | sh
-```
+| Документ | Назначение |
+|----------|------------|
+| `README.md` | Быстрый старт — установка, архитектура, агенты, скиллы, команды, провайдеры |
+| `CONFIG_DOCUMENTATION.md` | Этот файл — полная документация конфигурации |
+| `rules/README.md` | Индекс правил (11 шт.) |
+| `docs/HERDR_METRICS_INTEGRATION.md` | Документация интеграции Herdr (212 строк) — плагин `herdr-agent-state.js`, tool `get_metrics`, события, файл метрик |
+| `.env.example` | Шаблон переменных окружения для API-ключей |
+| `.gitignore` | Игнорируемые файлы: `node_modules/`, `.env`, `*.log`, `.DS_Store`, `.vscode/`, `.idea/`, `*.swp`, `tmp/`, `temp/`, `*.tmp`, `metrics.json`, `skills/unrobot/test/` |
 
-Вариант B — Homebrew (macOS):
-```bash
-brew install opencode
-```
-
-Вариант C — npm (если есть Node.js):
-```bash
-npm install -g @opencode-ai/cli
-```
-
-После установки убедись, что `~/.local/bin` в PATH:
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-# или для bash: echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-```
-
-**Шаг 2: Клонирование конфигурации**
+### .env.example — переменные окружения
 
 ```bash
-git clone git@github.com:rus-lan/opencode-work-config.git ~/.config/opencode
+# Qwen models
+ECOM_QWEN35_122b_TOKEN=
+ECOM_QWEN36_35b_TOKEN=
+ECOM_QWEN35_122b_NO_THINK_TOKEN=
+ECOM_QWEN36_35b_NO_THINK_TOKEN=
+
+# DeepSeek models
+ECOM_DEEPSEEK4_FLASH_TOKEN=
+
+# Other models
+ECOM_GIGA3_10b_TOKEN=
 ```
 
-Если SSH не работает (нет ключа), используй HTTPS:
-```bash
-git clone https://github.com/rus-lan/opencode-work-config.git ~/.config/opencode
-```
+> ⚠️ См. §16 — `.env.example` не содержит `ECOM_GLM52_TOKEN`, нужный провайдеру `ecom-glm-52`, и содержит устаревший `ECOM_GIGA3_10b_TOKEN`, не используемый ни одним провайдером в `opencode.json`.
 
-**Шаг 3: Установка зависимостей**
+---
 
-```bash
-cd ~/.config/opencode && npm install
-```
-
-Это установит:
-- `@ai-sdk/openai-compatible` — OpenAI-compatible SDK для кастомных провайдеров
-- `@opencode-ai/plugin` — плагин SDK для opencode
-
-**Шаг 4: Настройка переменных окружения**
-
-```bash
-cp ~/.config/opencode/.env.example ~/.config/opencode/.env
-```
-
-Отредактируй `.env` и заполни все API-токены:
-
-| Переменная | Описание | Где взять |
-|-----------|----------|-----------|
-| `ECOM_QWEN35_122b_TOKEN` | Токен для Qwen 3.5 122B | Инфраструктура компании (llm-core-olap) |
-| `ECOM_QWEN36_35b_TOKEN` | Токен для Qwen 3.6 35B | Инфраструктура компании (llm-core-olap) |
-| `ECOM_QWEN35_122b_NO_THINK_TOKEN` | Токен для Qwen 3.5 122B (no-think режим) | Инфраструктура компании (llm-core-olap) |
-| `ECOM_QWEN36_35b_NO_THINK_TOKEN` | Токен для Qwen 3.6 35B (no-think режим) | Инфраструктура компании (llm-core-olap) |
-| `ECOM_DEEPSEEK4_FLASH_TOKEN` | Токен для DeepSeek v4 flash | Инфраструктура компании (llm-core-olap) |
-| `ECOM_GIGA3_10b_TOKEN` | Токен для Giga v3 10B | Инфраструктура компании (llm-core-olap) |
-
-Все провайдеры используют единый base URL: `https://llm-core-olap.samokat.ru/v1`
-
-**Шаг 5: Проверка**
-
-```bash
-opencode --version
-# Должно показать: 1.18.7
-
-opencode run "Привет! Напиши short诗歌 на русском"
-# Проверяет модель по умолчанию и агента
-```
+## 🚀 14. Установка на новом устройстве
 
 ### Автоматическая установка
-
-Используй скрипт `scripts/setup-opencode-config.sh`:
 
 ```bash
 bash ~/.config/opencode/scripts/setup-opencode-config.sh
@@ -784,123 +483,112 @@ bash ~/.config/opencode/scripts/setup-opencode-config.sh
 Скрипт автоматически:
 1. Определит ОС (Linux/macOS)
 2. Установит opencode если не установлен
-3. Склонирует/pull репозиторий конфига
+3. Склонирует/pull репозиторий конфига в `~/.config/opencode`
 4. Установит npm-зависимости
 5. Создаст `.env` из `.env.example` (если нет)
 6. Добавит `~/.local/bin` в PATH (если нет)
 7. Проверит что opencode работает
 
-**Шаг 6: Установка guard hooks (рекомендовано)**
+### Ручная установка
 
-Установка pre-commit хуков для защиты от опасных команд:
+```bash
+# 1. Установить opencode
+curl -fsSL https://opencode.ai/install.sh | sh
+
+# 2. Клонировать конфигурацию
+git clone git@github.com:rus-lan/opencode-work-config.git ~/.config/opencode
+
+# 3. Установить зависимости
+cd ~/.config/opencode && npm install
+
+# 4. Настроить переменные окружения
+cp .env.example .env
+# Отредактировать .env — вставить API-токены
+
+# 5. Убедиться что ~/.local/bin в PATH
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+
+# 6. Проверка
+opencode --version    # 1.18.7
+opencode run "Hello"
+```
+
+### API-токены
+
+| Переменная | Провайдер | Где взять |
+|-----------|-----------|-----------|
+| `ECOM_QWEN35_122b_TOKEN` | ecom-qwen35-122b | Инфраструктура Samokat (llm-core-olap) |
+| `ECOM_QWEN36_35b_TOKEN` | ecom-qwen36-35b | Инфраструктура Samokat (llm-core-olap) |
+| `ECOM_QWEN35_122b_NO_THINK_TOKEN` | ecom-qwen35-122b-no-think | Инфраструктура Samokat (llm-core-olap) |
+| `ECOM_QWEN36_35b_NO_THINK_TOKEN` | ecom-qwen36-35b-no-think | Инфраструктура Samokat (llm-core-olap) |
+| `ECOM_DEEPSEEK4_FLASH_TOKEN` | ecom-deepseek4-flash | Инфраструктура Samokat (llm-core-olap) |
+| `ECOM_GLM52_TOKEN` | ecom-glm-52 | Инфраструктура Samokat (llm-core-olap) — **нет в .env.example** |
+| — | zai-coding-plan | Подписка Z.AI Coding Plan (авторизация через `~/.local/share/opencode/auth.json`) |
+
+Все ecom-* провайдеры используют base URL: `https://llm-core-olap.samokat.ru/v1`
+
+### Guard hooks (рекомендовано)
+
 ```bash
 ~/.config/opencode/guard.sh --install
 ```
 
 ---
 
-## 🔄 10. Обновление конфигурации
+## 🔄 15. Обновление конфигурации
 
 ```bash
-# Получить последние изменения из репозитория
 cd ~/.config/opencode && git pull
-
-# Обновить зависимости
 npm install
 ```
 
 **Project-level синхронизация:**
 - `/project-pull` — pull правил/агентов/скиллов в проект
 - `/project-push` — push улучшений из проекта в центральный репо
-
-**Global config sync:**
 - `config-pull` skill — pull последних изменений из `~/claude-config`
 
-**Guard hooks:**
+**После обновления:**
 ```bash
-# Установить guard hooks после обновления
-~/.config/opencode/guard.sh --install
-```
-
-**После git pull проверь:**
-```bash
-# Обновить зависимости
-npm install
-
-# Проверить, что guard.sh актуален
-~/.config/opencode/guard.sh --list
+npm install                              # обновить зависимости
+~/.config/opencode/guard.sh --list       # проверить актуальность guard
 ```
 
 ---
 
-## 🛠 11. Расширение конфигурации
+## ⚠️ 16. Известные расхождения и проблемы
 
-### Добавление нового агента
+При сопоставлении файлов конфигурации обнаружены следующие несоответствия:
 
-1. Создай `.md` файл в `~/.config/opencode/agents/` с frontmatter:
-   ```yaml
-   ---
-   name: my-agent
-   mode: subagent
-   model: provider/model
-   permissions:
-     read: allow
-     write: allow
-   ---
-   ```
-2. Добавь секцию `agent` в `opencode.json`:
-   ```json
-   "my-agent": {
-     "mode": "subagent",
-     "model": "ecom-qwen36-35b/qwen3.6-35b",
-     "description": "Описание"
-   }
-   ```
-3. Запушь изменения: `git add → commit → push`
+### 16.1 .env.example не синхронизирован с opencode.json
+- **Отсутствует** `ECOM_GLM52_TOKEN` — нужен провайдеру `ecom-glm-52` (модель `glm-5.2`, используется агентами orchestrator, desearch-researcher, desearch-synthesizer). Без этого токена эти агенты не смогут работать через `ecom-glm-52`.
+- **Присутствует** `ECOM_GIGA3_10b_TOKEN` — не используется ни одним провайдером в `opencode.json`. В старой документации и README упоминался провайдер `ecom-giga3-10b` (модель giga3-10b), но в текущем `opencode.json` он **отсутствует**.
 
-### Добавление нового скилла
+### 16.2 Дубликаты плагинов
+Файлы `aistats.js` и `herdr-agent-state.js` существуют **одновременно** в двух местах:
+- Корень: `~/.config/opencode/aistats.js`, `~/.config/opencode/herdr-agent-state.js`
+- Каталог плагинов: `~/.config/opencode/plugins/aistats.js`, `~/.config/opencode/plugins/herdr-agent-state.js`
 
-1. **Установка из репозитория:** Скопируй skill в `~/.config/opencode/skills/<name>/SKILL.md`
-2. **Создание нового:** Создай директорию `~/.config/opencode/skills/<name>/` с `SKILL.md` и frontmatter:
-   ```yaml
-   ---
-   name: my-skill
-   description: Описание
-   ---
-   ```
+В `opencode.json` нет секции `plugin`. Назначение корневых копий неясно — возможно, legacy. Рекомендуется удалить дубликаты и оставить только `plugins/`.
 
-### Добавление MCP сервера
+### 16.3 rules/README.md считает неправильно
+README заявляет «10 правил» и индекс-таблица содержит 10 строк, но фактически в `rules/` лежит **11** `.md`-файлов правил (в индексе не учтён `git-commit-push`). Старая CONFIG_DOCUMENTATION.md в одном месте писала «12 правил», в другом «11».
 
-1. Добавь секцию `mcp` в `opencode.json`:
-   ```json
-   "mcp": {
-     "my-server": {
-       "type": "local",
-       "command": ["my-server", "--arg"],
-       "enabled": true
-     }
-   }
-   ```
-2. Перезапусти opencode
+### 16.4 README.md содержит устаревшие данные
+- Бейдж «agents-23» — фактически 19 agent-файлов (3 primary + 16 subagents).
+- Бейдж «skills-22» — фактически 23 скилла в `skills/`.
+- Бейдж «model-qwen3.5--122b» — фактически модель по умолчанию `glm-5.2`.
+- В таблице сабагентов указаны `project-mapper` → giga3-10b и `test-agent` → giga3-10b — фактически `project-mapper` использует `ecom-qwen36-35b-no-think/qwen3.6-35b`, `test-agent` — `ecom-qwen36-35b/qwen3.6-35b`.
+- В таблице провайдеров указан `ecom-giga3-10b` — отсутствует в `opencode.json`.
+- Раздел «Команды (6)» перечисляет 6 команд, но не упоминает `/get-session-metrics`.
 
-### Добавление нового провайдера
+### 16.5 CLAUDE.md отсутствует
+Старая CONFIG_DOCUMENTATION.md (§8) упоминала `CLAUDE.md` — «Глобальные правила поведения агента (180 строк)». Файл **не существует** в текущем каталоге конфигурации. Вероятно, удалён или перенесён.
 
-1. Добавь секцию `provider` в `opencode.json`:
-   ```json
-   "my-provider": {
-     "npm": "@ai-sdk/openai-compatible",
-     "name": "model-name",
-     "options": {
-       "baseURL": "https://api.example.com/v1",
-       "apiKey": "{env:MY_API_KEY}"
-     },
-     "models": {
-       "model-name": {
-         "name": "model-name",
-         "limit": { "context": 128000, "output": 8192 }
-       }
-     }
-   }
-   ```
-2. Добавь переменную окружения в `.env.example` и `.env`
-3. Перезапусти opencode
+### 16.6 Каталог prompts/ пуст
+Содержит только `.gitignore`. Назначение неясно — возможно, заглушка для будущих промптов.
+
+### 16.7 seo-writer — subagent, не primary
+Старая документация и README перечисляют `seo-writer` как primary-агента. Фактически в frontmatter `agents/seo-writer.md` указано `mode: subagent`.
+
+### 16.8 Hidden-агенты не документированы
+Агенты `reviewer`, `reviewer-standards`, `reviewer-spec`, `reviewer-arch` имеют `hidden: true` в frontmatter — не появляются в UI списке. Старая документация не упоминала этот атрибут.

@@ -9,6 +9,7 @@ permission:
   task: deny
   glob: allow
   grep: allow
+  question: allow
 mode: primary
 model: ecom-deepseek4-flash/deepseek-v4-flash
 steps: 30

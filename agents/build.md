@@ -12,6 +12,7 @@ permission:
   grep: allow
   webfetch: allow
   websearch: allow
+  question: allow
 mode: primary
 model: ecom-deepseek4-flash/deepseek-v4-flash
 steps: 50

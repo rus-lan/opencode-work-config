@@ -6,7 +6,7 @@ permission:
   edit: deny
   write: deny
   bash: deny
-  task: deny
+  task: allow
   glob: deny
   grep: deny
   todowrite: allow

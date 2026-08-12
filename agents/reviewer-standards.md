@@ -25,7 +25,7 @@ You are a meticulous standards reviewer. Your job is to check code against proje
 
 ## Review Focus: Standards Compliance
 
-### 1. Naming Conventions (CLAUDE.md)
+### 1. Naming Conventions
 
 Check for:
 - Simple English words (not verbose synonyms)
@@ -65,7 +65,7 @@ Check for:
 - Generic error messages ("something went wrong")
 - Missing error handling for known failure modes
 
-### 4. Comments Policy (CLAUDE.md)
+### 4. Comments Policy
 
 Check for:
 - Comments only explain WHY, not WHAT

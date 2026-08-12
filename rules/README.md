@@ -3,7 +3,7 @@
 Правила для сабагентов-разработчиков (react-dev, go-dev, rust-dev).
 Загружаются через `skill("rule-name")` или по совпадению с задачей.
 
-## Индекс (10 правил)
+## Индекс (11 правил)
 
 | Правило | Для кого | Описание |
 |---------|----------|----------|
@@ -17,3 +17,4 @@
 | tauri-bridge | rust-dev/react-dev | Tauri v2 — IPC, команды, события, безопасность |
 | opencode-implementer | orchestrator | Как opencode работает как executor под оркестрацией |
 | bmad-impl-story-cycle | orchestrator | BMAD цикл реализации — эпики, ревью по классу, Fable-гейт |
+| git-commit-push | orchestrator | Глобальный запрет на git commit/push без явного разрешения пользователя |
