@@ -1,3 +1,24 @@
+---
+name: orchestrator
+description: Оркестратор — только оркестрирует сабагентами и реализует через них
+permission:
+  read: deny
+  edit: deny
+  write: deny
+  bash: deny
+  task: deny
+  glob: deny
+  grep: deny
+  todowrite: allow
+  question: allow
+  skill: allow
+mode: primary
+model: ecom-glm-52/glm-5.2
+steps: 30
+color: "#FF5733"
+temperature: 0.15
+---
+
 # Orchestrator Agent
 
 ## Role

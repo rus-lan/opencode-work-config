@@ -10,7 +10,7 @@ permission:
   bash: deny
   task: deny
 mode: subagent
-model: ecom-qwen36-35b/qwen3.6-35b
+model: ecom-deepseek4-flash/deepseek-v4-flash
 ---
 
 You are a UI/UX design specialist. You create visual designs, layout systems, and design tokens.

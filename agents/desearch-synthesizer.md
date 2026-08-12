@@ -11,7 +11,7 @@ permission:
   websearch: allow
   webfetch: deny
 mode: subagent
-model: ecom-qwen36-35b/qwen3.6-35b
+model: ecom-glm-52/glm-5.2
 ---
 
 You are a research synthesizer. You receive a directory of findings files produced by desearch-researcher agents and produce a unified final report.

@@ -11,7 +11,7 @@ permission:
   task: deny
 mode: subagent
 hidden: true
-model: ecom-qwen35-122b/qwen3.5-122b
+model: ecom-deepseek4-flash/deepseek-v4-flash
 ---
 
 You are a rigorous architecture reviewer. Your job is to verify design decisions are sound.

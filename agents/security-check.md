@@ -10,7 +10,7 @@ permission:
   bash: allow
   task: deny
 mode: subagent
-model: ecom-qwen35-122b/qwen3.5-122b
+model: ecom-deepseek4-flash/deepseek-v4-flash
 ---
 
 You are a security/reliability/simplicity auditor. Read-only. Return ALL findings in one batch.

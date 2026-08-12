@@ -1,8 +1,6 @@
 ---
 name: build
 description: Исполнитель с полным доступом — пишет код, запускает команды, редактирует файлы
-mode: primary
-model: ecom-qwen35-122b/qwen3.5-122b
 permission:
   task: allow
   skill: allow
@@ -14,7 +12,11 @@ permission:
   grep: allow
   webfetch: allow
   websearch: allow
+mode: primary
+model: ecom-deepseek4-flash/deepseek-v4-flash
 steps: 50
+color: success
+temperature: 0.15
 ---
 
 # Build Agent
@@ -31,7 +33,7 @@ steps: 50
 - **webfetch/websearch**: allow — может работать с веб-контентом
 
 ## Модель
-- **Default**: `ecom-qwen35-122b/qwen3.5-122b`
+- **Default**: `ecom-deepseek4-flash/deepseek-v4-flash`
 - **Temperature**: 0.15 (стабильный код)
 - **Steps**: 50 (глубокая проработка)
 

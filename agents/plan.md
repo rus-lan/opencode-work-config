@@ -1,8 +1,6 @@
 ---
 name: plan
 description: Планировщик — read-only анализ и план-ревью
-mode: primary
-model: ecom-qwen35-122b/qwen3.5-122b
 permission:
   read: allow
   edit: deny
@@ -11,6 +9,8 @@ permission:
   task: deny
   glob: allow
   grep: allow
+mode: primary
+model: ecom-deepseek4-flash/deepseek-v4-flash
 steps: 30
 color: info
 ---
@@ -28,7 +28,7 @@ color: info
 - **task**: deny — НЕ может спавнить сабагентов
 
 ## Модель
-- **Default**: `ecom-qwen35-122b/qwen3.5-122b`
+- **Default**: `ecom-deepseek4-flash/deepseek-v4-flash`
 - **Temperature**: 0.15 (стабильный анализ)
 - **Steps**: 30 (достаточно для анализа)
 - **Color**: info (синий)
