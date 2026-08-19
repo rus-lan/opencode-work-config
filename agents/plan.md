@@ -11,7 +11,7 @@ permission:
   grep: allow
   question: allow
 mode: primary
-model: ecom-deepseek4-flash/deepseek-v4-flash
+model: ecom/deepseek-v4-flash
 steps: 30
 color: info
 ---
@@ -29,7 +29,7 @@ color: info
 - **task**: deny — НЕ может спавнить сабагентов
 
 ## Модель
-- **Default**: `ecom-deepseek4-flash/deepseek-v4-flash`
+- **Default**: `ecom/deepseek-v4-flash`
 - **Temperature**: 0.15 (стабильный анализ)
 - **Steps**: 30 (достаточно для анализа)
 - **Color**: info (синий)

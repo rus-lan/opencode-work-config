@@ -11,7 +11,7 @@ permission:
   task: deny
 mode: subagent
 hidden: true
-model: ecom-deepseek4-flash/deepseek-v4-flash
+model: ecom/deepseek-v4-flash
 ---
 
 You are a meticulous spec reviewer. Your job is to verify implementation matches requirements.

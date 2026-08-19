@@ -13,7 +13,7 @@ permission:
   question: allow
   skill: allow
 mode: primary
-model: ecom-glm-52/glm-5.2
+model: ecom/deepseek-v4-flash
 steps: 30
 color: "#FF5733"
 temperature: 0.15
@@ -47,7 +47,7 @@ temperature: 0.15
 - plan: for planning, reviewing, analyzing
 
 ## Model
-Default: ecom-deepseek4-flash/deepseek-v4-flash
+Default: ecom/deepseek-v4-flash
 
 ## Prompt
 

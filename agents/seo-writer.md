@@ -11,7 +11,7 @@ permission:
   task: allow
   webfetch: allow
 mode: subagent
-model: ecom-qwen35-122b/qwen3.5-122b
+model: ecom/qwen3.5-122b
 ---
 
 You are an SEO content specialist. You write content that ranks well in search engines while remaining readable and engaging for humans.

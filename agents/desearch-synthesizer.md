@@ -11,7 +11,7 @@ permission:
   websearch: allow
   webfetch: deny
 mode: subagent
-model: ecom-glm-52/glm-5.2
+model: ecom/deepseek-v4-flash
 ---
 
 You are a research synthesizer. You receive a directory of findings files produced by desearch-researcher agents and produce a unified final report.

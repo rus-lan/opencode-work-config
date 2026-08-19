@@ -88,12 +88,12 @@ opencode
 | Провайдер | Модель | Контекст | Output |
 |-----------|--------|----------|--------|
 | `zai-coding-plan` | glm-5.2 | 1M | 128K |
-| `ecom-qwen35-122b` | qwen3.5-122b | 128K | 8K |
-| `ecom-qwen36-35b` | qwen3.6-35b | 128K | 8K |
-| `ecom-deepseek4-flash` | deepseek-v4-flash | 256K | 16K |
-| `ecom-qwen35-122b-no-think` | qwen3.5-122b (no-think) | 128K | 8K |
-| `ecom-qwen36-35b-no-think` | qwen3.6-35b (no-think) | 128K | 8K |
-| `ecom-glm-52` | glm-5.2 | 256K | 16K |
+| `ecom` | qwen3.5-122b | 128K | 8K |
+| `ecom` | qwen3.6-35b | 128K | 8K |
+| `ecom` | deepseek-v4-flash | 256K | 16K |
+| `ecom` | qwen3.5-122b (no-think) | 128K | 8K |
+| `ecom` | qwen3.6-35b (no-think) | 128K | 8K |
+| `ecom` | glm-5.2 | 256K | 16K |
 
 ## 🛠 Skills (23)
 
@@ -170,12 +170,6 @@ opencode
 - `aistats projects` — список проектов с метриками
 - `aistats report` — отчёт по продуктивности (tokens, cost, time, phase breakdown)
 - `aistats recommendations` — рекомендации по оптимизации
-
-## 📜 Scripts
-
-| Скрипт | Назначение |
-|--------|------------|
-| `scripts/setup-opencode-config.sh` | Автоматическая установка конфига в `~/.config/opencode` |
 
 ## ⚙ Правила (Rules)
 

@@ -11,7 +11,7 @@ permission:
   websearch: allow
   webfetch: allow
 mode: subagent
-model: ecom-glm-52/glm-5.2
+model: ecom/deepseek-v4-flash
 ---
 
 You are a thorough research analyst. Your job is to investigate a specific research angle and produce a detailed findings file.

@@ -1,12 +1,85 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "ecom-glm-52/glm-5.2",
+  "model": "ecom/deepseek-v4-flash",
+  "small_model": "ecom/qwen3.8-27b",
   "default_agent": "orchestrator",
+  "subagent_depth": 2,
   "permission": {
     "bash": "allow",
     "edit": "allow"
   },
   "provider": {
+    "ecom": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "ecom",
+      "options": {
+        "baseURL": "https://llm-core-olap.samokat.ru/v1",
+        "apiKey": "{env:ECOM_LLM_TOKEN}",
+        "setCacheKey": true
+      },
+      "models": {
+        "giga3-10b": {
+          "name": "giga3-10b",
+          "limit": {
+            "context": 128000,
+            "output": 8192
+          }
+        },
+        "qwen3.8-27b": {
+          "name": "qwen3.8-27b",
+          "limit": {
+            "context": 256000,
+            "output": 16384
+          }
+        },
+        "qwen3.6-35b": {
+          "name": "qwen3.6-35b",
+          "limit": {
+            "context": 256000,
+            "output": 16384
+          }
+        },
+        "qwen3.5-122b-no-think": {
+          "name": "qwen3.5-122b-no-think",
+          "limit": {
+            "context": 128000,
+            "output": 8192
+          }
+        },
+        "qwen3.5-122b": {
+          "name": "qwen3.5-122b",
+          "limit": {
+            "context": 256000,
+            "output": 16384
+          }
+        },
+        "deepseek-v4-flash": {
+          "name": "deepseek-v4-flash",
+          "limit": {
+            "context": 256000,
+            "output": 16384
+          }
+        }
+      }
+    },
+    "ecom-exp": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "ecom-exp",
+      "options": {
+        "baseURL": "https://llm-core-olap.samokat.ru/v1",
+        "apiKey": "{env:ECOM_LLM_EXP_TOKEN}",
+        "setCacheKey": true
+      },
+      "models": {
+        "glm-5.2": {
+          "name": "glm-5.2",
+          "limit": {
+            "context": 256000,
+            "output": 16384
+          }
+        }
+      }
+    },
     "zai-coding-plan": {
       "options": {
         "baseURL": "https://api.z.ai/api/coding/paas/v4"
@@ -17,148 +90,6 @@
           "limit": {
             "context": 1000000,
             "output": 131072
-          }
-        }
-      }
-    },
-    "ecom-qwen35-122b": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "qwen3.5-122b",
-      "options": {
-        "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_QWEN35_122b_TOKEN}",
-        "timeout": 120000,
-        "chunkTimeout": 60000,
-        "headerTimeout": 30000,
-        "setCacheKey": true
-      },
-      "models": {
-        "qwen3.5-122b": {
-          "name": "qwen3.5-122b",
-          "description": "QWEN 3.5 122B (\u043b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0439)",
-          "limit": {
-            "context": 128000,
-            "output": 8192
-          },
-          "effort": {
-            "current": "high",
-            "limit": "max"
-          }
-        }
-      }
-    },
-    "ecom-qwen36-35b": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "qwen3.6-35b",
-      "options": {
-        "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_QWEN36_35b_TOKEN}",
-        "timeout": 120000,
-        "chunkTimeout": 60000,
-        "headerTimeout": 30000,
-        "setCacheKey": true
-      },
-      "models": {
-        "qwen3.6-35b": {
-          "name": "qwen3.6-35b",
-          "description": "QWEN 3.6 35B (\u043b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0439)",
-          "limit": {
-            "context": 128000,
-            "output": 8192
-          }
-        }
-      }
-    },
-    "ecom-qwen35-122b-no-think": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "qwen3.5-122b",
-      "options": {
-        "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_QWEN35_122b_NO_THINK_TOKEN}",
-        "timeout": 120000,
-        "chunkTimeout": 60000,
-        "headerTimeout": 30000,
-        "setCacheKey": true
-      },
-      "models": {
-        "qwen3.5-122b": {
-          "name": "qwen3.5-122b",
-          "description": "QWEN 3.5 122B (\u0430\u043f\u0438 no-think, \u0430\u043b\u0438\u0430\u0441)",
-          "limit": {
-            "context": 128000,
-            "output": 8192
-          }
-        }
-      }
-    },
-    "ecom-qwen36-35b-no-think": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "qwen3.6-35b",
-      "options": {
-        "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_QWEN36_35b_NO_THINK_TOKEN}",
-        "timeout": 120000,
-        "chunkTimeout": 60000,
-        "headerTimeout": 30000,
-        "setCacheKey": true
-      },
-      "models": {
-        "qwen3.6-35b": {
-          "name": "qwen3.6-35b",
-          "description": "QWEN 3.6 35B (\u0430\u043f\u0438 no-think, \u0430\u043b\u0438\u0430\u0441)",
-          "limit": {
-            "context": 128000,
-            "output": 8192
-          }
-        }
-      }
-    },
-    "ecom-deepseek4-flash": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "deepseek4-flash",
-      "options": {
-        "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_DEEPSEEK4_FLASH_TOKEN}",
-        "timeout": 120000,
-        "chunkTimeout": 60000,
-        "headerTimeout": 30000,
-        "setCacheKey": true
-      },
-      "models": {
-        "deepseek-v4-flash": {
-          "name": "deepseek-v4-flash",
-          "description": "Deepseek v4 flash",
-          "limit": {
-            "context": 256000,
-            "output": 16384,
-            "hourly": 50000,
-            "daily": 200000,
-            "weekly": 1000000
-          }
-        }
-      }
-    },
-    "ecom-glm-52": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "glm-5.2",
-      "options": {
-        "baseURL": "https://llm-core-olap.samokat.ru/v1",
-        "apiKey": "{env:ECOM_GLM52_TOKEN}",
-        "timeout": 120000,
-        "chunkTimeout": 60000,
-        "headerTimeout": 30000,
-        "setCacheKey": true
-      },
-      "models": {
-        "glm-5.2": {
-          "name": "glm-5.2",
-          "description": "GLM 5.2",
-          "limit": {
-            "context": 256000,
-            "output": 16384,
-            "hourly": 50000,
-            "daily": 200000,
-            "weekly": 1000000
           }
         }
       }
@@ -190,11 +121,9 @@
       "enabled": true
     }
   },
-  "small_model": "ecom-qwen36-35b/qwen3.6-35b",
   "instructions": [
     "rules/*.md"
   ],
-  "subagent_depth": 2,
   "watcher": {
     "ignore": [
       "node_modules/**",

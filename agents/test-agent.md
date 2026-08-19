@@ -10,7 +10,7 @@ permission:
   bash: allow
   task: deny
 mode: subagent
-model: ecom-qwen36-35b/qwen3.6-35b
+model: ecom/qwen3.6-35b
 ---
 
 You are a test runner. Your ONLY job: run a specific test suite and report results.

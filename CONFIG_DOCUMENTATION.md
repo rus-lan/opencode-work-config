@@ -2,7 +2,7 @@
 
 **Репозиторий:** `git@github.com:rus-lan/opencode-work-config.git`
 **Версия opencode:** 1.18.7
-**Модель по умолчанию:** `ecom-glm-52/glm-5.2`
+**Модель по умолчанию:** `ecom-exp/glm-5.2`
 **Агент по умолчанию:** `orchestrator`
 
 > Документация обновлена на основе фактического состояния файлов конфигурации.
@@ -54,9 +54,7 @@
 ├── skills/                   # 23 директории скиллов (SKILL.md + ресурсы)
 ├── plugins/                  # JS-плагины (aistats.js, herdr-agent-state.js)
 ├── rules/                    # 11 правил (.md) + README.md
-├── scripts/                  # setup-opencode-config.sh
 ├── docs/                     # HERDR_METRICS_INTEGRATION.md
-├── tests/                    # test-orchestrator-grillme.sh
 ├── prompts/                  # Пусто (только .gitignore — заглушка)
 └── node_modules/             # npm-зависимости (gitignored)
 ```
@@ -72,9 +70,9 @@
 | Поле | Значение | Описание |
 |------|----------|----------|
 | `$schema` | `https://opencode.ai/config.json` | Ссылка на JSON-схему |
-| `model` | `ecom-glm-52/glm-5.2` | Модель по умолчанию |
+| `model` | `ecom-exp/glm-5.2` | Модель по умолчанию |
 | `default_agent` | `orchestrator` | Агент, запускаемый по умолчанию |
-| `small_model` | `ecom-qwen36-35b/qwen3.6-35b` | Лёгкая модель для нетворческих задач (тайтлы, компактизация) |
+| `small_model` | `ecom/qwen3.6-35b` | Лёгкая модель для нетворческих задач (тайтлы, компактизация) |
 | `subagent_depth` | `2` | Максимальная вложенность сабагентов |
 
 ### 2.2 Глобальные permissions
@@ -145,47 +143,47 @@ Watcher не реагирует на изменения в шумных дире
 
 | Агент | Модель | Steps | Color | Temp | Роль |
 |-------|--------|-------|-------|------|------|
-| **orchestrator** | `ecom-glm-52/glm-5.2` | 30 | `#FF5733` | 0.15 | Оркестратор — только спавнит сабагентов |
-| **build** | `ecom-deepseek4-flash/deepseek-v4-flash` | 50 | `success` | 0.15 | Исполнитель — пишет код, запускает команды |
-| **plan** | `ecom-deepseek4-flash/deepseek-v4-flash` | 30 | `info` | — | Планировщик — read-only анализ и план-ревью |
+| **orchestrator** | `ecom-exp/glm-5.2` | 30 | `#FF5733` | 0.15 | Оркестратор — только спавнит сабагентов |
+| **build** | `ecom/deepseek-v4-flash` | 50 | `success` | 0.15 | Исполнитель — пишет код, запускает команды |
+| **plan** | `ecom/deepseek-v4-flash` | 30 | `info` | — | Планировщик — read-only анализ и план-ревью |
 
 #### Orchestrator (`agents/orchestrator.md`)
 - **Роль:** Диспетчер — распределяет задачи между сабагентами. НИЧЕГО не делает сам.
-- **Модель:** `ecom-glm-52/glm-5.2`, temperature 0.15
+- **Модель:** `ecom-exp/glm-5.2`, temperature 0.15
 - **Permissions:** `task=allow`, `skill=allow`, `todowrite=allow`, `question=allow`, всё остальное `deny` (read/edit/write/bash/glob/grep = deny)
 - **Запуск:** Автоматически (агент по умолчанию)
 
 #### Build (`agents/build.md`)
 - **Роль:** Исполнитель с полным доступом — пишет код, запускает команды, редактирует файлы, спавнит сабагентов
-- **Модель:** `ecom-deepseek4-flash/deepseek-v4-flash`, temperature 0.15
+- **Модель:** `ecom/deepseek-v4-flash`, temperature 0.15
 - **Permissions:** Всё `allow` (task, skill, read, write, edit, bash, glob, grep, webfetch, websearch, question)
 - **Запуск:** `/build <задача>` или через оркестратора
 
 #### Plan (`agents/plan.md`)
 - **Роль:** Планировщик и ревьюер — read-only анализ кода, создание планов, архитектурное ревью. НЕ пишет код.
-- **Модель:** `ecom-deepseek4-flash/deepseek-v4-flash`
+- **Модель:** `ecom/deepseek-v4-flash`
 - **Permissions:** `read=allow`, `glob=allow`, `grep=allow`, `question=allow`, `bash=ask`, `edit=deny`, `write=deny`, `task=deny`
 
 ### 3.2 Subagents
 
 | # | Агент | Модель | Hidden | Роль | Ключевые permissions |
 |---|-------|--------|--------|------|---------------------|
-| 1 | `explore` | `ecom-qwen35-122b-no-think/qwen3.5-122b` | — | Быстрое исследование кодовой базы (read-only) | read/glob/grep/bash=allow, write/edit/task=deny |
-| 2 | `project-mapper` | `ecom-qwen36-35b-no-think/qwen3.6-35b` | — | Построение карты проекта | read/glob/grep/bash=allow, write/edit/task=deny |
-| 3 | `desearch-researcher` | `ecom-glm-52/glm-5.2` | — | Глубокий веб-ресёрч | read/write/edit/glob/grep/bash/websearch/webfetch=allow |
-| 4 | `desearch-synthesizer` | `ecom-glm-52/glm-5.2` | — | Синтез ресёрч-отчётов | read/write/edit/glob/grep/bash/websearch=allow, webfetch=deny |
-| 5 | `react-dev` | `ecom-qwen36-35b/qwen3.6-35b` | — | React/TS разработка | read/write/edit/glob/grep/bash=allow, task=deny |
-| 6 | `go-dev` | `ecom-qwen36-35b/qwen3.6-35b` | — | Go backend разработка | read/write/edit/glob/grep/bash=allow, task=deny |
-| 7 | `rust-dev` | `ecom-qwen36-35b/qwen3.6-35b` | — | Rust разработка | read/write/edit/glob/grep/bash/task=allow |
-| 8 | `seo-writer` | `ecom-qwen35-122b/qwen3.5-122b` | — | SEO-контент (read-only, через task) | read/glob/grep/task/webfetch=allow, write/edit=deny, bash=ask |
-| 9 | `reviewer` | `ecom-deepseek4-flash/deepseek-v4-flash` | ✅ hidden | Общий code review (standards + spec) | read/write/edit/glob/grep=allow, bash/task=deny |
-| 10 | `reviewer-standards` | `ecom-deepseek4-flash/deepseek-v4-flash` | ✅ hidden | Ревью кодстайла и конвенций | read/glob/grep=allow, edit/write/bash/task=deny |
-| 11 | `reviewer-spec` | `ecom-deepseek4-flash/deepseek-v4-flash` | ✅ hidden | Ревью соответствия спецификации | read/glob/grep=allow, edit/write/bash/task=deny |
-| 12 | `reviewer-arch` | `ecom-deepseek4-flash/deepseek-v4-flash` | ✅ hidden | Архитектурное ревью | read/glob/grep=allow, edit/write/bash/task=deny |
-| 13 | `test-agent` | `ecom-qwen36-35b/qwen3.6-35b` | — | Запуск тестов и отчёт | read/glob/grep/bash=allow, write/edit/task=deny |
-| 14 | `security-check` | `ecom-deepseek4-flash/deepseek-v4-flash` | — | Аудит security/reliability/simplicity | read/glob/grep/bash=allow, write/edit/task=deny |
-| 15 | `soc-check` | `ecom-qwen35-122b/qwen3.5-122b` | — | Проверка SOC/контрактов/покрытия | read/glob/grep/bash=allow, write/edit/task=deny |
-| 16 | `ui-designer` | `ecom-deepseek4-flash/deepseek-v4-flash` | — | UI/UX дизайн (только спецификации) | read/write/edit/glob/grep=allow, bash/task=deny |
+| 1 | `explore` | `ecom/qwen3.5-122b` | — | Быстрое исследование кодовой базы (read-only) | read/glob/grep/bash=allow, write/edit/task=deny |
+| 2 | `project-mapper` | `ecom/qwen3.6-35b` | — | Построение карты проекта | read/glob/grep/bash=allow, write/edit/task=deny |
+| 3 | `desearch-researcher` | `ecom-exp/glm-5.2` | — | Глубокий веб-ресёрч | read/write/edit/glob/grep/bash/websearch/webfetch=allow |
+| 4 | `desearch-synthesizer` | `ecom-exp/glm-5.2` | — | Синтез ресёрч-отчётов | read/write/edit/glob/grep/bash/websearch=allow, webfetch=deny |
+| 5 | `react-dev` | `ecom/qwen3.6-35b` | — | React/TS разработка | read/write/edit/glob/grep/bash=allow, task=deny |
+| 6 | `go-dev` | `ecom/qwen3.6-35b` | — | Go backend разработка | read/write/edit/glob/grep/bash=allow, task=deny |
+| 7 | `rust-dev` | `ecom/qwen3.6-35b` | — | Rust разработка | read/write/edit/glob/grep/bash/task=allow |
+| 8 | `seo-writer` | `ecom/qwen3.5-122b` | — | SEO-контент (read-only, через task) | read/glob/grep/task/webfetch=allow, write/edit=deny, bash=ask |
+| 9 | `reviewer` | `ecom/deepseek-v4-flash` | ✅ hidden | Общий code review (standards + spec) | read/write/edit/glob/grep=allow, bash/task=deny |
+| 10 | `reviewer-standards` | `ecom/deepseek-v4-flash` | ✅ hidden | Ревью кодстайла и конвенций | read/glob/grep=allow, edit/write/bash/task=deny |
+| 11 | `reviewer-spec` | `ecom/deepseek-v4-flash` | ✅ hidden | Ревью соответствия спецификации | read/glob/grep=allow, edit/write/bash/task=deny |
+| 12 | `reviewer-arch` | `ecom/deepseek-v4-flash` | ✅ hidden | Архитектурное ревью | read/glob/grep=allow, edit/write/bash/task=deny |
+| 13 | `test-agent` | `ecom/qwen3.6-35b` | — | Запуск тестов и отчёт | read/glob/grep/bash=allow, write/edit/task=deny |
+| 14 | `security-check` | `ecom/deepseek-v4-flash` | — | Аудит security/reliability/simplicity | read/glob/grep/bash=allow, write/edit/task=deny |
+| 15 | `soc-check` | `ecom/qwen3.5-122b` | — | Проверка SOC/контрактов/покрытия | read/glob/grep/bash=allow, write/edit/task=deny |
+| 16 | `ui-designer` | `ecom/deepseek-v4-flash` | — | UI/UX дизайн (только спецификации) | read/write/edit/glob/grep=allow, bash/task=deny |
 
 > **Hidden-агенты** (`hidden: true` в frontmatter) — не появляются в списке доступных агентов UI, но могут вызываться оркестратором через `task()`.
 
@@ -193,12 +191,12 @@ Watcher не реагирует на изменения в шумных дире
 
 | Модель | Агенты |
 |--------|--------|
-| `ecom-glm-52/glm-5.2` | orchestrator, desearch-researcher, desearch-synthesizer |
-| `ecom-deepseek4-flash/deepseek-v4-flash` | build, plan, reviewer, reviewer-standards, reviewer-spec, reviewer-arch, security-check, ui-designer |
-| `ecom-qwen36-35b/qwen3.6-35b` | react-dev, go-dev, rust-dev, test-agent |
-| `ecom-qwen35-122b/qwen3.5-122b` | seo-writer, soc-check |
-| `ecom-qwen35-122b-no-think/qwen3.5-122b` | explore |
-| `ecom-qwen36-35b-no-think/qwen3.6-35b` | project-mapper |
+| `ecom-exp/glm-5.2` | orchestrator, desearch-researcher, desearch-synthesizer |
+| `ecom/deepseek-v4-flash` | build, plan, reviewer, reviewer-standards, reviewer-spec, reviewer-arch, security-check, ui-designer |
+| `ecom/qwen3.6-35b` | react-dev, go-dev, rust-dev, test-agent |
+| `ecom/qwen3.5-122b` | seo-writer, soc-check |
+| `ecom/qwen3.5-122b` | explore |
+| `ecom/qwen3.6-35b` | project-mapper |
 
 ---
 
@@ -332,20 +330,20 @@ Playwright MCP дополнительно настраивает environment: `P
 7 провайдеров в `opencode.json` → секция `provider`:
 
 | Провайдер | Модель | Context | Output | API Key Env | npm-пакет | Base URL |
-|-----------|--------|---------|--------|-------------|-----------|----------|
+|----------|--------|---------|--------|-------------|-----------|----------|
 | `zai-coding-plan` | GLM-5.2 | 1M | 131072 | — (подписка Z.AI) | — (built-in) | `https://api.z.ai/api/coding/paas/v4` |
-| `ecom-glm-52` | glm-5.2 | 256K | 16K | `ECOM_GLM52_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
-| `ecom-qwen35-122b` | qwen3.5-122b | 128K | 8K | `ECOM_QWEN35_122b_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
-| `ecom-qwen36-35b` | qwen3.6-35b | 128K | 8K | `ECOM_QWEN36_35b_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
-| `ecom-qwen35-122b-no-think` | qwen3.5-122b (no-think) | 128K | 8K | `ECOM_QWEN35_122b_NO_THINK_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
-| `ecom-qwen36-35b-no-think` | qwen3.6-35b (no-think) | 128K | 8K | `ECOM_QWEN36_35b_NO_THINK_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
-| `ecom-deepseek4-flash` | deepseek-v4-flash | 256K | 16K | `ECOM_DEEPSEEK4_FLASH_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom` | glm-5.2 | 256K | 16K | `ECOM_GLM52_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom` | qwen3.5-122b | 128K | 8K | `ECOM_QWEN35_122b_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom` | qwen3.6-35b | 128K | 8K | `ECOM_QWEN36_35b_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom` | qwen3.5-122b (no-think) | 128K | 8K | `ECOM_QWEN35_122b_NO_THINK_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom` | qwen3.6-35b (no-think) | 128K | 8K | `ECOM_QWEN36_35b_NO_THINK_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom` | deepseek-v4-flash | 256K | 16K | `ECOM_DEEPSEEK4_FLASH_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
 
 ### Особенности провайдеров
 
-**zai-coding-plan** — провайдер подписки Z.AI Coding Plan. Не использует `npm`-пакет (встроенный в opencode) и не требует `apiKey` (авторизация через `~/.local/share/opencode/auth.json`). Контекст 1M, output 131K — самый большой контекст. Используется моделью по умолчанию (`ecom-glm-52/glm-5.2` — НЕ путать, `model` в конфиге указывает на `ecom-glm-52`, но `zai-coding-plan` тоже предоставляет `glm-5.2`).
+**zai-coding-plan** — провайдер подписки Z.AI Coding Plan. Не использует `npm`-пакет (встроенный в opencode) и не требует `apiKey` (авторизация через `~/.local/share/opencode/auth.json`). Контекст 1M, output 131K — самый большой контекст. Используется моделью по умолчанию (`ecom-exp/glm-5.2` — НЕ путать, `model` в конфиге указывает на `ecom-glm-52`, но `zai-coding-plan` тоже предоставляет `glm-5.2`).
 
-> **Внимание:** Поле `model` в `opencode.json` = `ecom-glm-52/glm-5.2` (провайдер `ecom-glm-52` — Samokat internal). Провайдер `zai-coding-plan` также предоставляет `glm-5.2` (Z.AI подписка), но не выбран как модель по умолчанию.
+> **Внимание:** Поле `model` в `opencode.json` = `ecom-exp/glm-5.2` (провайдер `ecom-glm-52` — Samokat internal). Провайдер `zai-coding-plan` также предоставляет `glm-5.2` (Z.AI подписка), но не выбран как модель по умолчанию.
 
 **ecom-* провайдеры** (6 шт.) — все используют один base URL `https://llm-core-olap.samokat.ru/v1` и npm-пакет `@ai-sdk/openai-compatible`. Каждый настроен с:
 - `timeout: 120000` (120с на полный запрос)
@@ -406,7 +404,6 @@ Pre-commit валидация по Zero-Rework Protocol (123 строки). 6 э
 
 | Скрипт | Строк | Назначение |
 |--------|-------|------------|
-| `scripts/setup-opencode-config.sh` | 426 | Автоматическая установка конфигурации на новом устройстве (Linux/macOS): определение ОС, установка opencode, клон/pull репо, npm install, создание `.env`, добавление `~/.local/bin` в PATH |
 | `guard.sh` | 128 | Защита от опасных compound-команд (см. §10) |
 | `pre-commit.sh` | 123 | Pre-commit валидация Zero-Rework Protocol (см. §10) |
 | `context-check.sh` | 59 | Проверка consistency контекста сессии (см. §10) |
@@ -421,22 +418,6 @@ Pre-commit валидация по Zero-Rework Protocol (123 строки). 6 э
     "@opencode-ai/plugin": "^1.18.7"
   }
 }
-```
-
----
-
-## 🧪 12. Тесты
-
-### test-orchestrator-grillme.sh (`tests/test-orchestrator-grillme.sh`)
-Test suite для проверки конфигурации orchestrator + grill-me интеграции (153 строки). 4 тест-кейса:
-1. Orchestrator конфигурация
-2. Grill-me конфигурация
-3. Интеграция
-4. Sanity checks
-
-Запуск:
-```bash
-bash ~/.config/opencode/tests/test-orchestrator-grillme.sh
 ```
 
 ---
@@ -474,21 +455,6 @@ ECOM_GIGA3_10b_TOKEN=
 
 ## 🚀 14. Установка на новом устройстве
 
-### Автоматическая установка
-
-```bash
-bash ~/.config/opencode/scripts/setup-opencode-config.sh
-```
-
-Скрипт автоматически:
-1. Определит ОС (Linux/macOS)
-2. Установит opencode если не установлен
-3. Склонирует/pull репозиторий конфига в `~/.config/opencode`
-4. Установит npm-зависимости
-5. Создаст `.env` из `.env.example` (если нет)
-6. Добавит `~/.local/bin` в PATH (если нет)
-7. Проверит что opencode работает
-
 ### Ручная установка
 
 ```bash
@@ -515,14 +481,14 @@ opencode run "Hello"
 
 ### API-токены
 
-| Переменная | Провайдер | Где взять |
-|-----------|-----------|-----------|
-| `ECOM_QWEN35_122b_TOKEN` | ecom-qwen35-122b | Инфраструктура Samokat (llm-core-olap) |
-| `ECOM_QWEN36_35b_TOKEN` | ecom-qwen36-35b | Инфраструктура Samokat (llm-core-olap) |
-| `ECOM_QWEN35_122b_NO_THINK_TOKEN` | ecom-qwen35-122b-no-think | Инфраструктура Samokat (llm-core-olap) |
-| `ECOM_QWEN36_35b_NO_THINK_TOKEN` | ecom-qwen36-35b-no-think | Инфраструктура Samokat (llm-core-olap) |
-| `ECOM_DEEPSEEK4_FLASH_TOKEN` | ecom-deepseek4-flash | Инфраструктура Samokat (llm-core-olap) |
-| `ECOM_GLM52_TOKEN` | ecom-glm-52 | Инфраструктура Samokat (llm-core-olap) — **нет в .env.example** |
+| Переменная | Провайдер       | Где взять |
+|-----------|-----------------|-----------|
+| `ECOM_QWEN35_122b_TOKEN` | ecom            | Инфраструктура Samokat (llm-core-olap) |
+| `ECOM_QWEN36_35b_TOKEN` | ecom            | Инфраструктура Samokat (llm-core-olap) |
+| `ECOM_QWEN35_122b_NO_THINK_TOKEN` | ecom            | Инфраструктура Samokat (llm-core-olap) |
+| `ECOM_QWEN36_35b_NO_THINK_TOKEN` | ecom            | Инфраструктура Samokat (llm-core-olap) |
+| `ECOM_DEEPSEEK4_FLASH_TOKEN` | ecom            | Инфраструктура Samokat (llm-core-olap) |
+| `ECOM_GLM52_TOKEN` | ecom-exp        | Инфраструктура Samokat (llm-core-olap) — **нет в .env.example** |
 | — | zai-coding-plan | Подписка Z.AI Coding Plan (авторизация через `~/.local/share/opencode/auth.json`) |
 
 Все ecom-* провайдеры используют base URL: `https://llm-core-olap.samokat.ru/v1`
@@ -577,7 +543,7 @@ README заявляет «10 правил» и индекс-таблица со�
 - Бейдж «agents-23» — фактически 19 agent-файлов (3 primary + 16 subagents).
 - Бейдж «skills-22» — фактически 23 скилла в `skills/`.
 - Бейдж «model-qwen3.5--122b» — фактически модель по умолчанию `glm-5.2`.
-- В таблице сабагентов указаны `project-mapper` → giga3-10b и `test-agent` → giga3-10b — фактически `project-mapper` использует `ecom-qwen36-35b-no-think/qwen3.6-35b`, `test-agent` — `ecom-qwen36-35b/qwen3.6-35b`.
+- В таблице сабагентов указаны `project-mapper` → giga3-10b и `test-agent` → giga3-10b — фактически `project-mapper` использует `ecom/qwen3.6-35b`, `test-agent` — `ecom/qwen3.6-35b`.
 - В таблице провайдеров указан `ecom-giga3-10b` — отсутствует в `opencode.json`.
 - Раздел «Команды (6)» перечисляет 6 команд, но не упоминает `/get-session-metrics`.
 

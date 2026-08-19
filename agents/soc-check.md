@@ -10,7 +10,7 @@ permission:
   bash: allow
   task: deny
 mode: subagent
-model: ecom-qwen35-122b/qwen3.5-122b
+model: ecom/qwen3.8-27b
 ---
 
 You are a SOC (Single Source of Truth) and contracts auditor. Read-only. Return ALL findings in one batch.

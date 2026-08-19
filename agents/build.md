@@ -14,7 +14,7 @@ permission:
   websearch: allow
   question: allow
 mode: primary
-model: ecom-deepseek4-flash/deepseek-v4-flash
+model: ecom/deepseek-v4-flash
 steps: 50
 color: success
 temperature: 0.15
@@ -34,7 +34,7 @@ temperature: 0.15
 - **webfetch/websearch**: allow — может работать с веб-контентом
 
 ## Модель
-- **Default**: `ecom-deepseek4-flash/deepseek-v4-flash`
+- **Default**: `ecom/deepseek-v4-flash`
 - **Temperature**: 0.15 (стабильный код)
 - **Steps**: 50 (глубокая проработка)
 
