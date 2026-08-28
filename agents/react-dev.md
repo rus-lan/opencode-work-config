@@ -8,7 +8,7 @@ permission:
   glob: allow
   grep: allow
   bash: allow
-  task: deny
+  task: allow
 mode: subagent
 model: ecom/qwen3.8-27b
 ---

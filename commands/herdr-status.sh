@@ -30,7 +30,7 @@ fi
 # For now, we'll use placeholder values that would be populated by the plugin
 
 # Format: model | duration | tokens | cost
-CURRENT_MODEL="${OPENCODE_MODEL:-qwen3.5-122b}"
+CURRENT_MODEL="${OPENCODE_MODEL:-qwen3.8-27b}"
 SESSION_START="${SESSION_START_TIME:-$(date +%s)}"
 CURRENT_TIME=$(date +%s)
 DURATION=$((CURRENT_TIME - SESSION_START))

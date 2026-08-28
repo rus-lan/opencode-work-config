@@ -3,8 +3,8 @@ name: reviewer
 description: Read-only code review — check quality, find issues, suggest improvements (no edits)
 permission:
   read: allow
-  write: allow
-  edit: allow
+  write: deny
+  edit: deny
   glob: allow
   grep: allow
   bash: deny
@@ -77,4 +77,4 @@ Return findings as a structured list:
 - Return ALL findings in one batch — no file-by-file ping-pong
 - Max 2 review rounds per task
 - If blocking architectural defect found, surface immediately
-- Reviewer and implementer must NEVER be the same model
+- Reviewer and implementer share the same base model by default (`ecom/deepseek-v4-flash`); this is intentional and safe. For high-value reviews you MAY assign a distinct model (e.g. `ecom-exp/glm-5.2`) — but ONLY with a fallback: if glm-5.2 is unavailable, fall back to `ecom/deepseek-v4-flash`. glm-5.2 is experimental and must never be set as the default.

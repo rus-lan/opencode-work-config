@@ -13,4 +13,4 @@ Run typechecking regularly, single test files regularly, and the full test suite
 
 Once done, use /code-review to review the work.
 
-Commit your work to the current branch.
+Show `git status`/`git diff --stat` and offer to commit, but do NOT commit or push without explicit user permission (see rules/git-commit-push.md).

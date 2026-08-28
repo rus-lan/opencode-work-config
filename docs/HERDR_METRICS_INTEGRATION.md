@@ -40,7 +40,7 @@ get_metrics — возвращает markdown dashboard и JSON с метрик�
 ```json
 {
   "state": "working",
-  "model": "qwen3.5-122b",
+  "model": "qwen3.8-27b",
   "duration": "12m 34s",
   "tokens_total": 20000,
   "cost": 0.02,
@@ -192,7 +192,7 @@ herdr integration install opencode
 
 Полная строка статуса:
 ```
-● 12m 34s | 12K/8K tokens | $0.02 | agents:3 | qwen3.5-122b
+● 12m 34s | 12K/8K tokens | $0.02 | agents:3 | qwen3.8-27b
 ```
 
 ## Будущие улучшения

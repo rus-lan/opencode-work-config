@@ -3,10 +3,45 @@
   "model": "ecom/deepseek-v4-flash",
   "small_model": "ecom/qwen3.8-27b",
   "default_agent": "orchestrator",
-  "subagent_depth": 2,
+  "subagent_depth": 4,
   "permission": {
-    "bash": "allow",
-    "edit": "allow"
+    "read": "allow",
+    "list": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "skill": "allow",
+    "edit": "allow",
+    "bash": {
+      "npm run *": "allow",
+      "npm t": "allow",
+      "git status*": "allow",
+      "git log *": "allow",
+      "git show *": "allow",
+      "git diff *": "allow",
+      "rg *": "allow",
+      "ls*": "allow",
+      "pwd": "allow",
+      "jq *": "allow",
+      "rm -rf *": "deny",
+      "rm *": "deny",
+      "git push*": "deny",
+      "git reset --hard*": "deny",
+      "*": "ask"
+    },
+    "webfetch": "allow",
+    "doom_loop": "ask",
+    "external_directory": "ask",
+    "atlassian_jira_*": "ask",
+    "atlassian_jira_get_*": "allow",
+    "atlassian_jira_search*": "allow",
+    "atlassian_confluence_*": "ask",
+    "atlassian_confluence_get_*": "allow",
+    "atlassian_confluence_search*": "allow",
+    "gitlab_*": "ask",
+    "gitlab_getFile": "allow",
+    "gitlab_listTree": "allow",
+    "gitlab_searchCode": "allow",
+    "gitlab_getIssue": "allow"
   },
   "provider": {
     "ecom": {
@@ -18,13 +53,6 @@
         "setCacheKey": true
       },
       "models": {
-        "giga3-10b": {
-          "name": "giga3-10b",
-          "limit": {
-            "context": 128000,
-            "output": 8192
-          }
-        },
         "qwen3.8-27b": {
           "name": "qwen3.8-27b",
           "limit": {
@@ -32,25 +60,11 @@
             "output": 16384
           }
         },
-        "qwen3.6-35b": {
-          "name": "qwen3.6-35b",
-          "limit": {
-            "context": 256000,
-            "output": 16384
-          }
-        },
-        "qwen3.5-122b-no-think": {
-          "name": "qwen3.5-122b-no-think",
+        "qwen3.8-27b-no-think": {
+          "name": "qwen3.8-27b-no-think",
           "limit": {
             "context": 128000,
             "output": 8192
-          }
-        },
-        "qwen3.5-122b": {
-          "name": "qwen3.5-122b",
-          "limit": {
-            "context": 256000,
-            "output": 16384
           }
         },
         "deepseek-v4-flash": {
@@ -119,6 +133,86 @@
         "PLAYWRIGHT_HOST_PLATFORM_OVERRIDE": "ubuntu24.04-x64"
       },
       "enabled": true
+    },
+    "confluence_samokat_read_only": {
+      "type": "remote",
+      "url": "https://llm-core-olap.samokat.ru/Confluence_Samokat_Read_Only/mcp",
+      "enabled": true,
+      "headers": {
+        "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
+        "Authorization": "Bearer {env:CONFLUENCE_TOKEN}"
+      }
+    },
+    "jira_samokat_read_only": {
+      "type": "remote",
+      "url": "https://llm-core-olap.samokat.ru/Jira_Samokat_Read_Only/mcp",
+      "enabled": true,
+      "headers": {
+        "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
+        "Authorization": "Bearer {env:JIRA_TOKEN}"
+      }
+    },
+    "confluence_samokat_write": {
+      "type": "remote",
+      "url": "https://llm-core-olap.samokat.ru/Confluence_Samokat_Write/mcp",
+      "enabled": true,
+      "headers": {
+        "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
+        "Authorization": "Bearer {env:CONFLUENCE_TOKEN}"
+      }
+    },
+    "jira_samokat_write": {
+      "type": "remote",
+      "url": "https://llm-core-olap.samokat.ru/Jira_Samokat_Write/mcp",
+      "enabled": true,
+      "headers": {
+        "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
+        "Authorization": "Bearer {env:JIRA_TOKEN}"
+      }
+    },
+    "adr_c4_drawio": {
+      "type": "remote",
+      "url": "https://litellm-proxy-llm-core-olap.samokat.io/public_adr_c4_drawio/mcp",
+      "enabled": true,
+      "headers": {
+        "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
+        "Authorization": "Bearer {env:ECOM_LLM_TOKEN}"
+      }
+    },
+    "atlassian": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "mcp-atlassian==0.23.1"
+      ],
+      "enabled": true,
+      "environment": {
+        "JIRA_URL": "{env:JIRA_BASE_URL}",
+        "JIRA_PERSONAL_TOKEN": "{env:JIRA_TOKEN}",
+        "CONFLUENCE_URL": "{env:CONFLUENCE_BASE_URL}",
+        "CONFLUENCE_PERSONAL_TOKEN": "{env:CONFLUENCE_TOKEN}"
+      },
+      "timeout": 30000
+    },
+    "testops": {
+      "type": "remote",
+      "enabled": true,
+      "url": "http://allure-testops-mcp-pqa-integration.app.kube01027.internal/api/mcp",
+      "headers": {
+        "Authorization": "Bearer {env:ALLURE_TOKEN}"
+      },
+      "oauth": false,
+      "timeout": 30000
+    },
+    "gitlab": {
+      "type": "remote",
+      "enabled": true,
+      "url": "http://gitlab-spring-mcp-pqa-integration.app.kube01027.internal/api/mcp",
+      "headers": {
+        "Authorization": "{env:GITLAB_TOKEN}"
+      },
+      "oauth": false,
+      "timeout": 30000
     }
   },
   "instructions": [

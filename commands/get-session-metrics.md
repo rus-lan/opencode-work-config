@@ -34,7 +34,7 @@ subtask: true
 
 ```json
 {
-    "model": "qwen3.5-122b",
+    "model": "qwen3.8-27b",
     "duration": "12m 34s",
     "tokens_in": "12K",
     "tokens_out": "8K",

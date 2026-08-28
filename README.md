@@ -1,8 +1,8 @@
 # ⚡ Opencode Work Configuration
 
-![Version](https://img.shields.io/badge/version-2.0-blue) ![Model](https://img.shields.io/badge/model-glm--5.2-green) ![Agents](https://img.shields.io/badge/agents-19-orange) ![Skills](https://img.shields.io/badge/skills-23-purple) ![OpenCode](https://img.shields.io/badge/opencode-1.18.7-red)
+![Version](https://img.shields.io/badge/version-2.0-blue) ![Model](https://img.shields.io/badge/model-deepseek--v4--flash-green) ![Agents](https://img.shields.io/badge/agents-24-orange) ![Skills](https://img.shields.io/badge/skills-23-purple) ![OpenCode](https://img.shields.io/badge/opencode-1.18.16-red)
 
-Готовая конфигурация opencode с 3 primary агентами, 16 сабагентами, полным CI-воркфлоу из 7 этапов и 23 скиллами.
+Готовая конфигурация opencode с 3 primary агентами, 21 сабагентом, полным CI-воркфлоу из 7 этапов и 23 скиллами.
 
 ## 🚀 Быстрая установка
 
@@ -21,7 +21,7 @@ cp .env.example .env
 opencode
 ```
 
-> **Важно:** Конфигурация использует несколько провайдеров (qwen3.5-122b, qwen3.6-35b, deepseek-v4-flash, glm-5.2). Убедитесь что все API-ключи указаны в `.env`.
+> **Важно:** Конфигурация использует 3 провайдера (ecom, ecom-exp, zai-coding-plan) с моделями qwen3.8-27b, qwen3.8-27b-no-think, deepseek-v4-flash и экспериментальной glm-5.2. Модель по умолчанию — `ecom/deepseek-v4-flash`. Все провайдеры используют **2 общих токена** — `ECOM_LLM_TOKEN` и `ECOM_LLM_EXP_TOKEN` (без per-model токенов). Убедитесь что ключи указаны в `.env`.
 
 ## 🏗 Архитектура
 
@@ -29,71 +29,101 @@ opencode
 
 | Агент | Модель | Роль |
 |-------|--------|------|
-| `@orchestrator` | glm-5.2 | 🧠 Оркестратор — ничего не делает сам, только спавнит сабагентов |
+| `@orchestrator` | deepseek-v4-flash | 🧠 Оркестратор — ничего не делает сам, только спавнит сабагентов |
 | `@build` | deepseek-v4-flash | 🔧 Исполнитель с полным доступом (пишет код, запускает команды) |
 | `@plan` | deepseek-v4-flash | 📋 Планирование и ревью (read-only, bash=ask) |
 
-### Сабагенты (16)
+### Сабагенты (21)
 
 | Агент | Модель | Роль |
 |-------|--------|------|
-| `seo-writer` | qwen3.5-122b | ✍️ SEO-писатель (read-only, write=deny) |
-| `explore` | qwen3.5-122b (no-think) | 🔍 Поиск файлов и структуры (read-only) |
-| `project-mapper` | qwen3.6-35b (no-think) | 🗺 Построение карты проекта |
-| `react-dev` | qwen3.6-35b | ⚛ React/TS разработка |
-| `go-dev` | qwen3.6-35b | 🔵 Go backend разработка |
-| `rust-dev` | qwen3.6-35b | 🦀 Rust разработка |
+| `seo-writer` | qwen3.8-27b | ✍️ SEO-писатель (read-only, write=deny) |
+| `explore` | qwen3.8-27b-no-think | 🔍 Поиск файлов и структуры (read-only) |
+| `project-mapper` | qwen3.8-27b-no-think | 🗺 Построение карты проекта |
+| `react-dev` | qwen3.8-27b | ⚛ React/TS разработка |
+| `go-dev` | qwen3.8-27b | 🔵 Go backend разработка |
+| `rust-dev` | qwen3.8-27b | 🦀 Rust разработка |
 | `ui-designer` | deepseek-v4-flash | 🎨 UI/UX дизайн |
-| `desearch-researcher` | glm-5.2 | 🌐 Глубокий веб-ресёрч |
-| `desearch-synthesizer` | glm-5.2 | 📄 Синтез ресёрч-отчётов |
-| `test-agent` | qwen3.6-35b | 🧪 Запуск тестов |
+| `desearch-researcher` | deepseek-v4-flash | 🌐 Глубокий веб-ресёрч |
+| `desearch-synthesizer` | deepseek-v4-flash | 📄 Синтез ресёрч-отчётов |
+| `test-agent` | qwen3.8-27b-no-think | 🧪 Запуск тестов |
 | `reviewer` *(hidden)* | deepseek-v4-flash | 👀 Code review |
 | `reviewer-arch` *(hidden)* | deepseek-v4-flash | 🏛 Архитектурное ревью |
 | `reviewer-spec` *(hidden)* | deepseek-v4-flash | 📐 Ревью по спецификации |
 | `reviewer-standards` *(hidden)* | deepseek-v4-flash | 📏 Ревью по кодстайлам |
 | `security-check` | deepseek-v4-flash | 🔒 Аудит безопасности |
-| `soc-check` | qwen3.5-122b | ✅ Проверка SOC/контрактов |
+| `soc-check` | deepseek-v4-flash | ✅ Проверка SOC/контрактов |
+| `mcp-aistats` | qwen3.8-27b-no-think | 📊 Обёртка MCP aistats (метрики, изолированный контекст) |
+| `mcp-confluence` | qwen3.8-27b-no-think | 📄 Обёртка MCP Confluence (read/write) |
+| `mcp-jira` | qwen3.8-27b-no-think | 📋 Обёртка MCP Jira (read/write) |
+| `mcp-adr-drawio` | qwen3.8-27b | 🖊 Обёртка MCP_adr_drawio (схемы ADR) |
+| `mcp-playwright` | deepseek-v4-flash | 🎭 Обёртка MCP playwright (browser-автоматизация) |
 
 ### Workflow
 
 При запуске `/start <задача>` через `@orchestrator` выполняется 7-этапный пайплайн:
 
 ```
-  0: Project Map         → qwen3.6-35b (no-think)
-  1: Grill-me + Research  → glm-5.2 × 2-3 + glm-5.2 (synthesizer)
-  2: Implementation       → react-dev / go-dev / rust-dev (qwen3.6-35b)
+  0: Project Map         → qwen3.8-27b
+  1: Grill-me + Research  → deepseek-v4-flash (researcher × 2-3) + deepseek-v4-flash (synthesizer)
+  2: Implementation       → react-dev / go-dev / rust-dev (qwen3.8-27b)
   3: Code Review          → reviewer-standards + reviewer-spec + reviewer-arch (deepseek-v4-flash)
-  4: Testing              → test-agent (qwen3.6-35b)
+  4: Testing              → test-agent (qwen3.8-27b)
   5: Security Check       → security-check (deepseek-v4-flash)
-  6: SOC / Contracts      → soc-check (qwen3.5-122b)
+  6: SOC / Contracts      → soc-check (deepseek-v4-flash)
 ```
 
 ### Model Strategy
 
 | Этап | Модель |
 |------|--------|
-| Project Map | qwen3.6-35b (no-think) |
-| Grill-me | qwen3.5-122b |
-| Research | glm-5.2 |
-| Synthesis | glm-5.2 |
-| Implementation | qwen3.6-35b |
+| Project Map | qwen3.8-27b-no-think |
+| Grill-me | deepseek-v4-flash |
+| Research | deepseek-v4-flash |
+| Synthesis | deepseek-v4-flash |
+| Implementation | qwen3.8-27b |
 | Code Review | deepseek-v4-flash |
-| Testing | qwen3.6-35b |
+| Testing | qwen3.8-27b-no-think |
 | Security Check | deepseek-v4-flash |
-| SOC Check | qwen3.5-122b |
-| Titles / Compaction | qwen3.6-35b (`small_model`) |
+| SOC Check | deepseek-v4-flash |
+| Titles / Compaction | qwen3.8-27b (`small_model`) |
+
+### 🔱 Глубокая вложенность сабагентов
+
+`subagent_depth: 4` в `opencode.json`. Сабагенты, способные декомпозировать работу вглубь (`build`, `plan`, `react-dev`, `go-dev`, `rust-dev`, `explore`, `project-mapper`, `test-agent`), могут порождать собственных сабагентов. Каждый уровень держит собственный мини-контекст и возвращает наверх **только агрегированный результат** — поэтому глубокая декомпозиция не раздувает контекст основного агента.
+
+Ревьюеры (`reviewer*`), `security-check`, `soc-check` и MCP-обёртки остаются `task: deny` — они читают/выполняют и не декомпозируют.
+
+### 🧩 MCP-обёртки
+
+Для каждого MCP-сервера создан сабагент-обёртка, который выполняет MCP-действия в изолированном контексте и возвращает только краткий результат:
+`mcp-aistats`, `mcp-confluence`, `mcp-jira`, `mcp-adr-drawio`, `mcp-playwright`. Оркестратор (и build) делегируют обёрткам вместо прямых вызовов MCP-инструментов — это сокращает потребление основного окна.
 
 ### Провайдеры моделей
 
-| Провайдер | Модель | Контекст | Output |
-|-----------|--------|----------|--------|
-| `zai-coding-plan` | glm-5.2 | 1M | 128K |
-| `ecom` | qwen3.5-122b | 128K | 8K |
-| `ecom` | qwen3.6-35b | 128K | 8K |
-| `ecom` | deepseek-v4-flash | 256K | 16K |
-| `ecom` | qwen3.5-122b (no-think) | 128K | 8K |
-| `ecom` | qwen3.6-35b (no-think) | 128K | 8K |
-| `ecom` | glm-5.2 | 256K | 16K |
+| Провайдер | Модель | Контекст | Output | Токен |
+|-----------|--------|----------|--------|-------|
+| `ecom` | deepseek-v4-flash | 256K | 16K | `ECOM_LLM_TOKEN` |
+| `ecom` | qwen3.8-27b | 256K | 16K | `ECOM_LLM_TOKEN` |
+| `ecom` | qwen3.8-27b-no-think | 128K | 8K | `ECOM_LLM_TOKEN` |
+| `ecom-exp` | glm-5.2 *(экспериментальная)* | 256K | 16K | `ECOM_LLM_EXP_TOKEN` |
+| `zai-coding-plan` | GLM-5.2 *(экспериментальная)* | 1M | 131072 | подписка Z.AI |
+
+Фактически в `opencode.json` **3 провайдера** (ecom, ecom-exp, zai-coding-plan) и **2 общих токена** (`ECOM_LLM_TOKEN`, `ECOM_LLM_EXP_TOKEN`) — без per-model токенов, timeout и rate-limits.
+
+### Модели провайдеров
+
+- `qwen3.8-27b-no-think` (ecom) — вариант без thinking-режима (128K/8K). Используется для **простых/механических** задач без аналитики: `explore`, `project-mapper`, `test-agent` и все MCP-обёртки (кроме `mcp-playwright` и `mcp-adr-drawio`).
+- `ecom-exp/glm-5.2` и `zai-coding-plan/glm-5.2` — **экспериментальные** модели. Используются **ТОЛЬКО опционально** с fallback-проверкой: в случае недоступности glm-5.2 использовать `ecom/deepseek-v4-flash`. По умолчанию **не задействованы ни в одном агенте**, и подключать их на постоянной основе запрещено.
+
+## ⚙️ Версии opencode
+
+| Расположение | Версия | В PATH |
+|--------------|--------|--------|
+| `~/.local/bin/opencode` | 1.18.16 | ✅ да |
+| `~/.opencode/bin/opencode` | 1.18.23 | ❌ нет (вне PATH) |
+
+Рекомендуется привести бинарники к единой версии (например, обновить `~/.local/bin/opencode` до 1.18.23 или удалить устаревший бинарник).
 
 ## 🛠 Skills (23)
 
@@ -111,7 +141,7 @@ opencode
 | `context-metrics` | Мониторинг метрик контекста |
 | `desearch` | Параллельный глубокий веб-ресёрч |
 | `design` | UI дизайн из скриншотов и промптов |
-| `file-diff` | Сравнение двух файлов (unified diff) |
+
 | `full-workflow` | Полный 7-этапный workflow |
 | `graphify` | Построение графа знаний кодовой базы |
 | `grill-me` | Интерактивный допрос плана/решения |
@@ -138,12 +168,17 @@ opencode
 
 Скиллы также доступны как команды: `/unrobot`, `/bmad-impl` и др.
 
-## 🔌 MCP Серверы (2)
+## 🔌 MCP Серверы (7)
 
 | MCP | Тип | Назначение |
 |-----|-----|------------|
 | `aistats` | local | 📊 Метрики токенов, стоимости и рекомендации |
 | `playwright` | local | 🎭 E2E тестирование (headless Chromium) |
+| `Confluence_Samokat_Read_Only` | remote | 📄 Confluence чтение (требует `CONFLUENCE_TOKEN`) |
+| `Confluence_Samokat_Write` | remote | 📝 Confluence запись (требует `CONFLUENCE_TOKEN`) |
+| `Jira_Samokat_Read_Only` | remote | 📋 Jira чтение (требует `JIRA_TOKEN`) |
+| `Jira_Samokat_Write` | remote | ✍️ Jira запись (требует `JIRA_TOKEN`) |
+| `MCP_adr_drawio` | remote | 🖊 ADR drawio |
 
 ## 🔧 Плагины (2)
 

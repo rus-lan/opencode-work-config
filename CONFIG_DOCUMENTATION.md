@@ -1,8 +1,8 @@
 # ⚙️ Конфигурация Opencode — полная документация
 
 **Репозиторий:** `git@github.com:rus-lan/opencode-work-config.git`
-**Версия opencode:** 1.18.7
-**Модель по умолчанию:** `ecom-exp/glm-5.2`
+**Версия opencode:** 1.18.24
+**Модель по умолчанию:** `ecom/deepseek-v4-flash`
 **Агент по умолчанию:** `orchestrator`
 
 > Документация обновлена на основе фактического состояния файлов конфигурации.
@@ -46,10 +46,8 @@
 ├── guard.sh                  # Защита от опасных compound-команд
 ├── pre-commit.sh             # Pre-commit валидация (Zero-Rework Protocol)
 ├── context-check.sh          # Проверка consistency контекста сессии
-├── aistats.js                # Копия плагина aistats (см. §8 — дубликат)
-├── herdr-agent-state.js      # Копия плагина herdr (см. §8 — дубликат)
 ├── metrics.json              # Метрики последней сессии (gitignored)
-├── agents/                   # 19 файлов описаний агентов (.md)
+├── agents/                   # 24 файла описаний агентов (.md)
 ├── commands/                 # 6 команд (.md) + herdr-status.sh
 ├── skills/                   # 23 директории скиллов (SKILL.md + ресурсы)
 ├── plugins/                  # JS-плагины (aistats.js, herdr-agent-state.js)
@@ -63,17 +61,17 @@
 
 ## 📜 2. opencode.json — главный конфиг
 
-Файл `opencode.json` (220 строк). Схема: `https://opencode.ai/config.json`.
+Файл `opencode.json` (179 строк). Схема: `https://opencode.ai/config.json`.
 
 ### 2.1 Корневые поля
 
 | Поле | Значение | Описание |
 |------|----------|----------|
 | `$schema` | `https://opencode.ai/config.json` | Ссылка на JSON-схему |
-| `model` | `ecom-exp/glm-5.2` | Модель по умолчанию |
+| `model` | `ecom/deepseek-v4-flash` | Модель по умолчанию |
 | `default_agent` | `orchestrator` | Агент, запускаемый по умолчанию |
-| `small_model` | `ecom/qwen3.6-35b` | Лёгкая модель для нетворческих задач (тайтлы, компактизация) |
-| `subagent_depth` | `2` | Максимальная вложенность сабагентов |
+| `small_model` | `ecom/qwen3.8-27b` | Лёгкая модель для нетворческих задач (тайтлы, компактизация) |
+| `subagent_depth` | `4` | Максимальная вложенность сабагентов (глубокое дерево декомпозиции) |
 
 ### 2.2 Глобальные permissions
 
@@ -137,19 +135,19 @@ Watcher не реагирует на изменения в шумных дире
 
 ## 🤖 3. Агенты
 
-Агенты определяются **только** в `agents/*.md` (19 файлов). Конфигурация — в YAML frontmatter каждого файла. Нет блока `agent` в `opencode.json`.
+Агенты определяются **только** в `agents/*.md` (24 файла). Конфигурация — в YAML frontmatter каждого файла. Нет блока `agent` в `opencode.json`.
 
 ### 3.1 Primary-агенты
 
 | Агент | Модель | Steps | Color | Temp | Роль |
 |-------|--------|-------|-------|------|------|
-| **orchestrator** | `ecom-exp/glm-5.2` | 30 | `#FF5733` | 0.15 | Оркестратор — только спавнит сабагентов |
+| **orchestrator** | `ecom/deepseek-v4-flash` | 30 | `#FF5733` | 0.15 | Оркестратор — только спавнит сабагентов |
 | **build** | `ecom/deepseek-v4-flash` | 50 | `success` | 0.15 | Исполнитель — пишет код, запускает команды |
 | **plan** | `ecom/deepseek-v4-flash` | 30 | `info` | — | Планировщик — read-only анализ и план-ревью |
 
 #### Orchestrator (`agents/orchestrator.md`)
 - **Роль:** Диспетчер — распределяет задачи между сабагентами. НИЧЕГО не делает сам.
-- **Модель:** `ecom-exp/glm-5.2`, temperature 0.15
+- **Модель:** `ecom/deepseek-v4-flash`, temperature 0.15
 - **Permissions:** `task=allow`, `skill=allow`, `todowrite=allow`, `question=allow`, всё остальное `deny` (read/edit/write/bash/glob/grep = deny)
 - **Запуск:** Автоматически (агент по умолчанию)
 
@@ -168,22 +166,27 @@ Watcher не реагирует на изменения в шумных дире
 
 | # | Агент | Модель | Hidden | Роль | Ключевые permissions |
 |---|-------|--------|--------|------|---------------------|
-| 1 | `explore` | `ecom/qwen3.5-122b` | — | Быстрое исследование кодовой базы (read-only) | read/glob/grep/bash=allow, write/edit/task=deny |
-| 2 | `project-mapper` | `ecom/qwen3.6-35b` | — | Построение карты проекта | read/glob/grep/bash=allow, write/edit/task=deny |
-| 3 | `desearch-researcher` | `ecom-exp/glm-5.2` | — | Глубокий веб-ресёрч | read/write/edit/glob/grep/bash/websearch/webfetch=allow |
-| 4 | `desearch-synthesizer` | `ecom-exp/glm-5.2` | — | Синтез ресёрч-отчётов | read/write/edit/glob/grep/bash/websearch=allow, webfetch=deny |
-| 5 | `react-dev` | `ecom/qwen3.6-35b` | — | React/TS разработка | read/write/edit/glob/grep/bash=allow, task=deny |
-| 6 | `go-dev` | `ecom/qwen3.6-35b` | — | Go backend разработка | read/write/edit/glob/grep/bash=allow, task=deny |
-| 7 | `rust-dev` | `ecom/qwen3.6-35b` | — | Rust разработка | read/write/edit/glob/grep/bash/task=allow |
-| 8 | `seo-writer` | `ecom/qwen3.5-122b` | — | SEO-контент (read-only, через task) | read/glob/grep/task/webfetch=allow, write/edit=deny, bash=ask |
-| 9 | `reviewer` | `ecom/deepseek-v4-flash` | ✅ hidden | Общий code review (standards + spec) | read/write/edit/glob/grep=allow, bash/task=deny |
+| 1 | `explore` | `ecom/qwen3.8-27b-no-think` | — | Быстрое исследование кодовой базы (read-only) | read/glob/grep/bash=allow, write/edit=deny, task=allow |
+| 2 | `project-mapper` | `ecom/qwen3.8-27b-no-think` | — | Построение карты проекта | read/glob/grep/bash=allow, edit=deny, write=allow, task=allow |
+| 3 | `desearch-researcher` | `ecom/deepseek-v4-flash` | — | Глубокий веб-ресёрч | read/write/edit/glob/grep/bash/websearch/webfetch=allow |
+| 4 | `desearch-synthesizer` | `ecom/deepseek-v4-flash` | — | Синтез ресёрч-отчётов | read/write/edit/glob/grep/bash/websearch=allow, webfetch=deny |
+| 5 | `react-dev` | `ecom/qwen3.8-27b` | — | React/TS разработка | read/write/edit/glob/grep/bash=allow, task=allow |
+| 6 | `go-dev` | `ecom/qwen3.8-27b` | — | Go backend разработка | read/write/edit/glob/grep/bash=allow, task=allow |
+| 7 | `rust-dev` | `ecom/qwen3.8-27b` | — | Rust разработка | read/write/edit/glob/grep/bash/task=allow |
+| 8 | `seo-writer` | `ecom/qwen3.8-27b` | — | SEO-контент (read-only, через task) | read/glob/grep/task/webfetch=allow, write/edit=deny, bash=ask |
+| 9 | `reviewer` | `ecom/deepseek-v4-flash` | ✅ hidden | Общий code review (standards + spec) | read/glob/grep=allow, write/edit/bash/task=deny |
 | 10 | `reviewer-standards` | `ecom/deepseek-v4-flash` | ✅ hidden | Ревью кодстайла и конвенций | read/glob/grep=allow, edit/write/bash/task=deny |
 | 11 | `reviewer-spec` | `ecom/deepseek-v4-flash` | ✅ hidden | Ревью соответствия спецификации | read/glob/grep=allow, edit/write/bash/task=deny |
 | 12 | `reviewer-arch` | `ecom/deepseek-v4-flash` | ✅ hidden | Архитектурное ревью | read/glob/grep=allow, edit/write/bash/task=deny |
-| 13 | `test-agent` | `ecom/qwen3.6-35b` | — | Запуск тестов и отчёт | read/glob/grep/bash=allow, write/edit/task=deny |
+| 13 | `test-agent` | `ecom/qwen3.8-27b-no-think` | — | Запуск тестов и отчёт | read/glob/grep/bash=allow, write/edit=deny, task=allow |
 | 14 | `security-check` | `ecom/deepseek-v4-flash` | — | Аудит security/reliability/simplicity | read/glob/grep/bash=allow, write/edit/task=deny |
-| 15 | `soc-check` | `ecom/qwen3.5-122b` | — | Проверка SOC/контрактов/покрытия | read/glob/grep/bash=allow, write/edit/task=deny |
+| 15 | `soc-check` | `ecom/deepseek-v4-flash` | — | Проверка SOC/контрактов/покрытия | read/glob/grep/bash=allow, write/edit/task=deny |
 | 16 | `ui-designer` | `ecom/deepseek-v4-flash` | — | UI/UX дизайн (только спецификации) | read/write/edit/glob/grep=allow, bash/task=deny |
+| 17 | `mcp-aistats` | `ecom/qwen3.8-27b-no-think` | — | MCP-обёртка aistats (метрики) | только MCP-инструменты aistats; read/write/edit/bash/glob/grep/task=deny |
+| 18 | `mcp-confluence` | `ecom/qwen3.8-27b-no-think` | — | MCP-обёртка Confluence (read/write) | только MCP-инструменты Confluence; file/task=deny |
+| 19 | `mcp-jira` | `ecom/qwen3.8-27b-no-think` | — | MCP-обёртка Jira (read/write) | только MCP-инструменты Jira; file/task=deny |
+| 20 | `mcp-adr-drawio` | `ecom/qwen3.8-27b` | — | MCP-обёртка ADR drawio (схемы) | MCP-adr-drawio + read/write/glob/grep=allow (для артефактов), bash=deny, task=deny |
+| 21 | `mcp-playwright` | `ecom/deepseek-v4-flash` | — | MCP-обёртка playwright (browser-автоматизация) | только MCP-инструменты playwright; file/task=deny |
 
 > **Hidden-агенты** (`hidden: true` в frontmatter) — не появляются в списке доступных агентов UI, но могут вызываться оркестратором через `task()`.
 
@@ -191,12 +194,9 @@ Watcher не реагирует на изменения в шумных дире
 
 | Модель | Агенты |
 |--------|--------|
-| `ecom-exp/glm-5.2` | orchestrator, desearch-researcher, desearch-synthesizer |
-| `ecom/deepseek-v4-flash` | build, plan, reviewer, reviewer-standards, reviewer-spec, reviewer-arch, security-check, ui-designer |
-| `ecom/qwen3.6-35b` | react-dev, go-dev, rust-dev, test-agent |
-| `ecom/qwen3.5-122b` | seo-writer, soc-check |
-| `ecom/qwen3.5-122b` | explore |
-| `ecom/qwen3.6-35b` | project-mapper |
+| `ecom/deepseek-v4-flash` | orchestrator, build, plan, reviewer, reviewer-standards, reviewer-spec, reviewer-arch, security-check, soc-check, desearch-researcher, desearch-synthesizer, ui-designer, mcp-playwright |
+| `ecom/qwen3.8-27b` | react-dev, go-dev, rust-dev, seo-writer, mcp-adr-drawio |
+| `ecom/qwen3.8-27b-no-think` | explore, project-mapper, test-agent, mcp-aistats, mcp-confluence, mcp-jira |
 
 ---
 
@@ -240,7 +240,7 @@ Watcher не реагирует на изменения в шумных дире
 | `context-metrics` | Мониторинг метрик контекста, лимитов и effort |
 | `desearch` | Параллельный deep web research (3-5 углов) с синтезированным отчётом |
 | `design` | UI/UX дизайн из скриншотов и промптов — анти-AI-slop, анимации, градиенты |
-| `file-diff` | Сравнение двух файлов с выводом различий в формате unified diff |
+
 | `full-workflow` | Полный 7-этапный workflow через orchestrator: map → grill → research → implement → review → testing → safety → soc |
 | `graphify` | Построение графа знаний из кода/документов/изображений с query/path/explain tools |
 | `grill-me` | Интерактивный допрос плана/решения — разбирает дерево решений шаг за шагом |
@@ -277,12 +277,17 @@ Watcher не реагирует на изменения в шумных дире
 
 ## 🌐 7. MCP Серверы
 
-2 MCP-сервера в `opencode.json` → секция `mcp`:
+7 MCP-серверов в `opencode.json` → секция `mcp`:
 
-| Сервер | Тип | Команда | Назначение |
-|--------|-----|---------|------------|
+| Сервер | Тип | Команда / URL | Назначение |
+|--------|-----|---------------|------------|
 | `aistats` | local | `aistats mcp` | Сбор метрик токенов, стоимости, рекомендации по эффективности |
 | `playwright` | local | `npx @playwright/mcp@latest --executable-path ${HOME}/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome --headless --no-sandbox --isolated` | E2E тестирование (headless Chromium) |
+| `Confluence_Samokat_Read_Only` | remote | `.../Confluence_Samokat_Read_Only/mcp` | Чтение Confluence (`CONFLUENCE_TOKEN`) |
+| `Confluence_Samokat_Write` | remote | `.../Confluence_Samokat_Write/mcp` | Запись Confluence (`CONFLUENCE_TOKEN`) |
+| `Jira_Samokat_Read_Only` | remote | `.../Jira_Samokat_Read_Only/mcp` | Чтение Jira (`JIRA_TOKEN`) |
+| `Jira_Samokat_Write` | remote | `.../Jira_Samokat_Write/mcp` | Запись Jira (`JIRA_TOKEN`) |
+| `MCP_adr_drawio` | remote | `http://mcp-adr-drawio-ai-factory.../mcp` | ADR drawio |
 
 Playwright MCP дополнительно настраивает environment: `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`.
 
@@ -291,13 +296,31 @@ Playwright MCP дополнительно настраивает environment: `P
 - `aistats_aistats_report` — отчёт по продуктивности (tokens, cost, time, phase breakdown)
 - `aistats_aistats_recommendations` — ранжированные рекомендации по эффективности
 
+### MCP-обёртки (сабагенты)
+
+Для каждого подключённого MCP-сервера создан сабагент-обёртка, который выполняет MCP-действия в **изолированном контексте** и возвращает в основной контекст **только краткий агрегированный результат** — это снижает потребление контекстного окна основного агента.
+
+| Обёртка (`agents/*.md`) | MCP-сервер | Модель | Особенности |
+|-------------------------|------------|--------|-------------|
+| `mcp-aistats` | aistats | qwen3.8-27b-no-think | Лёгкие метрики; file/bash/task=deny, только aistats-инструменты |
+| `mcp-confluence` | Confluence RO + Write | qwen3.8-27b-no-think | Чтение и запись wiki; file/task=deny |
+| `mcp-jira` | Jira RO + Write | qwen3.8-27b-no-think | Чтение и запись тикетов; file/task=deny |
+| `mcp-adr-drawio` | MCP_adr_drawio | qwen3.8-27b | Генерация ADR-схем; read/write/glob/grep=allow (артефакты), bash=deny, task=deny |
+| `mcp-playwright` | playwright | deepseek-v4-flash | Тяжёлая browser-автоматизация/исследование страниц; file/task=deny |
+
+Все обёртки: `task: deny` (терминальные на своём уровне), возвращают только агрегированный итог (ID/ключ/статус/числа), не разворачивая промежуточные подробности. Оркестратор и `build` делегируют обёрткам вместо прямых вызовов MCP-инструментов.
+
+### Глубокая вложенность сабагентов
+
+`subagent_depth: 4` — сабагенты, которым разрешён `task: allow` (`build`, `plan`, `react-dev`, `go-dev`, `rust-dev`, `explore`, `project-mapper`, `test-agent`), могут порождать собственных сабагентов, образуя глубокое дерево декомпозиции. Каждый уровень держит собственный мини-контекст и возвращает наверх только агрегированный результат — поэтому глубина не раздувает основной контекст. Ревьюеры, `security-check`, `soc-check` и MCP-обёртки остаются `task: deny` (читают/выполняют, не декомпозируют).
+
 ---
 
 ## 🔌 8. Плагины
 
 2 JS-плагина. В `opencode.json` **нет** секции `plugin` — плагины авто-обнаруживаются opencode из директории `plugins/`.
 
-> **Дубликат:** файлы `aistats.js` и `herdr-agent-state.js` существуют **одновременно** в корне конфига и в `plugins/`. См. §16 (Известные проблемы).
+> **Примечание:** файлы `aistats.js` и `herdr-agent-state.js` существуют **только** в `plugins/`. Копий в корне конфига нет (в отличие от того, что указывала старая документация).
 
 ### aistats.js (`plugins/aistats.js`)
 - **Назначение:** Ингест метрик сессии в aistats при idle
@@ -327,36 +350,31 @@ Playwright MCP дополнительно настраивает environment: `P
 
 ## 🧩 9. Провайдеры моделей
 
-7 провайдеров в `opencode.json` → секция `provider`:
+3 провайдера в `opencode.json` → секция `provider`, **2 общих токена** (`ECOM_LLM_TOKEN`, `ECOM_LLM_EXP_TOKEN`). Per-model токенов, timeout и rate-limits в конфиге **нет**.
 
 | Провайдер | Модель | Context | Output | API Key Env | npm-пакет | Base URL |
 |----------|--------|---------|--------|-------------|-----------|----------|
-| `zai-coding-plan` | GLM-5.2 | 1M | 131072 | — (подписка Z.AI) | — (built-in) | `https://api.z.ai/api/coding/paas/v4` |
-| `ecom` | glm-5.2 | 256K | 16K | `ECOM_GLM52_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
-| `ecom` | qwen3.5-122b | 128K | 8K | `ECOM_QWEN35_122b_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
-| `ecom` | qwen3.6-35b | 128K | 8K | `ECOM_QWEN36_35b_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
-| `ecom` | qwen3.5-122b (no-think) | 128K | 8K | `ECOM_QWEN35_122b_NO_THINK_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
-| `ecom` | qwen3.6-35b (no-think) | 128K | 8K | `ECOM_QWEN36_35b_NO_THINK_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
-| `ecom` | deepseek-v4-flash | 256K | 16K | `ECOM_DEEPSEEK4_FLASH_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom` | deepseek-v4-flash | 256K | 16K | `ECOM_LLM_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom` | qwen3.8-27b | 256K | 16K | `ECOM_LLM_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom` | qwen3.8-27b-no-think | 128K | 8K | `ECOM_LLM_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom-exp` | glm-5.2 *(экспериментальная)* | 256K | 16K | `ECOM_LLM_EXP_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `zai-coding-plan` | GLM-5.2 *(экспериментальная)* | 1M | 131072 | — (подписка Z.AI) | — (built-in) | `https://api.z.ai/api/coding/paas/v4` |
 
 ### Особенности провайдеров
 
-**zai-coding-plan** — провайдер подписки Z.AI Coding Plan. Не использует `npm`-пакет (встроенный в opencode) и не требует `apiKey` (авторизация через `~/.local/share/opencode/auth.json`). Контекст 1M, output 131K — самый большой контекст. Используется моделью по умолчанию (`ecom-exp/glm-5.2` — НЕ путать, `model` в конфиге указывает на `ecom-glm-52`, но `zai-coding-plan` тоже предоставляет `glm-5.2`).
+**ecom** — основной провайдер. Использует base URL `https://llm-core-olap.samokat.ru/v1`, npm-пакет `@ai-sdk/openai-compatible`, ключ `ECOM_LLM_TOKEN`, `setCacheKey: true`. Opencode.json **не содержит** per-model токенов, timeout / rate-limits — только базовые `limit` (context/output) на каждую модель.
 
-> **Внимание:** Поле `model` в `opencode.json` = `ecom-exp/glm-5.2` (провайдер `ecom-glm-52` — Samokat internal). Провайдер `zai-coding-plan` также предоставляет `glm-5.2` (Z.AI подписка), но не выбран как модель по умолчанию.
+**ecom-exp** — экспериментальный провайдер. Ключ `ECOM_LLM_EXP_TOKEN`. Содержит единственную экспериментальную модель `glm-5.2`.
 
-**ecom-* провайдеры** (6 шт.) — все используют один base URL `https://llm-core-olap.samokat.ru/v1` и npm-пакет `@ai-sdk/openai-compatible`. Каждый настроен с:
-- `timeout: 120000` (120с на полный запрос)
-- `chunkTimeout: 60000` (60с между SSE чанками)
-- `headerTimeout: 30000` (30с на получение заголовков)
-- `setCacheKey: true` (промпт-кэширование для экономии токенов)
+**zai-coding-plan** — провайдер подписки Z.AI Coding Plan. Встроенный в opencode, без apiKey (авторизация через `~/.local/share/opencode/auth.json`). Контекст 1M, output 131K — самый большой контекст.
 
-**Rate limits** (в `limit` блоке модели):
-- `deepseek-v4-flash`: hourly 50K, daily 200K, weekly 1M токенов
-- `glm-5.2` (ecom-glm-52): hourly 50K, daily 200K, weekly 1M токенов
-- `qwen3.5-122b`: effort `current: high`, `limit: max`
+### Модель по умолчанию
 
-**No-think провайдеры** (`ecom-qwen35-122b-no-think`, `ecom-qwen36-35b-no-think`) — алиасы тех же моделей с отключённым thinking-режимом. Используются агентами `explore` и `project-mapper` для быстрых нетворческих задач.
+Поле `model` в `opencode.json` = `ecom/deepseek-v4-flash`. Малая модель (`small_model`) = `ecom/qwen3.8-27b`.
+
+### glm-5.2 — экспериментальная модель
+
+`ecom-exp/glm-5.2` и `zai-coding-plan/glm-5.2` — **экспериментальные** и не всегда доступны. Они **не назначены ни одному агенту на постоянной основе** и по умолчанию не задействованы. Допускается ТОЛЬКО опциональное использование с fallback-проверкой: в случае недоступности glm-5.2 использовать `ecom/deepseek-v4-flash`. Не подключать как жёсткий дефолт ни одному агенту.
 
 ---
 
@@ -436,20 +454,16 @@ Pre-commit валидация по Zero-Rework Protocol (123 строки). 6 э
 ### .env.example — переменные окружения
 
 ```bash
-# Qwen models
-ECOM_QWEN35_122b_TOKEN=
-ECOM_QWEN36_35b_TOKEN=
-ECOM_QWEN35_122b_NO_THINK_TOKEN=
-ECOM_QWEN36_35b_NO_THINK_TOKEN=
-
-# DeepSeek models
-ECOM_DEEPSEEK4_FLASH_TOKEN=
-
-# Other models
-ECOM_GIGA3_10b_TOKEN=
+# ECOM TECH
+ECOM_LLM_TOKEN=
+ECOM_LLM_EXP_TOKEN=
+# MCP: Confluence Read-Only / Write
+CONFLUENCE_TOKEN=
+# MCP: Jira Read-Only / Write
+JIRA_TOKEN=
 ```
 
-> ⚠️ См. §16 — `.env.example` не содержит `ECOM_GLM52_TOKEN`, нужный провайдеру `ecom-glm-52`, и содержит устаревший `ECOM_GIGA3_10b_TOKEN`, не используемый ни одним провайдером в `opencode.json`.
+Все ecom/ecom-exp модели используют общие токены `ECOM_LLM_TOKEN` / `ECOM_LLM_EXP_TOKEN`; `CONFLUENCE_TOKEN` и `JIRA_TOKEN` — для remote MCP-серверов Confluence/Jira.
 
 ---
 
@@ -475,20 +489,18 @@ cp .env.example .env
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 
 # 6. Проверка
-opencode --version    # 1.18.7
+opencode --version    # 1.18.16
 opencode run "Hello"
 ```
 
 ### API-токены
 
-| Переменная | Провайдер       | Где взять |
-|-----------|-----------------|-----------|
-| `ECOM_QWEN35_122b_TOKEN` | ecom            | Инфраструктура Samokat (llm-core-olap) |
-| `ECOM_QWEN36_35b_TOKEN` | ecom            | Инфраструктура Samokat (llm-core-olap) |
-| `ECOM_QWEN35_122b_NO_THINK_TOKEN` | ecom            | Инфраструктура Samokat (llm-core-olap) |
-| `ECOM_QWEN36_35b_NO_THINK_TOKEN` | ecom            | Инфраструктура Samokat (llm-core-olap) |
-| `ECOM_DEEPSEEK4_FLASH_TOKEN` | ecom            | Инфраструктура Samokat (llm-core-olap) |
-| `ECOM_GLM52_TOKEN` | ecom-exp        | Инфраструктура Samokat (llm-core-olap) — **нет в .env.example** |
+| Переменная | Провайдер / MCP | Где взять |
+|-----------|------------------|-----------|
+| `ECOM_LLM_TOKEN` | ecom (все модели) | Инфраструктура Samokat (llm-core-olap) |
+| `ECOM_LLM_EXP_TOKEN` | ecom-exp (glm-5.2) | Инфраструктура Samokat (llm-core-olap) |
+| `CONFLUENCE_TOKEN` | Confluence MCP (Read-Only/Write) | Confluence / инфраструктура Samokat |
+| `JIRA_TOKEN` | Jira MCP (Read-Only/Write) | Jira / инфраструктура Samokat |
 | — | zai-coding-plan | Подписка Z.AI Coding Plan (авторизация через `~/.local/share/opencode/auth.json`) |
 
 Все ecom-* провайдеры используют base URL: `https://llm-core-olap.samokat.ru/v1`
@@ -525,27 +537,17 @@ npm install                              # обновить зависимост
 
 При сопоставлении файлов конфигурации обнаружены следующие несоответствия:
 
-### 16.1 .env.example не синхронизирован с opencode.json
-- **Отсутствует** `ECOM_GLM52_TOKEN` — нужен провайдеру `ecom-glm-52` (модель `glm-5.2`, используется агентами orchestrator, desearch-researcher, desearch-synthesizer). Без этого токена эти агенты не смогут работать через `ecom-glm-52`.
-- **Присутствует** `ECOM_GIGA3_10b_TOKEN` — не используется ни одним провайдером в `opencode.json`. В старой документации и README упоминался провайдер `ecom-giga3-10b` (модель giga3-10b), но в текущем `opencode.json` он **отсутствует**.
+### 16.1 .env.example и opencode.json синхронизированы
+`.env.example` содержит 2 токена (`ECOM_LLM_TOKEN`, `ECOM_LLM_EXP_TOKEN`), которые соответствуют `opencode.json` (там нет per-model токенов). Дополнительно добавлены `CONFLUENCE_TOKEN` и `JIRA_TOKEN` для remote MCP-серверов Confluence/Jira.
 
-### 16.2 Дубликаты плагинов
-Файлы `aistats.js` и `herdr-agent-state.js` существуют **одновременно** в двух местах:
-- Корень: `~/.config/opencode/aistats.js`, `~/.config/opencode/herdr-agent-state.js`
-- Каталог плагинов: `~/.config/opencode/plugins/aistats.js`, `~/.config/opencode/plugins/herdr-agent-state.js`
-
-В `opencode.json` нет секции `plugin`. Назначение корневых копий неясно — возможно, legacy. Рекомендуется удалить дубликаты и оставить только `plugins/`.
+### 16.2 Дубликатов плагинов нет
+Файлы `aistats.js` и `herdr-agent-state.js` существуют **только** в `plugins/`. Копий в корне конфига нет. Ранее задокументированные «дубликаты в корне» неверны.
 
 ### 16.3 rules/README.md считает неправильно
 README заявляет «10 правил» и индекс-таблица содержит 10 строк, но фактически в `rules/` лежит **11** `.md`-файлов правил (в индексе не учтён `git-commit-push`). Старая CONFIG_DOCUMENTATION.md в одном месте писала «12 правил», в другом «11».
 
-### 16.4 README.md содержит устаревшие данные
-- Бейдж «agents-23» — фактически 19 agent-файлов (3 primary + 16 subagents).
-- Бейдж «skills-22» — фактически 23 скилла в `skills/`.
-- Бейдж «model-qwen3.5--122b» — фактически модель по умолчанию `glm-5.2`.
-- В таблице сабагентов указаны `project-mapper` → giga3-10b и `test-agent` → giga3-10b — фактически `project-mapper` использует `ecom/qwen3.6-35b`, `test-agent` — `ecom/qwen3.6-35b`.
-- В таблице провайдеров указан `ecom-giga3-10b` — отсутствует в `opencode.json`.
-- Раздел «Команды (6)» перечисляет 6 команд, но не упоминает `/get-session-metrics`.
+### 16.4 README.md содержал устаревшие данные
+Часть устаревших данных в README исправлена в ходе синхронизации. Остаточные отличия: раздел «Команды (6)» не упоминает `/get-session-metrics` как отдельную команду (реализована через aiStats).
 
 ### 16.5 CLAUDE.md отсутствует
 Старая CONFIG_DOCUMENTATION.md (§8) упоминала `CLAUDE.md` — «Глобальные правила поведения агента (180 строк)». Файл **не существует** в текущем каталоге конфигурации. Вероятно, удалён или перенесён.
@@ -558,3 +560,12 @@ README заявляет «10 правил» и индекс-таблица со�
 
 ### 16.8 Hidden-агенты не документированы
 Агенты `reviewer`, `reviewer-standards`, `reviewer-spec`, `reviewer-arch` имеют `hidden: true` в frontmatter — не появляются в UI списке. Старая документация не упоминала этот атрибут.
+
+### 16.9 Модель giga3-10b удалена
+Модель `giga3-10b` (провайдер `ecom`) удалена из `opencode.json` и из документации. Ни один агент ранее её не использовал (была не задействована). Теперь провайдер `ecom` содержит 3 модели: `qwen3.8-27b`, `qwen3.8-27b-no-think`, `deepseek-v4-flash`.
+
+### 16.10 Модель qwen3.8-27b-no-think теперь задействована
+`qwen3.8-27b-no-think` (128K/8K) ранее не использовалась. Теперь назначена на простые/механические задачи: `explore`, `project-mapper`, `test-agent` и MCP-обёртки (`mcp-aistats`, `mcp-confluence`, `mcp-jira`).
+
+### 16.11 Глубокая вложенность сабагентов
+`subagent_depth` поднят с `2` до `4`. `task: allow` включён для `plan`, `react-dev`, `go-dev` (ранее deny) и уже имелся у `build`/`rust-dev`/`seo-writer`/`orchestrator`; дополнительно включён у `explore`, `project-mapper`, `test-agent`. Ревьюеры, `security-check`, `soc-check` и MCP-обёртки остались `task: deny`.

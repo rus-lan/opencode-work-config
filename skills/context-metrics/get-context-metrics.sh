@@ -73,7 +73,7 @@ calc_percentage() {
 # Основной вывод метрик
 show_metrics() {
     local session=$(get_current_session)
-    local model="${OPENCODE_MODEL:-qwen3.5-122b}"
+    local model="${OPENCODE_MODEL:-qwen3.8-27b}"
     
     echo -e "${CYAN}╔════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║${NC}  ${BLUE}Context Metrics${NC}  Session: ${GREEN}$session${NC}"
@@ -155,7 +155,7 @@ case "${1:-}" in
         show_metrics
         ;;
     "effort")
-        model="${OPENCODE_MODEL:-qwen3.5-122b}"
+        model="${OPENCODE_MODEL:-qwen3.8-27b}"
         model_config=$(get_model_config "$model")
         effort_current=$(echo "$model_config" | jq -r '.effort.current // "not set"')
         effort_limit=$(echo "$model_config" | jq -r '.effort.limit // "not set"')

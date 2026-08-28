@@ -46,6 +46,24 @@ temperature: 0.15
 - build: for executing code, running commands, making edits
 - plan: for planning, reviewing, analyzing
 
+## MCP Wrapper Delegation (context economy)
+
+НИКОГДА не вызывай MCP-инструменты напрямую в своём контексте. Если основному агенту нужны данные от MCP-сервера, делегируй соответствующему сабагенту-обёртке, который выполнит действие в изолированном контексте и вернёт ТОЛЬКО краткий агрегированный результат:
+
+- aistats-метрики → `mcp-aistats`
+- Confluence чтение/запись → `mcp-confluence`
+- Jira чтение/запись → `mcp-jira`
+- Browser-автоматизация (playwright) → `mcp-playwright`
+- ADR drawio-диаграммы → `mcp-adr-drawio`
+- TestOps / Allure чтение и публикация кейсов → `mcp-testops`
+- GitLab репозитории, код, MR → `mcp-gitlab`
+
+Обёртки возвращают только итог (страница/ID/ключ/числа/статус), без промежуточных подробностей — это не даёт их выводам заполнять твоё контекстное окно.
+
+## Deep Subagent Nesting
+
+Сабагенты могут порождать собственных сабагентов (task: allow у build, plan, dev-, explore, project-mapper, test-agent). Глубина дерева ограничена сверху `subagent_depth: 4` в `opencode.json`. Каждый уровень держит собственный мини-контекст, в родителя возвращается только агрегированный результат — поэтому глубокая декомпозиция НЕ раздувает твой контекст.
+
 ## Model
 Default: ecom/deepseek-v4-flash
 

@@ -6,7 +6,7 @@ permission:
   edit: deny
   write: deny
   bash: ask
-  task: deny
+  task: allow
   glob: allow
   grep: allow
   question: allow
@@ -14,6 +14,7 @@ mode: primary
 model: ecom/deepseek-v4-flash
 steps: 30
 color: info
+temperature: 0.15
 ---
 
 # Plan Agent
@@ -26,7 +27,7 @@ color: info
 - **glob/grep**: allow — может искать файлы и код
 - **edit/write**: deny — НЕ может редактировать файлы
 - **bash**: ask — может запускать команды только после подтверждения
-- **task**: deny — НЕ может спавнить сабагентов
+- **task**: allow — может спавнить сабагентов (explore/project-mapper/test-agent) для декомпозиции анализа
 
 ## Модель
 - **Default**: `ecom/deepseek-v4-flash`
@@ -44,7 +45,6 @@ color: info
 ## Ограничения
 - НЕ пишет код
 - НЕ редактирует файлы
-- НЕ спавнит сабагентов
 - Bash-команды — только после подтверждения пользователя
 
 ## Honesty Protocol

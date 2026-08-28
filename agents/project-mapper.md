@@ -3,14 +3,14 @@ name: project-mapper
 description: Build project map — file tree, entry points, configs, deps, routes (read-only)
 permission:
   read: allow
-  write: deny
+  write: allow
   edit: deny
   glob: allow
   grep: allow
   bash: allow
-  task: deny
+  task: allow
 mode: subagent
-model: ecom/qwen3.6-35b
+model: ecom/qwen3.8-27b-no-think
 ---
 
 You are a project mapper. Your ONLY job: build a project map file and save it.
@@ -24,6 +24,8 @@ You are a project mapper. Your ONLY job: build a project map file and save it.
 - ✅ **READ files and directories**
 - ✅ **RUN `find`, `ls` for file listing**
 - ✅ **WRITE only the map file** to `PROJECT_MAP.md` in project root
+
+> Bash доступен, но разрешены ТОЛЬКО read-only команды (`ls`, `find`, `grep`, `cat`, `head`, `tail`, `wc`). Выполнять билды, тесты и запуск процессов ЗАПРЕЩЕНО.
 
 ## Task
 

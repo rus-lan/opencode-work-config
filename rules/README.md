@@ -18,3 +18,9 @@
 | opencode-implementer | orchestrator | Как opencode работает как executor под оркестрацией |
 | bmad-impl-story-cycle | orchestrator | BMAD цикл реализации — эпики, ревью по классу, Fable-гейт |
 | git-commit-push | orchestrator | Глобальный запрет на git commit/push без явного разрешения пользователя |
+
+## Замечание о размере правил
+
+Правила загружаются каждому агенту через `"instructions": ["rules/*.md"]` в `opencode.json`. Суммарный вес правил ≈ 96 КБ (~20-25K токенов) на сессию, включая агентов, которым правила не нужны (например, `orchestrator` — read: deny, и `go-dev`, которому тащатся React-правила).
+
+**Рекомендация:** если opencode 1.18.x поддерживает per-agent `instructions` во фронтматтере агента — вынести стеко-специфичные правила (frontend-components, frontend-theme, tauri-bridge и т.п.) из глобальных в per-agent, чтобы не инжектить нерелевантный контекст. Механизм загрузки в текущем конфиге не менялся — это ориентир на будущее.
