@@ -170,13 +170,12 @@
         "Authorization": "Bearer {env:JIRA_TOKEN}"
       }
     },
-    "adr_c4_drawio": {
+    "MCP_adr_drawio": {
       "type": "remote",
-      "url": "https://litellm-proxy-llm-core-olap.samokat.io/public_adr_c4_drawio/mcp",
+      "url": "http://mcp-adr-drawio-ai-factory.app.kube02019.internal/mcp",
       "enabled": true,
       "headers": {
-        "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
-        "Authorization": "Bearer {env:ECOM_LLM_TOKEN}"
+        "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}"
       }
     },
     "atlassian": {
