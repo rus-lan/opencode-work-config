@@ -22,6 +22,12 @@
       "ls*": "allow",
       "pwd": "allow",
       "jq *": "allow",
+      "ls *": "allow",
+      "list *": "allow",
+      "glob *": "allow",
+      "echo *": "allow",
+      "cat *": "allow",
+      "grep *": "allow",
       "rm -rf *": "deny",
       "rm *": "deny",
       "git push*": "deny",
@@ -58,7 +64,8 @@
           "limit": {
             "context": 256000,
             "output": 16384
-          }
+          },
+          "options": { "reasoningEffort": "high" }
         },
         "qwen3.8-27b-no-think": {
           "name": "qwen3.8-27b-no-think",
@@ -72,7 +79,8 @@
           "limit": {
             "context": 256000,
             "output": 16384
-          }
+          },
+          "options": { "reasoningEffort": "high" }
         }
       }
     },
@@ -85,8 +93,8 @@
         "setCacheKey": true
       },
       "models": {
-        "glm-5.2": {
-          "name": "glm-5.2",
+        "glm-5.3": {
+          "name": "glm-5.3",
           "limit": {
             "context": 256000,
             "output": 16384
@@ -99,8 +107,8 @@
         "baseURL": "https://api.z.ai/api/coding/paas/v4"
       },
       "models": {
-        "glm-5.2": {
-          "name": "GLM-5.2",
+        "glm-5.3": {
+          "name": "GLM-5.3",
           "limit": {
             "context": 1000000,
             "output": 131072
