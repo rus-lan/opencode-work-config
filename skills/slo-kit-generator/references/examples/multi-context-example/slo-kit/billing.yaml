@@ -1,0 +1,35 @@
+# Контекст: биллинг
+# Функциональная область: тарификация и учёт
+
+team: team-billing
+
+groups:
+  rating:
+    description: Тарификация
+    labels:
+      serviceTier: "2"  # Биллинг менее критичен чем звонки
+    defaults:
+      latency_limit: "1.0"
+    consists_of:
+      custom:
+        - name: rating-availability
+          description: Доступность тарификации
+          error_query: sum(rate(rating_errors[{{.window}}]))
+          total_query: sum(rate(rating_total[{{.window}}]))
+
+        - name: rating-accuracy
+          description: Точность тарификации (нулевые ошибки)
+          error_ratio_query: sum(rate(rating_balance_errors[{{.window}}]))
+
+  invoicing:
+    description: Выставление счётов
+    labels:
+      serviceTier: "3"
+    defaults:
+      latency_limit: "5.0"
+    consists_of:
+      custom:
+        - name: invoice-generation
+          description: Генерация счётов
+          error_query: sum(rate(invoice_generation_errors[{{.window}}]))
+          total_query: sum(rate(invoice_generation_total[{{.window}}]))

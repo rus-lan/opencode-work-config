@@ -206,9 +206,10 @@
     "gitlab": {
       "type": "remote",
       "enabled": true,
-      "url": "http://gitlab-spring-mcp-pqa-integration.app.kube01027.internal/api/mcp",
+      "url": "https://llm-core-olap.samokat.ru/gitecomrooir/mcp",
       "headers": {
-        "Authorization": "{env:GITLAB_TOKEN}"
+        "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
+        "Authorization": "Bearer {env:GITLAB_TOKEN}"
       },
       "oauth": false,
       "timeout": 30000

@@ -1,0 +1,14 @@
+# Go binary
+/slokit
+
+# Сгенерированные файлы
+slo-kit.yaml
+sloth.yaml
+slo.yaml
+alerts.yaml
+deploy/
+
+# Временные файлы
+temp-*.yaml
+temp-*.json
+*.log

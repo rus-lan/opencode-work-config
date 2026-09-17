@@ -1,0 +1,58 @@
+# ============================================
+# slo-kit configuration
+# ============================================
+SLO_KIT_IMAGE=dreg.sbmt.io/content/slo-kit:latest
+SLO_KIT_CONFIGS=configs
+SLO_KIT_VALUES_PATH=helm  # Путь к helm values для линтера
+
+# Генерация PaaS-формата: slo.yaml + alerts.yaml (Docker)
+slo-gen-paas:
+	docker run --rm \
+		-v $(CURDIR)/$(SLO_KIT_CONFIGS):/configs \
+		$(SLO_KIT_IMAGE) \
+		./slo-kit generate --in /configs/slo-kit.yaml --out /configs/slo.yaml --alerts /configs/alerts.yaml
+
+# Генерация sloth CRDs (Docker)
+slo-gen:
+	mkdir -p deploy/slo
+	docker run --rm \
+		-v $(CURDIR)/$(SLO_KIT_CONFIGS):/configs \
+		-v $(CURDIR)/$(SLO_KIT_CONFIGS):/output \
+		$(SLO_KIT_IMAGE) \
+		./slo-kit generate sloth --in /configs/slo-kit.yaml --output-dir /output
+
+# Генерация sloth CRDs (Go binary - альтернатива)
+slo-gen-go:
+	mkdir -p deploy/slo
+	slo-kit generate sloth --in $(SLO_KIT_CONFIGS)/slo-kit.yaml --output-dir deploy/slo
+
+# Генерация vmrules (Docker)
+slo-gen-vmrules:
+	mkdir -p deploy/slo
+	docker run --rm \
+		-v $(CURDIR)/$(SLO_KIT_CONFIGS):/configs \
+		-v $(CURDIR)/$(SLO_KIT_CONFIGS):/output \
+		$(SLO_KIT_IMAGE) \
+		./slo-kit generate vmrules --in /configs/slo-kit.yaml --output-dir /output
+
+# Валидация конфигурации
+slo-lint:
+	docker run --rm \
+		-v $(CURDIR):/service \
+		-v $(SLO_KIT_VALUES_PATH):/helm-values \
+		-e SLO_KIT_VALUES_PATH=/helm-values \
+		$(SLO_KIT_IMAGE) \
+		./slo-kit lint --spath=/service
+
+# Полный workflow: генерация sloth + vmrules
+slo-full: slo-gen slo-gen-vmrules
+
+# Generate (PaaS) + lint подряд: в ≥ 26.8.3 — чистый workflow без ложных exit 3;
+# в < 26.8.2 — generate ещё и перештамповывает версию в заголовке (обход version-check)
+slo-kit: slo-gen-paas slo-lint
+
+# Пример использования:
+#   make slo-full          # Сгенерировать sloth.yaml и vmrules.yaml
+#   make slo-gen           # Только sloth.yaml
+#   make slo-lint          # Валидация конфигурации
+#   make slo-kit           # generate + lint (рекомендуемый локальный workflow)

@@ -1,0 +1,609 @@
+{
+  "skill_name": "slo-kit-generator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Создай slo-kit.yaml конфигурацию для сервиса tracker. У меня есть OpenAPI спецификация в файле ./openapi.yaml. Нужно сгруппировать endpoints по тегам. Также добавь Kafka consumer группу для топиков: kuper.k-ecom-prod.ecom.megamarket.fct.cw-issues.0, kuper.k-ecom-prod.ecom.samokat.fct.cw-issues.0. Метаданные: namespace=cs-com-hub, service=tracker, product=cs-e080-core-platform, profile=ecomtech-letsgo, team=t080, cost_centre=E080.",
+      "expected_output": "Сгенерированный slo-kit.yaml файл с HTTP группами по тегам и consumer группой для Kafka topics",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Присутствуют поля profile: ecomtech-letsgo, namespace: cs-com-hub, service: tracker"},
+        {"text": "HTTP endpoints сгруппированы по тегам из OpenAPI (несколько групп, не одна)"},
+        {"text": "Есть consumer группа с указанными Kafka topics"},
+        {"text": "Есть поле cost_centre: E080"}
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "У сервиса нет HTTP API, только Kafka consumers. Создай slo-kit.yaml только с consumer группами. Топики: orders.created.0, payments.processed.0. Метаданные: namespace=orders, service=orders-service, product=core-orders, profile=ecomtech-letsgo, team=t100.",
+      "expected_output": "slo-kit.yaml только с consumer группой, без HTTP endpoints",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Отсутствуют HTTP endpoints (нет consists_of.http)"},
+        {"text": "Есть consists_of.consumerss с топиками orders.created.0 и payments.processed.0"},
+        {"text": "Присутствуют метаданные namespace=orders, service=orders-service"}
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Нужно создать slo-kit.yaml для REST API сервиса. OpenAPI файл находится в ./api/openapi.yaml. Группируй все endpoints в одну группу http. Метаданные: namespace=api-gateway, service=gateway, product=platform-core, profile=ecomtech-letsgo. Alerts включи с notify=[oncall, t200] и min_severity=warning.",
+      "expected_output": "slo-kit.yaml с одной HTTP группой со всеми endpoints и настроенными global alerts",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Все HTTP endpoints в одной группе"},
+        {"text": "Настроен блок alerts с enabled: true, notify: [oncall, t200], min_severity: warning"}
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Создай slo-kit.yaml для сервиса с внешними интеграциями. Сервис делает исходящие HTTP запросы к платежному шлюзу (http://payments.prod.lan/api/v1/charge) и CRM системе (http://crm.prod.lan/api/v1/customers). Метрики: http_outgoing_requests_total, http_outgoing_requests_duration. Метаданные: namespace=cs-com-hub, service=integration-service, product=cs-integrations, profile=ecomtech-letsgo, team=t150.",
+      "expected_output": "slo-kit.yaml с outgoing группой для внешних интеграций, использующей нативный outgoing тип",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Есть consists_of.outgoing (не custom) с entries для payments-gateway и crm-service"},
+        {"text": "Каждая outgoing entry содержит name, description и endpoint"},
+        {"text": "Endpoints содержат .* префикс (regex для полного URL с хостом)"},
+        {"text": "profile: ecomtech-letsgo"}
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Создай многоконтекстную конфигурацию slo-kit для телефонического сервиса. Контексты: calls (звонки, team=team-calls), dispatch (маршрутизация, team=team-dispatch), billing (биллинг, team=team-billing). В каждом контексте custom SLI для соответствующих метрик. Основной конфиг: namespace=cs-com-hub, service=phone-service, product=cs-telecom, profile=ecomtech-letsgo.",
+      "expected_output": "Многоконтекстная конфигурация в configs/slo-kit/: основной slo-kit.yaml и директория slo-kit/ с calls.yaml, dispatch.yaml, billing.yaml",
+      "files": [],
+      "assertions": [
+        {"text": "Создан основной configs/slo-kit/slo-kit.yaml с метаданными"},
+        {"text": "Созданы файлы контекстов calls.yaml, dispatch.yaml, billing.yaml в configs/slo-kit/slo-kit/"},
+        {"text": "Каждый контекст содержит поле team с соответствующим значением"},
+        {"text": "Каждый контекст содержит consists_of.custom с PromQL запросами"}
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Создай slo-kit.yaml для сервиса который принимает HTTP запросы и делает исходящие вызовы к внешнему сервису доставки. Входящие endpoints из OpenAPI ./api/openapi.yaml, исходящие к http://delivery.prod.lan/api/v1/shipment. Метаданные: namespace=cs-com-hub, service=orders-service, product=cs-orders, profile=ecomtech-letsgo, team=t080.",
+      "expected_output": "slo-kit.yaml с HTTP группой для входящих запросов и outgoing группой для исходящих вызовов к доставке",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Есть consists_of.http для входящих запросов"},
+        {"text": "Есть consists_of.outgoing (не custom) для исходящих вызовов к delivery-service"},
+        {"text": "outgoing endpoint содержит .* префикс для матчит host"},
+        {"text": "profile: ecomtech-letsgo"}
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Создай slo-kit.yaml для Go-сервиса на платформе ecom-tech (letsgo). У сервиса есть 2 cron-задачи: cleanupWorkLogs (ежедневно) и sendMetrics (каждую минуту). Сервис экспортирует метрики background_jobs_total, background_jobs_failure, background_jobs_duration_sum/count с лейблом name. Профиль ecomtech-letsgo поддерживает нативный тип jobs — используй native jobs. Метаданные: namespace=cs-com-hub, service=background-worker, product=cs-platform, profile=ecomtech-letsgo, team=t100.",
+      "expected_output": "slo-kit.yaml с нативным типом jobs для фоновых задач (cleanupWorkLogs, sendMetrics)",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Используется consists_of.jobss (native), не custom"},
+        {"text": "Каждый job содержит queue: cleanupWorkLogs и queue: sendMetrics"},
+        {"text": "Группа jobs имеет defaults.latency_limit"},
+        {"text": "Присутствуют метаданные namespace=cs-com-hub, service=background-worker"}
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Создай slo-kit.yaml для Ruby-сервиса на платформе Space. Сервис имеет: 1) HTTP endpoints из config/routes.rb (контроллер tickets, actions: index, show, create, update), 2) GraphQL operations: getTickets (query), createTicket (mutation) из app/graphql/types/query_type.rb, 3) Kafka consumer топик events.orders из karafka.rb, 4) que job OrderProcessingJob в очереди default. Метаданные: namespace=cs-com-hub, service=api, product=cs-e001-operator-tools, profile=ecom-ruby, team=t102.",
+      "expected_output": "slo-kit.yaml для ecom-ruby профиля с http, graphql, consumer и job типами",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecom-ruby"},
+        {"text": "Есть consists_of.http с controller и action (Ruby формат)"},
+        {"text": "Есть consists_of.graphql с operation_name getTickets и createTicket"},
+        {"text": "Есть consists_of.consumers с topic: events.orders"},
+        {"text": "Есть consists_of.jobs с queue и job_type: que"}
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Создай slo-kit.yaml для Go-сервиса (не letsgo, обычный Gin). Сервис экспортирует кастомные метрики: gi_api_request_duration_histogram (лейбл path), gi_external_status_code_count (лейблы service_name, code), gi_jira_request_duration_histogram (лейблы action, code). Профиль ecomtech-letsgo, но нативные типы не подходят — используй custom и custom_latency. Метаданные: namespace=cs-com-hub, service=goods-issues, product=cs-e001-operator-tools, profile=ecomtech-letsgo, team=t102.",
+      "expected_output": "slo-kit.yaml с custom_latency для API latency и custom для external availability",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Используется custom_latency с metric_name: gi_api_request_duration_histogram"},
+        {"text": "Используется custom с gi_external_status_code_count для availability"},
+        {"text": "PromQL для external использует code=~5.. фильтр"},
+        {"text": "Присутствуют метаданные profile: ecomtech-letsgo, service: goods-issues"}
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Создай slo-kit.yaml для Kotlin-сервиса на Spring Boot. Сервис nrt-data-api имеет 3 контроллера: OrderHistoryOrdersController (POST /order-history/orders/order-snapshots, POST /order-history/orders/order-items, POST /order-history/orders/order-lines), CustomerProfilesController (POST /customer-profiles/by-email, POST /customer-profiles/by-id), BonusMachineController (POST /bonus-machine/promotion-users, POST /bonus-machine/promocodes). Метрики Spring Boot Actuator: http_server_requests_seconds_count/sum с labels namespace, service, uri, method, outcome, error_code. Профиль ecom-kotlin. Метаданные: namespace=opercrm, service=nrt-dataapi, product=opercrm, team=t102, cost_centre=E001.",
+      "expected_output": "slo-kit.yaml с profile: ecom-kotlin, HTTP группами по контроллерам, нативный http SLI",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecom-kotlin"},
+        {"text": "HTTP endpoints сгруппированы по контроллерам (order-history-orders, customer-profiles, bonus-machine)"},
+        {"text": "Есть consists_of.http с method: POST и handler путями"},
+        {"text": "Есть alerts блок с notify"},
+        {"text": "Есть cost_centre: E001"}
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Создай slo-kit.yaml для Go-сервиса на platform go-backend (good-tools). Сервис tfs имеет 3 HTTP endpoints из OpenAPI: POST /tfs/v1/feedback/create, POST /tfs/v1/script/get, POST /tfs/v1/token/create. Метрики platform go-backend: http_incoming_requests_duration_sum/count (latency) и http_incoming_requests_total (availability), labels: endpoint, method, code. Профиль ecom-go-legacy. Метаданные: namespace=gi, service=tfs, product=gi, team=t102, cost_centre=E001.",
+      "expected_output": "slo-kit.yaml с profile: ecom-go-legacy, HTTP группой с 3 endpoints, нативный http SLI",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecom-go-legacy"},
+        {"text": "Есть consists_of.http с 3 endpoints (POST /tfs/v1/feedback/create, /tfs/v1/script/get, /tfs/v1/token/create)"},
+        {"text": "Есть поле cost_centre: E001"},
+        {"text": "Есть latency_limit в defaults"}
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Создай slo-kit.yaml для Go-сервиса goods-issues. Метрика latency: gi_api_request_duration_histogram (histogram, label path, значения в миллисекундах). Нет метрики availability (нет label code). Есть external интеграции: gi_external_status_code_count (labels service_name, code) для Elastic (service_name=http://general-elastic-nginx) и Jira (service_name=http://jira). Профиль ecom-go-legacy. Метаданные: namespace=gi, service=goods-issues, product=gi, team=t102. Сгруппируй: api (custom_latency, threshold=500ms), external (custom для Elastic + Jira availability).",
+      "expected_output": "slo-kit.yaml с custom_latency для API (без availability) и custom для external integrations",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecom-go-legacy"},
+        {"text": "Используется custom_latency с metric_name: gi_api_request_duration_histogram и threshold: 500"},
+        {"text": "Нет consists_of.http (custom метрики не поддерживают нативный http)"},
+        {"text": "Есть consists_of.custom для external с gi_external_status_code_count"},
+        {"text": "PromQL для external использует code=~5.. фильтр"},
+        {"text": "error_query и total_query содержат {{.window}} плейсхолдер"}
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "Я хочу настроить SLO мониторинг для сервиса nrt-data-api в ~/Documents/ECOM/gitlab/opercrm.smkt/nrt-data-api. Это Kotlin/Spring Boot сервис. Сначала просканируй его, затем сгенерируй slo-kit.yaml. Метаданные: namespace=opercrm, team=t102, cost_centre=E001.",
+      "expected_output": "Запуск slokit scan --profile ecom-kotlin, интервью по недостающим полям с примерами, затем slokit generate + заполнение TODO, результат — configs/slo-kit.yaml",
+      "files": [],
+      "assertions": [
+        {"text": "Используется команда slokit scan --profile ecom-kotlin"},
+        {"text": "После скана агент спрашивает недостающие данные (product, service_name_humanized, title, description, user_impact, alerts, serviceTier) с примерами"},
+        {"text": "Используется команда slokit generate --profile ecom-kotlin"},
+        {"text": "Найдены HTTP endpoints через Spring annotations (POST /order-history/orders/*, /customer-profiles/*, /bonus-machine/*)"},
+        {"text": "Сгенерированный slo-kit.yaml содержит profile: ecom-kotlin"},
+        {"text": "Service name определён автоматически (nrt-dataapi)"}
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "У меня есть Go-сервис cc-exchanger в ~/Documents/ECOM/gitlab/cc-exchanger.mm/cc-exchanger. Он использует platform go-backend (good-tools). Мне нужно создать SLO конфигурацию. Просканируй сервис и сгенерируй slo-kit.yaml. Метаданные: namespace=cc-exchanger, team=t102, cost_centre=E001.",
+      "expected_output": "Запуск slokit scan --profile ecom-go-legacy, интервью по недостающим полям, затем slokit generate + заполнение TODO, результат — configs/slo-kit.yaml",
+      "files": [],
+      "assertions": [
+        {"text": "Используется профиль ecom-go-legacy"},
+        {"text": "После скана агент спрашивает недостающие данные (product, service_name_humanized, title, description, user_impact, alerts) с примерами"},
+        {"text": "Service и product определены из go.mod (service=cc-exchanger, product=cc-exchanger)"},
+        {"text": "Найдены HTTP endpoints из openapi.yml (12 endpoints)"},
+        {"text": "Сгенерированный slo-kit.yaml содержит profile: ecom-go-legacy"}
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Какой профиль slo-kit выбрать для сервиса? У меня есть: 1) Go-сервис на Kuper (метрики http_request_duration_seconds), 2) Kotlin-сервис на Spring Boot (метрики http_server_requests_seconds), 3) Go-сервис на good-tools/platform go-backend (метрики http_incoming_requests_duration), 4) Ruby-сервис на Space (метрики sbmtapp_http_request_duration_seconds), 5) Go-сервис на letsgo фреймворке. Объясни какой профиль для каждого.",
+      "expected_output": "Объяснение соответствия профилей и метрик/платформ",
+      "files": [],
+      "assertions": [
+        {"text": "kuper-go для Go на Kuper (http_request_duration_seconds)"},
+        {"text": "ecom-kotlin для Kotlin/Spring Boot (http_server_requests_seconds)"},
+        {"text": "ecom-go-legacy для Go на good-tools/platform go-backend (http_incoming_requests_duration)"},
+        {"text": "ecom-ruby для Ruby на Space (sbmtapp_http_request_duration_seconds)"},
+        {"text": "ecomtech-letsgo для Go на letsgo фреймворке"}
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "Создай slo-kit.yaml для letsgo-сервиса sam-adapter. Сервис имеет 7 HTTP endpoints (GET /v1/pickup-points, GET /v1/pickup-points/closests, GET /v1/pickup-points/clusters, GET /v1/pickup-points/{locationId}, GET /v1/shops, GET /v1/shops/{locationId}, POST /v1/supports/events) и 2 Kafka consumers с топиками sam.logistics.event-streaming.location и sam.logistics.event-streaming.merchant-store. Также есть external интеграция через oif с ticket-system (spec: ./ts_spec.yaml). Профиль ecomtech-letsgo. Метаданные: namespace=erm, service=sam-adapter, product=erm, team=t102.",
+      "expected_output": "slo-kit.yaml с http, consumer и oif группами",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecomtech-letsgo"},
+        {"text": "Есть consists_of.http с 7 endpoints"},
+        {"text": "Есть consists_of.consumers с 2 топиками"},
+        {"text": "Есть consists_of.oif с out_service и out_if_id"},
+        {"text": "Используется нативный oif тип (не custom)"}
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "Создай slo-kit.yaml для Kotlin-сервиса с gRPC. Сервис имеет HTTP endpoints (POST /api/v1/orders/create, POST /api/v1/orders/get) и gRPC метод ru.samokat.api.OrderService/GetOrder. Метрики Spring Boot для HTTP (http_server_requests_seconds), gRPC стандартные (grpc_server_handled_total, grpc_server_handling_seconds). Профиль ecom-kotlin. Метаданные: namespace=opercrm, service=order-service, product=opercrm, team=t102. HTTP endpoints в группе orders, gRPC в группе grpc.",
+      "expected_output": "slo-kit.yaml с http и grpc группами для ecom-kotlin",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecom-kotlin"},
+        {"text": "Есть consists_of.http с 2 endpoints"},
+        {"text": "Есть consists_of.grpc с service и method"},
+        {"text": "gRPC service содержит точку (Package.Service формат)"}
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "Создай slo-kit.yaml для Go-сервива cc-exchanger с 12 HTTP endpoints. Сервис использует good-tools/platform go-backend. Endpoints: GET /cc/exchanger/v1/-/health, POST /cc/exchanger/v1/task/create, POST /cc/exchanger/v1/task/get, POST /cc/exchanger/v1/task/list, POST /cc/exchanger/v1/task/update, POST /cc/exchanger/v1/task/delete, POST /cc/exchanger/v1/task/cancel, POST /cc/exchanger/v1/task/launch, POST /cc/exchanger/v1/task/queue. Endpoint /health не нужно включать в SLO. Профиль ecom-go-legacy. Метаданные: namespace=cc-exchanger, service=cc-exchanger, product=cc-exchanger, team=t102, cost_centre=E001. Группируй task endpoints в одну группу.",
+      "expected_output": "slo-kit.yaml с одной HTTP группой task (без health endpoint)",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecom-go-legacy"},
+        {"text": "Endpoint /cc/exchanger/v1/-/health отсутствует в consists_of"},
+        {"text": "Есть consists_of.http с task endpoints (create, get, list, update, delete, cancel, launch, queue)"},
+        {"text": "Есть cost_centre: E001"},
+        {"text": "Есть alerts блок"}
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "Какие метрики Prometheus использовать для каждого профиля slo-kit? Объясни различия между kuper-go, ecom-go-legacy, ecom-kotlin и ecomtech-letsgo. Какие labels у HTTP метрик в каждом профиле?",
+      "expected_output": "Таблица или список с метриками и labels для каждого профиля",
+      "files": [],
+      "assertions": [
+        {"text": "kuper-go: http_request_duration_seconds_sum/count, labels http_method/http_handler/http_code_num"},
+        {"text": "ecom-go-legacy: http_incoming_requests_duration_sum/count + http_incoming_requests_total, labels endpoint/method/code"},
+        {"text": "ecom-kotlin: http_server_requests_seconds_sum/count, labels service/uri/method/outcome/error_code"},
+        {"text": "ecomtech-letsgo: http_incoming_requests_duration_sum/count + http_incoming_requests_total, labels exported_endpoint/method/code"},
+        {"text": "Указано что ecom-kotlin использует service label (не application)"}
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "Создай slo-kit.yaml для Kotlin-сервиса nrt-data-api. Сервис возвращает HTTP 200 даже при бизнес-ошибках (error_code=TECHNICAL_ERROR). Нужно двухуровневый SLO: availability error = HTTP 5xx (outcome!=SUCCESS) + бизнес-ошибки (outcome=SUCCESS, error_code!=none). Latency считается только для успешных (outcome=SUCCESS, error_code=none). Endpoints: POST /order-history/orders/order-lines (latency_limit=2s), POST /order-history/orders/order-snapshots (latency_limit=2s), POST /customer-profiles/by-email (latency_limit=1s). Профиль ecom-kotlin. Метаданные: namespace=opercrm, service=nrt-dataapi, product=opercrm, team=t102.",
+      "expected_output": "slo-kit.yaml с profile: ecom-kotlin, разными latency_limit для групп",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecom-kotlin"},
+        {"text": "Группа order-history имеет latency_limit: 2"},
+        {"text": "Группа customer-profiles имеет latency_limit: 1"},
+        {"text": "Есть consists_of.http с 3 endpoints"},
+        {"text": "Endpoints сгруппированы по контексту (order-history, customer-profiles)"}
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "У меня есть slo-kit.yaml для ecomtech-letsgo сервиса, но после запуска slo-kit lint я получаю ошибку что некоторые HTTP endpoints из конфига не найдены в коде. Endpoint /v1/ticket-system/tickets/search не существует в OpenAPI spec. Как найти и исправить расхождения? Сервис в ~/Documents/ECOM/gitlab/ts.mm/ticket-system.",
+      "expected_output": "Объяснение как использовать slo-kit lint для валидации, как читать ошибки и исправлять конфиг",
+      "files": [],
+      "assertions": [
+        {"text": "Упоминается команда slo-kit lint --spath"},
+        {"text": "Объясняется что lint сравнивает consists_of.http с OpenAPI spec"},
+        {"text": "Предлагается удалить или исправить несуществующие endpoints"},
+        {"text": "Упоминается exit code lint (0=OK, 4=конфиг расходится с кодом)"}
+      ]
+    },
+    {
+      "id": 22,
+      "prompt": "Создай slo-kit.yaml для сервиса с background jobs на Ruby (Que). Сервис имеет 3 Que job: OrderProcessingJob (queue: default), NotificationJob (queue: notifications), ReportJob (queue: reports). Для каждого job нужно SLO на availability (que_jobs_failed_total / que_jobs_executed_total) и latency (que_job_runtime_seconds). Профиль ecom-ruby. Метаданные: namespace=orders, service=orders-api, product=orders, team=t100. Jobs в отдельной группе с serviceTier 3.",
+      "expected_output": "slo-kit.yaml с consists_of.jobs для 3 Que jobs",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecom-ruby"},
+        {"text": "Есть consists_of.jobs с 3 entries (default, notifications, reports)"},
+        {"text": "Каждый job имеет job_type: que"},
+        {"text": "Группа jobs имеет serviceTier: 3"},
+        {"text": "Есть latency_limit для jobs"}
+      ]
+    },
+    {
+      "id": 23,
+      "prompt": "У меня есть сервис medis на letsgo. Сервис имеет всего 1 HTTP endpoint (GET /v1/medis/attachments/{uuid}) и делает исходящие вызовы к file-processing-service через adapter (spec: ./fps_service_spec.yaml). Создай slo-kit.yaml с HTTP группой и oif группой для external calls. Профиль ecomtech-letsgo. Метаданные: namespace=ts, service=medis, product=ts, team=t102.",
+      "expected_output": "slo-kit.yaml с http и oif группами",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecomtech-letsgo"},
+        {"text": "Есть consists_of.http с GET /v1/medis/attachments/{uuid}"},
+        {"text": "Есть consists_of.oif с out_service и out_if_id"},
+        {"text": "oif out_if_type: http"}
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "Создай slo-kit.yaml для сервиса с разными serviceTier для разных групп. Группа api (HTTP endpoints) — serviceTier 1 (critical), latency_limit 0.3s. Группа background (Kafka consumers) — serviceTier 3, latency_limit 5s. Группа external (oif) — serviceTier 2, latency_limit 1s. HTTP: POST /api/v1/orders, GET /api/v1/orders/{id}. Consumers: topic orders.events. External: payment-gateway. Профиль ecomtech-letsgo. Метаданные: namespace=core, service=orders, product=orders, team=t100.",
+      "expected_output": "slo-kit.yaml с 3 группами, разными serviceTier и latency_limit",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Группа api имеет serviceTier: 1 и latency_limit: 0.3"},
+        {"text": "Группа background имеет serviceTier: 3 и latency_limit: 5"},
+        {"text": "Группа external имеет serviceTier: 2 и latency_limit: 1"},
+        {"text": "Есть consists_of.http, consists_of.consumers, consists_of.oif"}
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "Как использовать slokit для сканирования сервиса? У меня есть сервис в ~/Documents/ECOM/gitlab/gi.mm/tfs. Это Go-сервис. Я не знаю какой профиль выбрать. Покажи как просканировать, определить подходящий профиль и что делать после скана.",
+      "expected_output": "Объяснение процесса: сканирование → выбор профиля → интервью по недостающим данным → генерация",
+      "files": [],
+      "assertions": [
+        {"text": "Упоминается slokit scan"},
+        {"text": "Упоминается что для Go на good-tools подходит ecom-go-legacy"},
+        {"text": "Упоминается что slokit определяет service/product из go.mod"},
+        {"text": "Упоминается флаг --profile"},
+        {"text": "Упоминается что после скана нужно опросить пользователя по недостающим данным (метаданные, alerts, serviceTier)"}
+      ]
+    },
+    {
+      "id": 26,
+      "prompt": "Создай slo-kit.yaml для Kotlin-сервиса с Kafka consumers. Сервис nrt-data-api имеет HTTP endpoints (POST /order-history/orders/order-lines, POST /order-history/orders/order-snapshots) и Kafka consumer с топиком opercrm.nrt-dataapi.events.0. Профиль ecom-kotlin. Метаданные: namespace=opercrm, service=nrt-dataapi, product=opercrm, team=t102. HTTP в группе order-history (serviceTier 2, latency 2s), consumers в группе kafka (serviceTier 2, latency 5s).",
+      "expected_output": "slo-kit.yaml с http и consumer группами для ecom-kotlin",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecom-kotlin"},
+        {"text": "Есть consists_of.http с 2 endpoints"},
+        {"text": "Есть consists_of.consumers с topic: opercrm.nrt-dataapi.events.0"},
+        {"text": "Группа order-history имеет latency_limit: 2"},
+        {"text": "Группа kafka имеет latency_limit: 5"}
+      ]
+    },
+    {
+      "id": 27,
+      "prompt": "Создай slo-kit.yaml для ecom-ruby сервиса с GraphQL. Сервис имеет 5 queries (customer, order, trackingStatus, pickupPoint, receipts) и 2 mutations (createFeature, removeFeature). Также есть HTTP endpoint POST /api/webhook для внешних коллбеков. Профиль ecom-ruby. Метаданные: namespace=erm, service=gql-bff, product=erm, team=t102. GraphQL в группе graphql (serviceTier 2), webhook в группе webhooks (serviceTier 2).",
+      "expected_output": "slo-kit.yaml с graphql и http группами для ecom-ruby",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecom-ruby"},
+        {"text": "Есть consists_of.graphql с 7 operations (5 queries + 2 mutations)"},
+        {"text": "GraphQL operations имеют operation_type: query или mutation"},
+        {"text": "Есть consists_of.http с POST /api/webhook"},
+        {"text": "Группы разделены: graphql и webhooks"}
+      ]
+    },
+    {
+      "id": 28,
+      "prompt": "Мне нужно настроить SLO для сервиса ticket-system. Сервис на letsgo, 18 HTTP endpoints. После генерации slo-kit.yaml через slokit, мне нужно: 1) включить alerts, 2) указать runbook URL, 3) установить objective 99.9 для критичных групп и 99.5 для некритичных. Группа tickets — serviceTier 1, objective 99.9. Группа attachments — serviceTier 3, objective 99.5. Метаданные: namespace=ts, service=ticket-system, product=ts, team=t102.",
+      "expected_output": "slo-kit.yaml с настроенными alerts, runbook, разными objective по группам",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "alerts.enabled: true"},
+        {"text": "Группа tickets имеет objective: 99.9 и serviceTier: 1"},
+        {"text": "Группа attachments имеет objective: 99.5 и serviceTier: 3"},
+        {"text": "Есть runbook URL в labels групп"},
+        {"text": "alerts.notify содержит team"}
+      ]
+    },
+    {
+      "id": 29,
+      "prompt": "Создай slo-kit.yaml для сервиса с custom_latency SLI. Сервис экспортирует гистограмму api_response_time_seconds с labels: endpoint, method. Нет counter метрики для availability. Threshold: 1 секунда для GET, 2 секунды для POST. Endpoints: GET /api/v1/products/{id}, POST /api/v1/orders, POST /api/v1/orders/{id}/cancel. Профиль ecom-go-legacy. Метаданные: namespace=shop, service=catalog-api, product=shop, team=t200.",
+      "expected_output": "slo-kit.yaml с custom_latency SLI, разными threshold для GET и POST",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Используется custom_latency (не http)"},
+        {"text": "metric_name: api_response_time_seconds"},
+        {"text": "GET endpoint имеет threshold: 1"},
+        {"text": "POST endpoints имеют threshold: 2"},
+        {"text": "Нет consists_of.http (нет availability метрики)"},
+        {"text": "Есть labels с endpoint и method"}
+      ]
+    },
+    {
+      "id": 30,
+      "prompt": "У меня есть slo-kit.yaml конфигурация для ecomtech-letsgo сервиса. После запуска slo-kit generate я получаю slo.yaml. Что делать дальше? Как добавить alerts.yaml и настроить CI?",
+      "expected_output": "Объяснение pipeline: generate → alerts → CI",
+      "files": [],
+      "assertions": [
+        {"text": "Упоминается slo-kit generate для создания slo.yaml"},
+        {"text": "Упоминается что alerts.yaml создаётся через --alerts флаг"},
+        {"text": "Упоминается slo-kit lint для валидации"},
+        {"text": "Упоминается Makefile с slo-gen и slo-lint таргетами"},
+        {"text": "Упоминается .gitlab-ci.yml с check:slo-kit job"}
+      ]
+    },
+    {
+      "id": 31,
+      "prompt": "Создай slo-kit.yaml для сервиса erm/backend. Это Go-сервис на Kuper с 77 HTTP endpoints. Сгруппируй по тегам: addressSuggestService (1 endpoint), cc (1), contactCenterService (2), deal (3), deliveries (5). Endpoints: POST /clientService/erm/v1/address/suggest, POST /clientService/erm/v1/ccRequest/listActive, POST /clientService/erm/v1/customerOrder/all, POST /clientService/erm/v1/customerOrder/lightList, POST /clientService/erm/v1/promocode/checkForRecover, POST /clientService/erm/v1/promocode/recover, POST /clientService/erm/v1/supportline/voucherTransactions, POST /clientService/erm/v1/delivery/availableActions, POST /clientService/erm/v1/delivery/cancel, POST /clientService/erm/v1/delivery/cancelGroup, POST /clientService/erm/v1/delivery/update, POST /clientService/erm/v1/delivery/list. Профиль kuper-go. Метаданные: namespace=erm, service=backend, product=erm, team=t102, cost_centre=E001.",
+      "expected_output": "slo-kit.yaml с 5 группами по тегам, profile: kuper-go",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: kuper-go"},
+        {"text": "Есть 5 групп: addressSuggestService, cc, contactCenterService, deal, deliveries"},
+        {"text": "Группа deliveries содержит 5 endpoints"},
+        {"text": "Есть cost_centre: E001"},
+        {"text": "Все endpoints используют POST method"}
+      ]
+    },
+    {
+      "id": 32,
+      "prompt": "У сервиса sam-adapter 5 Kafka consumers с пустыми topics в .env.example. Реальные топики находятся в helm values. Как решить эту проблему при создании SLO конфигурации? Топики: merchantShop=sam.logistics.event-streaming.merchant-shop, pickupPoint=sam.logistics.event-streaming.pickup-point, partnerPickupPoint=sam.logistics.event-streaming.partner-pickup-point, partnerServiceOrganization=sam.logistics.event-streaming.partner-service-organization, merchantFboStore=sam.logistics.event-streaming.merchant-fbo-store. Профиль ecomtech-letsgo. Метаданные: namespace=erm, service=sam-adapter, product=erm, team=t102.",
+      "expected_output": "slo-kit.yaml с consumer группой, где topics указаны вручную",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Есть consists_of.consumers с 5 топиками"},
+        {"text": "Топики содержат префикс sam.logistics.event-streaming."},
+        {"text": "Упоминается что .env.example может содержать пустые значения и нужно указать topics вручную"},
+        {"text": "profile: ecomtech-letsgo"}
+      ]
+    },
+    {
+      "id": 33,
+      "prompt": "Какой workflow создания SLO конфигурации с нуля? Опиши все шаги от сканирования до CI. У меня letsgo-сервис automation в ~/Documents/ECOM/gitlab/ts.mm/automation.",
+      "expected_output": "Пошаговое описание workflow: scan → интервью → generate+fill → lint → CI",
+      "files": [],
+      "assertions": [
+        {"text": "Шаг 1: slokit scan для проверки найденного"},
+        {"text": "Шаг 2: интервью — опрос пользователя по группам (группировка, метаданные, alerts/serviceTier) с примерами"},
+        {"text": "Шаг 3: slokit generate + заполнение TODO полей из ответов пользователя"},
+        {"text": "Шаг 4: slo-kit generate для создания slo.yaml"},
+        {"text": "Шаг 5: slo-kit lint для валидации"},
+        {"text": "Шаг 6: Makefile + .gitlab-ci.yml"}
+      ]
+    },
+    {
+      "id": 34,
+      "prompt": "Создай slo-kit.yaml для сервиса с iif (Inbound Interface). Сервис принимает входящие сообщения от внешней системы через webhook. IIF: in_service=payment-provider, in_if_id=payment-events, in_if_type=http. Также есть HTTP API: POST /api/v1/refunds/create, POST /api/v1/refunds/process. Профиль ecomtech-letsgo. Метаданные: namespace=payments, service=refund-service, product=payments, team=t100. IIF в группе inbound (serviceTier 2), HTTP в группе api (serviceTier 1).",
+      "expected_output": "slo-kit.yaml с iif и http группами",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Есть consists_of.iif с in_service, in_if_id, in_if_type"},
+        {"text": "Есть consists_of.http с 2 refund endpoints"},
+        {"text": "Группа api имеет serviceTier: 1"},
+        {"text": "Группа inbound имеет serviceTier: 2"},
+        {"text": "profile: ecomtech-letsgo"}
+      ]
+    },
+    {
+      "id": 35,
+      "prompt": "Создай многоконтекстную slo-kit конфигурацию для сервиса ticket-system. Основной конфиг: namespace=ts, service=ticket-system, product=ts, profile=ecomtech-letsgo, team=t102. Контексты: 1) tickets (endpoints: POST /v1/ticket-system/tickets/getpersonallist, PATCH /v1/ticket-system/tickets/update, GET /v1/ticket-system/tickets/{ticketKey}, serviceTier 1, objective 99.9), 2) comments (POST /v1/ticket-system/comments/create, POST /v1/ticket-system/comments/list, serviceTier 2, objective 99.5), 3) attachments (POST /v1/ticket-system/attachments/upload, POST /v1/ticket-system/attachments/list, serviceTier 3, objective 99.0). Каждый контекст в отдельном файле.",
+      "expected_output": "Многоконтекстная конфигурация: основной slo-kit.yaml + 3 файла контекстов",
+      "files": [],
+      "assertions": [
+        {"text": "Создан основной configs/slo-kit/slo-kit.yaml с метаданными"},
+        {"text": "Созданы tickets.yaml, comments.yaml, attachments.yaml в configs/slo-kit/slo-kit/"},
+        {"text": "Контекст tickets имеет serviceTier: 1, objective: 99.9"},
+        {"text": "Контекст comments имеет serviceTier: 2, objective: 99.5"},
+        {"text": "Контекст attachments имеет serviceTier: 3, objective: 99.0"},
+        {"text": "Каждый контекст содержит consists_of.http с соответствующими endpoints"}
+      ]
+    },
+    {
+      "id": 36,
+      "prompt": "У меня есть Go-сервис goods-issues с 64 HTTP endpoints из OpenAPI. Метрика latency: gi_api_request_duration_histogram (label path, миллисекунды). Нет availability (нет label code). Мне нужно создать SLO только для самых важных endpoints (5 штук): POST /v2/issuesService/issue/create, POST /v2/issuesService/issueComment/create, POST /v1/issuesService/deliveryIssue/create, POST /v2/issuesService/category/list, POST /v1/issuesService/issueComment/list. Профиль ecom-go-legacy. Метаданные: namespace=gi, service=goods-issues, product=gi, team=t102. Используй custom_latency с threshold 500ms.",
+      "expected_output": "slo-kit.yaml с custom_latency для 5 выбранных endpoints",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "profile: ecom-go-legacy"},
+        {"text": "Используется custom_latency с metric_name: gi_api_request_duration_histogram"},
+        {"text": "threshold: 500 (миллисекунды)"},
+        {"text": "Только 5 endpoints в конфиге (не все 64)"},
+        {"text": "Нет consists_of.http"},
+        {"text": "Каждый SLI имеет labels с path"}
+      ]
+    },
+    {
+      "id": 37,
+      "prompt": "Создай slo-kit.yaml для letsgo-сервиса order-service. Сервис принимает HTTP запросы (POST /api/v1/orders, GET /api/v1/orders/{id}) и делает исходящие HTTP запросы к платёжному шлюзу по URL http://payments.prod.lan/api/v1/charge. Используй нативный тип для исходящих запросов. Метаданные: namespace=orders, service=order-service, product=orders, profile=ecomtech-letsgo, team=t100, cost_centre=E001. HTTP endpoints в группе api (serviceTier 1), исходящие в группе external (serviceTier 2, latency_limit 2s).",
+      "expected_output": "slo-kit.yaml с http группой для входящих и outgoing группой для исходящих запросов к платежному шлюзу",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Есть consists_of.http с 2 endpoints"},
+        {"text": "Есть consists_of.outgoing (не custom) для платёжного шлюза"},
+        {"text": "outgoing entry содержит name, description и endpoint"},
+        {"text": "endpoint содержит regex с .* префиксом для матчит host части URL"},
+        {"text": "Группа external имеет serviceTier: 2 и latency_limit: 2"},
+        {"text": "profile: ecomtech-letsgo"}
+      ]
+    },
+    {
+      "id": 38,
+      "prompt": "Создай slo-kit.yaml для letsgo-сервиса integration-hub. Сервис делает исходящие HTTP запросы к трём внешним системам: 1) CRM (http://crm.prod.lan/api/v1/customers, метод POST), 2) SMS шлюз (http://sms.prod.lan/send, метод POST), 3) Email сервис (http://email.prod.lan/api/v1/send). Все в одной группе external. Метаданные: namespace=integrations, service=integration-hub, product=integrations, profile=ecomtech-letsgo, team=t150, cost_centre=E001.",
+      "expected_output": "slo-kit.yaml с одной группой external, содержащей 3 outgoing entries для CRM, SMS и Email",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Есть consists_of.outgoing с 3 entries"},
+        {"text": "CRM entry имеет method: POST"},
+        {"text": "SMS entry имеет method: POST"},
+        {"text": "Каждая outgoing entry имеет name, description и endpoint"},
+        {"text": "Все endpoints содержат .* префикс (regex для полного URL с хостом)"},
+        {"text": "profile: ecomtech-letsgo"}
+      ]
+    },
+    {
+      "id": 39,
+      "prompt": "Создай slo-kit.yaml для letsgo-сервиса orders-processing. Сервис принимает входящие HTTP запросы и делает исходящие вызовы к сервису доставки. Входящие: POST /api/v1/orders, GET /api/v1/orders/{id}. Исходящие: delivery-service по URL http://delivery.prod.lan/api/v1/shipment. Объедини входящие и исходящие в одной группе orders. Метаданные: namespace=orders, service=orders-processing, product=orders, profile=ecomtech-letsgo, team=t100, cost_centre=E001.",
+      "expected_output": "slo-kit.yaml с одной группой orders, содержащей consists_of.http и consists_of.outgoing одновременно",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Есть одна группа orders (не две отдельные для http и outgoing)"},
+        {"text": "Группа orders содержит consists_of.http с 2 endpoints"},
+        {"text": "Группа orders содержит consists_of.outgoing для delivery-service"},
+        {"text": "outgoing использует нативный тип (не custom)"},
+        {"text": "endpoint содержит .* префикс для матчит host части URL"},
+        {"text": "profile: ecomtech-letsgo"}
+      ]
+    },
+    {
+      "id": 40,
+      "prompt": "Я создаю slo-kit.yaml для letsgo-сервиса. Сервис делает исходящие HTTP запросы к order-service по полному URL http://api.market.prod.lan/api/market/v4/orderService/customerOrder/get и к user-conductor по http://api.market.prod.lan/api/market/v1/userConductor/userProfile/find (метод POST). Мне нужно использовать outgoing тип. Как правильно указать endpoint — это полный URL или путь? Объясни и создай конфиг. Метаданные: namespace=ts, service=ticket-system, product=ts, profile=ecomtech-letsgo, team=t102.",
+      "expected_output": "slo-kit.yaml с outgoing типом, где endpoint указан как regex с .* префиксом, плюс объяснение что exported_endpoint содержит полный URL с хостом",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "endpoint указан как regex с .* префиксом (например .*/api/market/v4/orderService/customerOrder/get)"},
+        {"text": "Объясняется что exported_endpoint содержит полный URL с хостом"},
+        {"text": "Объясняется необходимость .* префикса для матчит host части"},
+        {"text": "user-conductor entry имеет method: POST"},
+        {"text": "Есть consists_of.outgoing (не custom)"},
+        {"text": "profile: ecomtech-letsgo"}
+      ]
+    },
+    {
+      "id": 41,
+      "prompt": "У меня есть slo-kit.yaml для ecomtech-letsgo сервиса. Внешние интеграции описаны через custom SLI с метриками http_outgoing_requests_total и http_outgoing_requests_duration. Вот фрагмент: consists_of.custom с name=payments-gateway, error_query=sum(increase(http_outgoing_requests_total{exported_endpoint=~\".*/api/v1/charge\",code=~\"5..\"}[{{.window}}])), total_query=sum(increase(http_outgoing_requests_total{exported_endpoint=~\".*/api/v1/charge\"}[{{.window}}])). Как переписать это на нативный outgoing тип? Создай обновлённую группу external. Метаданные: namespace=payments, service=payment-service, product=payments, profile=ecomtech-letsgo, team=t100.",
+      "expected_output": "Обновлённая группа external с consists_of.outgoing вместо consists_of.custom, без ручных PromQL запросов",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Используется consists_of.outgoing (не custom)"},
+        {"text": "outgoing entry содержит name: payments-gateway"},
+        {"text": "endpoint указан как regex .*/api/v1/charge"},
+        {"text": "Нет error_query и total_query (они автогенерируются для outgoing)"},
+        {"text": "Объясняется что outgoing автоматически генерирует availability и latency SLI"},
+        {"text": "profile: ecomtech-letsgo"}
+      ]
+    },
+    {
+      "id": 42,
+      "prompt": "У меня letsgo-сервис делает исходящие HTTP запросы. Какой тип SLI использовать: outgoing, oif или custom? В чём разница? Сервис делает запросы через letsgo RoundTripper (метрики http_outgoing_requests_*) и также есть интеграция через oif (метрика oif_duration). Объясни какой тип для каких метрик и почему.",
+      "expected_output": "Объяснение различий между outgoing, oif и custom для исходящих HTTP запросов с рекомендациями",
+      "files": [],
+      "assertions": [
+        {"text": "Объясняется что outgoing предназначен для http_outgoing_requests_* метрик (letsgo RoundTripper)"},
+        {"text": "Объясняется что oif предназначен для oif_duration метрики (другая инструментация)"},
+        {"text": "Упоминается что oif хардкожен на oif_duration и не работает с http_outgoing_requests_*"},
+        {"text": "Объясняется что custom — универсальный тип с ручным PromQL, но требует больше работы"},
+        {"text": "Рекомендуется outgoing для http_outgoing_requests_* как нативный тип"},
+        {"text": "Рекомендуется oif для oif_duration метрик"},
+        {"text": "Упоминается что job label = scrape job (имя сервиса-источника), не целевой сервис"}
+      ]
+    },
+    {
+      "id": 43,
+      "prompt": "Создай slo-kit.yaml для letsgo-сервиса с двумя группами исходящих интеграций разной критичности. Критичная интеграция: payment-gateway (http://payments.prod.lan/api/v1/charge), serviceTier 1, latency_limit 1s, alerts с notify=[oncall, t100]. Некритичная: analytics-service (http://analytics.prod.lan/api/v1/track), serviceTier 3, latency_limit 5s. Метаданные: namespace=payments, service=payment-hub, product=payments, profile=ecomtech-letsgo, team=t100, cost_centre=E001.",
+      "expected_output": "slo-kit.yaml с двумя outgoing группами разной критичности с разными serviceTier, latency_limit и alerts",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Есть две группы с consists_of.outgoing"},
+        {"text": "Критичная группа (payment-gateway) имеет serviceTier: 1 и latency_limit: 1"},
+        {"text": "Некритичная группа (analytics) имеет serviceTier: 3 и latency_limit: 5"},
+        {"text": "Критичная группа имеет alerts с notify: [oncall, t100]"},
+        {"text": "Обе outgoing entries имеют endpoint с .* префиксом"},
+        {"text": "profile: ecomtech-letsgo"}
+      ]
+    },
+    {
+      "id": 44,
+      "prompt": "Создай slo-kit.yaml для letsgo-сервиса notification-service. Сервис делает исходящие HTTP запросы к push-сервису (http://push.prod.lan/api/v1/send, метод POST) и email-сервису (http://email.prod.lan/api/v1/send, метод POST). Для push-сервиса 4xx ошибки должны считаться ошибками SLO (клиент отправляет невалидные данные). Для email-сервиса 4xx не считаются ошибками. Метаданные: namespace=notifications, service=notification-service, product=notifications, profile=ecomtech-letsgo, team=t150, cost_centre=E001. Push в группе push (serviceTier 1), email в группе email (serviceTier 2).",
+      "expected_output": "slo-kit.yaml с двумя outgoing группами: push с errors_4xx: true, email без errors_4xx",
+      "files": [],
+      "assertions": [
+        {"text": "YAML валиден и парсится без ошибок"},
+        {"text": "Есть consists_of.outgoing для push-service с errors_4xx: true"},
+        {"text": "Есть consists_of.outgoing для email-service без errors_4xx (или errors_4xx: false)"},
+        {"text": "Push entry имеет method: POST"},
+        {"text": "Email entry имеет method: POST"},
+        {"text": "Группа push имеет serviceTier: 1"},
+        {"text": "Группа email имеет serviceTier: 2"},
+        {"text": "profile: ecomtech-letsgo"}
+      ]
+    }
+  ]
+}

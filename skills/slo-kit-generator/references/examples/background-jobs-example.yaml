@@ -1,0 +1,81 @@
+# Пример конфигурации для фоновых задач (Background Jobs)
+#
+# Для ecomtech-letsgo используйте нативный `jobs` тип (не custom).
+# Метрики (генерируются автоматически):
+# - background_jobs_total — общий счётчик задач (label: name)
+# - background_jobs_failure — неудачные выполнения (label: name)
+# - background_jobs_duration_sum/count — время выполнения (label: name)
+#
+# Лейблы: namespace, service, name (имя задачи = поле queue в конфиге)
+#
+# Важно: сканер slo-kit lint ищет JobWithOptions в Go-коде.
+# Если используется schedule.CronScheduler — job не будет найден (warning, не error).
+
+profile: ecomtech-letsgo
+namespace: cs-com-hub
+service: background-worker
+product: cs-platform
+service_name_humanized: Background Worker
+team: t100
+cost_centre: E100
+
+title: Background Worker
+description: Сервис фоновых задач
+user_impact:
+  degraded: Замедление обработки фоновых задач
+  outage: Невозможность выполнения фоновых задач
+
+alerts:
+  enabled: true
+  notify:
+    - t100
+    - oncall
+  min_severity: warning
+
+defaults:
+  latency_limit: "5.0"  # Фоновые задачи обычно медленнее HTTP
+
+groups:
+  # ============================================================
+  # Группа фоновых задач: обработка заказов
+  # ============================================================
+
+  order-processing:
+    description: Фоновые задачи обработки заказов
+    labels:
+      serviceTier: "1"
+      runbook: "https://space.samokat.ru/display/ECOMCS/E080+Runbooks"
+    defaults:
+      latency_limit: "10.0"
+    consists_of:
+      jobs:
+        - queue: order-processor
+
+  # ============================================================
+  # Группа фоновых задач: уведомления
+  # ============================================================
+
+  notification-processing:
+    description: Фоновые задачи отправки уведомлений
+    labels:
+      serviceTier: "2"
+    defaults:
+      latency_limit: "5.0"
+    consists_of:
+      jobs:
+        - queue: notification-sender
+
+  # ============================================================
+  # Группа фоновых задач: репортинг
+  # ============================================================
+
+  reporting:
+    description: Фоновые задачи генерации отчётов
+    labels:
+      serviceTier: "3"
+    defaults:
+      latency_limit: "60.0"
+    consists_of:
+      jobs:
+        - queue: report-generator
+
