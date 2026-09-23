@@ -23,6 +23,9 @@
       "pwd": "allow",
       "jq *": "allow",
       "ls *": "allow",
+      "find *": "allow",
+      "wc *": "allow",
+      "sort *": "allow",
       "list *": "allow",
       "glob *": "allow",
       "echo *": "allow",
@@ -65,7 +68,7 @@
             "context": 256000,
             "output": 16384
           },
-          "options": { "reasoningEffort": "high" }
+          "options": { "reasoningEffort": "xhigh" }
         },
         "qwen3.8-27b-no-think": {
           "name": "qwen3.8-27b-no-think",
@@ -80,7 +83,7 @@
             "context": 256000,
             "output": 16384
           },
-          "options": { "reasoningEffort": "high" }
+          "options": { "reasoningEffort": "xhigh" }
         }
       }
     },
