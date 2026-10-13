@@ -26,3 +26,5 @@ metrics.json
 
 # Test artifacts
 skills/unrobot/test/
+*.bak
+*.bak[0-9]
