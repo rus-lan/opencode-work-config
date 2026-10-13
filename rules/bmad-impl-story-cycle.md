@@ -2,6 +2,7 @@
 name: bmad-impl-story-cycle
 description: Экономный цикл реализации BMAD-фаз — kickoff → эпики → внешнее ревью → readiness → спринт; ревью историй по классу риска (self-review vs полный CR), Fable-гейт на суммарный дифф эпика
 version: 1.0.0
+---
 
 # BMAD — Impl Story Cycle (экономный цикл реализации)
 

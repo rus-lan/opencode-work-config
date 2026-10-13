@@ -11,6 +11,14 @@
     "grep": "allow",
     "skill": "allow",
     "edit": "allow",
+    "external_directory": {
+      "*": "ask",
+      "/tmp/*": "allow",
+      "~/public/*": "allow",
+      "~/slo-kit/*": "allow",
+      "~/workspaces/*": "allow",
+      "/etc/*": "allow"
+    },
     "bash": {
       "npm run *": "allow",
       "npm t": "allow",
@@ -31,15 +39,15 @@
       "echo *": "allow",
       "cat *": "allow",
       "grep *": "allow",
+      "/tmp*": "allow",
       "rm -rf *": "deny",
       "rm *": "deny",
       "git push*": "deny",
       "git reset --hard*": "deny",
-      "*": "ask"
+      "*": "allow"
     },
     "webfetch": "allow",
     "doom_loop": "ask",
-    "external_directory": "ask",
     "atlassian_jira_*": "ask",
     "atlassian_jira_get_*": "allow",
     "atlassian_jira_search*": "allow",
@@ -96,25 +104,11 @@
         "setCacheKey": true
       },
       "models": {
-        "glm-5.3": {
-          "name": "glm-5.3",
+        "glm-5.3-flash": {
+          "name": "glm-5.3-flash",
           "limit": {
             "context": 256000,
             "output": 16384
-          }
-        }
-      }
-    },
-    "zai-coding-plan": {
-      "options": {
-        "baseURL": "https://api.z.ai/api/coding/paas/v4"
-      },
-      "models": {
-        "glm-5.3": {
-          "name": "GLM-5.3",
-          "limit": {
-            "context": 1000000,
-            "output": 131072
           }
         }
       }
@@ -135,12 +129,13 @@
         "npx",
         "@playwright/mcp@latest",
         "--executable-path",
-        "${HOME}/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome",
+        "/home/ruslan/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome",
         "--headless",
         "--no-sandbox",
         "--isolated"
       ],
       "environment": {
+        "HOME": "/home/ruslan",
         "PLAYWRIGHT_HOST_PLATFORM_OVERRIDE": "ubuntu24.04-x64"
       },
       "enabled": true
@@ -188,21 +183,6 @@
       "headers": {
         "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}"
       }
-    },
-    "atlassian": {
-      "type": "local",
-      "command": [
-        "uvx",
-        "mcp-atlassian==0.23.1"
-      ],
-      "enabled": true,
-      "environment": {
-        "JIRA_URL": "{env:JIRA_BASE_URL}",
-        "JIRA_PERSONAL_TOKEN": "{env:JIRA_TOKEN}",
-        "CONFLUENCE_URL": "{env:CONFLUENCE_BASE_URL}",
-        "CONFLUENCE_PERSONAL_TOKEN": "{env:CONFLUENCE_TOKEN}"
-      },
-      "timeout": 30000
     },
     "testops": {
       "type": "remote",

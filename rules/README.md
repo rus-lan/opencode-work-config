@@ -18,6 +18,7 @@
 | opencode-implementer | orchestrator | Как opencode работает как executor под оркестрацией |
 | bmad-impl-story-cycle | orchestrator | BMAD цикл реализации — эпики, ревью по классу, Fable-гейт |
 | git-commit-push | orchestrator | Глобальный запрет на git commit/push без явного разрешения пользователя |
+| confluence-links | mcp-confluence | Поиск и формирование ссылок в Confluence при работе через MCP |
 
 ## Замечание о размере правил
 

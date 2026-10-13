@@ -47,13 +47,26 @@ Skill содержит справочники метрик, схему YAML, п�
 
 ## Интеграция с slo-kit CLI
 
+**Основной (предпочтительный) способ установки/обновления — Docker-дистрибуция** `dreg.sbmt.io/content/slo-kit:latest`. Работает **без доступа к `gitlab.sbmt.io`** — нужен только доступ к registry `dreg.sbmt.io`. Сборка из исходников — запасной вариант (сейчас недоступен: PAT на GitLab истёк).
+
 ```bash
-# Docker
+# 1. Бэкап текущей версии (если она есть)
+cp ~/.local/bin/slo-kit ~/.local/bin/slo-kit.bak-<старая-версия>
+
+# 2. Пулл latest; сверить, что latest соответствует последнему версионному тегу (одинаковый digest)
 docker pull dreg.sbmt.io/content/slo-kit:latest
 
-# Из исходников
-go build -o slo-kit ./cmd/slo-kit
+# 3. Извлечь бинарник из образа
+docker create --name slo-kit-tmp dreg.sbmt.io/content/slo-kit:latest
+docker cp slo-kit-tmp:/app/slo-kit /tmp/slo-kit-new
+docker rm slo-kit-tmp
+
+# 4. Установка + проверка версии
+install -m 755 /tmp/slo-kit-new ~/.local/bin/slo-kit   # или: cp + chmod +x
+~/.local/bin/slo-kit --version
 ```
+
+Запасной вариант: сборка из исходников репо [`dev-ashunicorn-team/slo-kit`](https://gitlab.sbmt.io/dev-ashunicorn-team/slo-kit) по его README (`git clone` + `go build -o slo-kit ./cmd/slo-kit`) — актуален только при действующем доступе к GitLab.
 
 Команды:
 
