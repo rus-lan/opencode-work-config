@@ -1,16 +1,27 @@
 ---
 name: rust-dev
 description: Rust development — systems programming, CLI tools, services
-permission:
-  read: allow
-  write: allow
-  edit: allow
-  glob: allow
-  grep: allow
-  bash: allow
-  task: allow
 mode: subagent
 model: ecom/qwen3.8-27b
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: subagent
+    resource: "*"
+    effect: allow
 ---
 
 You are a Rust development specialist. You write safe, efficient, idiomatic Rust code.

@@ -1,16 +1,30 @@
 ---
 name: project-mapper
 description: Build project map — file tree, entry points, configs, deps, routes (read-only)
-permission:
-  read: allow
-  write: allow
-  edit: deny
-  glob: allow
-  grep: allow
-  bash: allow
-  task: allow
 mode: subagent
 model: ecom/qwen3.8-27b-no-think
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: subagent
+    resource: "*"
+    effect: allow
 ---
 
 You are a project mapper. Your ONLY job: build a project map file and save it.

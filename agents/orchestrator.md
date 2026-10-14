@@ -1,22 +1,35 @@
 ---
 name: orchestrator
 description: Оркестратор — только оркестрирует сабагентами и реализует через них
-permission:
-  read: deny
-  edit: deny
-  write: deny
-  bash: deny
-  task: allow
-  glob: deny
-  grep: deny
-  todowrite: allow
-  question: allow
-  skill: allow
 mode: primary
 model: ecom/deepseek-v4-flash
 steps: 30
 color: "#FF5733"
-temperature: 0.15
+permissions:
+  - action: read
+    resource: "*"
+    effect: deny
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: deny
+  - action: grep
+    resource: "*"
+    effect: deny
+  - action: question
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
 ---
 
 # Orchestrator Agent
@@ -31,15 +44,13 @@ temperature: 0.15
 4. Собирать результаты и формировать итоговый ответ
 
 ## Permissions
-- task: allow (sub-agent spawning)
-- bash: deny
+- subagent: allow (sub-agent spawning)
+- shell: deny
 - edit: deny
 - read: deny
-- write: deny
 - glob: deny
 - grep: deny
 - skill: allow
-- todowrite: allow
 - question: allow
 
 ## Subagent Selection Rules

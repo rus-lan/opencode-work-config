@@ -1,43 +1,52 @@
-// aistats Opencode plugin — live-trigger shim (DESIGN.md §3.1/§13).
-//
-// Install: copied by `aistats install --opencode` to
-// ~/.config/opencode/plugins/aistats.js, where opencode auto-loads every `*.js`
-// plugin file. All logic lives in the CLI — this shim only decides when to fire
-// `aistats ingest --tool opencode` and never blocks opencode itself: the ingest
-// runs detached (its promise is deliberately not awaited) and every failure is
-// swallowed, so a plugin bug (or `aistats` missing from PATH) can never break the
-// host.
-//
-// Verified against the installed @opencode-ai/plugin 1.17.x typings
-// (~/.opencode/node_modules/@opencode-ai/plugin/dist/index.d.ts) and the two
-// existing plugins this is modeled after:
-//  - `event.type === "session.idle"` carries `event.properties.sessionID`
-//    (≈ a session's Stop/SessionEnd) — see herdr-agent-state.js.
-//  - `Session.parentID` is set only on a subagent/child session; `client.session.get`
-//    is the way to check it before acting, so a spawn's internal subtask never
-//    triggers its own ingest — see telegram-notify.js's `isRootSession`.
-//  - `$` is the Bun shell handed in `PluginInput`; a template call spawns without
-//    blocking unless awaited, and `.quiet()` keeps its output out of opencode's UI.
+// aistats opencode plugin (V2, fixed for 2.0.28).
+// - non-blocking setup: event loop runs in a detached promise; setup returns cleanup immediately
+//   (required by the v2 activation contract — otherwise every prompt hangs).
+// - triggers ingest on session.execution.succeeded|failed|interrupted
+//   (session.idle is NOT emitted as a stream event in 2.0.28).
+// Fire-and-forget: ingest runs detached; any failure is swallowed so the plugin never breaks the host.
+import { spawn } from "node:child_process";
+import { Plugin } from "@opencode/plugin";
 
-export const AistatsPlugin = async ({ client, $ }) => {
-  async function isRootSession(id) {
-    try {
-      const { data } = await client.session.get({ path: { id } });
-      return data ? !data.parentID : true;
-    } catch {
-      return true;
-    }
-  }
+export default Plugin.define({
+  id: "aistats",
 
-  return {
-    event: async ({ event }) => {
-      if (event.type !== 'session.idle') return;
-      const id = event.properties.sessionID;
-      if (!id || !(await isRootSession(id))) return;
-      // Fire-and-forget: do not await, so a slow/failing ingest never delays opencode.
-      void $`aistats ingest --tool opencode`
-        .quiet()
-        .catch(() => {});
-    },
-  };
-};
+  setup(ctx) {
+    const childSessions = new Set(); // subagent/spawn session ids to skip
+
+    void (async () => {
+      try {
+        for await (const event of ctx.event.subscribe()) {
+          try {
+            if (event.type === "session.created") {
+              const sid = event.data?.sessionID;
+              if (sid && event.data?.parentID) childSessions.add(sid);
+            } else if (event.type === "session.deleted") {
+              const sid = event.data?.sessionID;
+              if (sid) childSessions.delete(sid);
+            } else if (
+              event.type === "session.execution.succeeded" ||
+              event.type === "session.execution.failed" ||
+              event.type === "session.execution.interrupted"
+            ) {
+              const id = event.data?.sessionID;
+              if (id && childSessions.has(id)) continue; // skip subagent sessions
+              try {
+                const proc = spawn("aistats", ["ingest", "--tool", "opencode"], {
+                  stdio: "ignore",
+                  detached: true,
+                });
+                proc.unref();
+              } catch (e) {
+                console.error("[aistats]", e);
+              }
+            }
+          } catch {}
+        }
+      } catch (e) {
+        console.error("[aistats]", e);
+      }
+    })();
+
+    return () => {}; // non-blocking cleanup — activation completes immediately
+  },
+});

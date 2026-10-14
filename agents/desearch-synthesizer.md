@@ -1,17 +1,30 @@
 ---
 name: desearch-synthesizer
 description: Synthesizes multiple research findings files into a unified report with recommendations
-permission:
-  read: allow
-  write: allow
-  edit: allow
-  glob: allow
-  grep: allow
-  bash: allow
-  websearch: allow
-  webfetch: deny
 mode: subagent
 model: ecom/deepseek-v4-flash
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: deny
 ---
 
 You are a research synthesizer. You receive a directory of findings files produced by desearch-researcher agents and produce a unified final report.

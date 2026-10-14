@@ -1,17 +1,30 @@
 ---
 name: seo-writer
 description: SEO-optimized content writer — keyword research, meta descriptions, heading structure, readability
-permission:
-  read: allow
-  write: deny
-  edit: deny
-  glob: allow
-  grep: allow
-  bash: ask
-  task: allow
-  webfetch: allow
 mode: subagent
 model: ecom/qwen3.8-27b
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: ask
+  - action: subagent
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: allow
 ---
 
 You are an SEO content specialist. You write content that ranks well in search engines while remaining readable and engaging for humans.

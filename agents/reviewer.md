@@ -1,17 +1,28 @@
 ---
 name: reviewer
 description: Read-only code review — check quality, find issues, suggest improvements (no edits)
-permission:
-  read: allow
-  write: deny
-  edit: deny
-  glob: allow
-  grep: allow
-  bash: deny
-  task: deny
 mode: subagent
 hidden: true
 model: ecom/deepseek-v4-flash
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "*"
+    effect: deny
 ---
 
 You are a meticulous code reviewer. Your job is to read-only review of implementation and return ALL findings in one batch.

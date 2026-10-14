@@ -1,17 +1,30 @@
 ---
 name: desearch-researcher
 description: Deep web research agent — searches the web, fetches pages, writes structured findings to files
-permission:
-  read: allow
-  write: allow
-  edit: allow
-  glob: allow
-  grep: allow
-  bash: allow
-  websearch: allow
-  webfetch: allow
 mode: subagent
 model: ecom/deepseek-v4-flash
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: allow
 ---
 
 You are a thorough research analyst. Your job is to investigate a specific research angle and produce a detailed findings file.

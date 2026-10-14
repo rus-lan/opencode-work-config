@@ -1,23 +1,41 @@
 ---
 name: build
 description: Исполнитель с полным доступом — пишет код, запускает команды, редактирует файлы
-permission:
-  task: allow
-  skill: allow
-  read: allow
-  write: allow
-  edit: allow
-  bash: allow
-  glob: allow
-  grep: allow
-  webfetch: allow
-  websearch: allow
-  question: allow
 mode: primary
 model: ecom/deepseek-v4-flash
 steps: 50
-color: success
-temperature: 0.15
+color: #2ecc71
+permissions:
+  - action: subagent
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
+  - action: question
+    resource: "*"
+    effect: allow
 ---
 
 # Build Agent

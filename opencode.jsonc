@@ -1,0 +1,222 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "ecom/deepseek-v4-flash",
+  "small_model": "ecom/qwen3.8-27b",
+  "default_agent": "orchestrator",
+  "subagent_depth": 4,
+  "permissions": [
+    { "action": "read", "resource": "*", "effect": "allow" },
+    { "action": "glob", "resource": "*", "effect": "allow" },
+    { "action": "grep", "resource": "*", "effect": "allow" },
+    { "action": "skill", "resource": "*", "effect": "allow" },
+    { "action": "edit", "resource": "*", "effect": "allow" },
+    { "action": "external_directory", "resource": "*", "effect": "ask" },
+    { "action": "external_directory", "resource": "/tmp/*", "effect": "allow" },
+    { "action": "external_directory", "resource": "~/public/*", "effect": "allow" },
+    { "action": "external_directory", "resource": "~/slo-kit/*", "effect": "allow" },
+    { "action": "external_directory", "resource": "~/workspaces/*", "effect": "allow" },
+    { "action": "external_directory", "resource": "/etc/*", "effect": "allow" },
+    { "action": "shell", "resource": "npm run *", "effect": "allow" },
+    { "action": "shell", "resource": "npm t", "effect": "allow" },
+    { "action": "shell", "resource": "git status*", "effect": "allow" },
+    { "action": "shell", "resource": "git log *", "effect": "allow" },
+    { "action": "shell", "resource": "git show *", "effect": "allow" },
+    { "action": "shell", "resource": "git diff *", "effect": "allow" },
+    { "action": "shell", "resource": "rg *", "effect": "allow" },
+    { "action": "shell", "resource": "ls*", "effect": "allow" },
+    { "action": "shell", "resource": "pwd", "effect": "allow" },
+    { "action": "shell", "resource": "jq *", "effect": "allow" },
+    { "action": "shell", "resource": "ls *", "effect": "allow" },
+    { "action": "shell", "resource": "find *", "effect": "allow" },
+    { "action": "shell", "resource": "wc *", "effect": "allow" },
+    { "action": "shell", "resource": "sort *", "effect": "allow" },
+    { "action": "shell", "resource": "list *", "effect": "allow" },
+    { "action": "shell", "resource": "glob *", "effect": "allow" },
+    { "action": "shell", "resource": "echo *", "effect": "allow" },
+    { "action": "shell", "resource": "cat *", "effect": "allow" },
+    { "action": "shell", "resource": "grep *", "effect": "allow" },
+    { "action": "shell", "resource": "/tmp*", "effect": "allow" },
+    { "action": "shell", "resource": "rm -rf *", "effect": "deny" },
+    { "action": "shell", "resource": "rm *", "effect": "deny" },
+    { "action": "shell", "resource": "git push*", "effect": "deny" },
+    { "action": "shell", "resource": "git reset --hard*", "effect": "deny" },
+    { "action": "shell", "resource": "*", "effect": "allow" },
+    { "action": "webfetch", "resource": "*", "effect": "allow" },
+    { "action": "atlassian_jira_*", "resource": "*", "effect": "ask" },
+    { "action": "atlassian_jira_get_*", "resource": "*", "effect": "allow" },
+    { "action": "atlassian_jira_search*", "resource": "*", "effect": "allow" },
+    { "action": "atlassian_confluence_*", "resource": "*", "effect": "ask" },
+    { "action": "atlassian_confluence_get_*", "resource": "*", "effect": "allow" },
+    { "action": "atlassian_confluence_search*", "resource": "*", "effect": "allow" },
+    { "action": "gitlab_*", "resource": "*", "effect": "ask" },
+    { "action": "gitlab_getFile", "resource": "*", "effect": "allow" },
+    { "action": "gitlab_listTree", "resource": "*", "effect": "allow" },
+    { "action": "gitlab_searchCode", "resource": "*", "effect": "allow" },
+    { "action": "gitlab_getIssue", "resource": "*", "effect": "allow" }
+  ],
+  "providers": {
+    "ecom": {
+      "name": "ecom",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "https://llm-core-olap.samokat.ru/v1",
+        "apiKey": "{env:ECOM_LLM_TOKEN}"
+        // TODO(v2): setCacheKey not found in V2 provider settings (checked 2026-10) — dropped
+      },
+      "models": {
+        "qwen3.8-27b": {
+          "name": "qwen3.8-27b",
+          "limit": {
+            "context": 256000,
+            "output": 16384
+          },
+          "settings": { "reasoningEffort": "xhigh" }
+        },
+        "qwen3.8-27b-no-think": {
+          "name": "qwen3.8-27b-no-think",
+          "limit": {
+            "context": 128000,
+            "output": 8192
+          }
+        },
+        "deepseek-v4-flash": {
+          "name": "deepseek-v4-flash",
+          "limit": {
+            "context": 256000,
+            "output": 16384
+          },
+          "settings": { "reasoningEffort": "xhigh" }
+        }
+      }
+    },
+    "ecom-exp": {
+      "name": "ecom-exp",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "https://llm-core-olap.samokat.ru/v1",
+        "apiKey": "{env:ECOM_LLM_EXP_TOKEN}"
+        // TODO(v2): setCacheKey not found in V2 provider settings (checked 2026-10) — dropped
+      },
+      "models": {
+        "glm-5.3-flash": {
+          "name": "glm-5.3-flash",
+          "limit": {
+            "context": 256000,
+            "output": 16384
+          }
+        }
+      }
+    }
+  },
+  "mcp": {
+    "servers": {
+      "aistats": {
+        "type": "local",
+        "command": ["aistats", "mcp"]
+      },
+      "playwright": {
+        "type": "local",
+        "command": [
+          "npx",
+          "@playwright/mcp@latest",
+          "--executable-path",
+          "/home/ruslan/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome",
+          "--headless",
+          "--no-sandbox",
+          "--isolated"
+        ],
+        "environment": {
+          "HOME": "/home/ruslan",
+          "PLAYWRIGHT_HOST_PLATFORM_OVERRIDE": "ubuntu24.04-x64"
+        }
+      },
+      "confluence_samokat_read_only": {
+        "type": "remote",
+        "url": "https://llm-core-olap.samokat.ru/Confluence_Samokat_Read_Only/mcp",
+        "headers": {
+          "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
+          "Authorization": "Bearer {env:CONFLUENCE_TOKEN}"
+        }
+      },
+      "jira_samokat_read_only": {
+        "type": "remote",
+        "url": "https://llm-core-olap.samokat.ru/Jira_Samokat_Read_Only/mcp",
+        "headers": {
+          "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
+          "Authorization": "Bearer {env:JIRA_TOKEN}"
+        }
+      },
+      "confluence_samokat_write": {
+        "type": "remote",
+        "url": "https://llm-core-olap.samokat.ru/Confluence_Samokat_Write/mcp",
+        "headers": {
+          "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
+          "Authorization": "Bearer {env:CONFLUENCE_TOKEN}"
+        }
+      },
+      "jira_samokat_write": {
+        "type": "remote",
+        "url": "https://llm-core-olap.samokat.ru/Jira_Samokat_Write/mcp",
+        "headers": {
+          "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
+          "Authorization": "Bearer {env:JIRA_TOKEN}"
+        }
+      },
+      "public_adr_c4_drawio": {
+        "type": "remote",
+        "url": "https://litellm-proxy-llm-core-olap.samokat.io/public_adr_c4_drawio/mcp",
+        "headers": {
+          "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}"
+        }
+      },
+      "testops": {
+        "type": "remote",
+        "url": "https://allure-testops-mcp-pqa.ecom.tech/api/mcp",
+        "headers": {
+          "Authorization": "Bearer {env:ALLURE_TOKEN}"
+        },
+        "oauth": false,
+        // TODO(v2): V2 MCP doc shows per-server `timeout` as an object override; integer 30000 preserved as-is from V1
+        "timeout": 30000
+      },
+      "gitlab": {
+        "type": "remote",
+        "url": "https://llm-core-olap.samokat.ru/gitecomrooir/mcp",
+        "headers": {
+          "x-litellm-api-key": "Bearer {env:ECOM_LLM_TOKEN}",
+          "Authorization": "Bearer {env:GITLAB_TOKEN}"
+        },
+        "oauth": false,
+        // TODO(v2): V2 MCP doc shows per-server `timeout` as an object override; integer 30000 preserved as-is from V1
+        "timeout": 30000
+      }
+    }
+  },
+  // instructions inert in v2; rules moved to AGENTS.md
+  "instructions": [
+    "rules/*.md"
+  ],
+  "watcher": {
+    "ignore": [
+      "node_modules/**",
+      ".git/**",
+      ".bmad/**",
+      ".research/**",
+      "*.log",
+      "dist/**",
+      ".next/**",
+      ".cache/**"
+    ]
+  },
+  // compaction migrated from V1 {auto,reserved,tail_turns,prune} -> V2 {auto,keep.tokens,buffer}
+  // values are a recommendation (keep.tokens matches V2 default 15000)
+  "compaction": {
+    "auto": true,
+    "keep": { "tokens": 15000 },
+    "buffer": 20000
+  },
+  "tool_output": {
+    "max_lines": 2000,
+    "max_bytes": 51200
+  }
+}

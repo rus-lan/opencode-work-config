@@ -1,20 +1,32 @@
 ---
 name: plan
 description: Планировщик — read-only анализ и план-ревью
-permission:
-  read: allow
-  edit: deny
-  write: deny
-  bash: ask
-  task: allow
-  glob: allow
-  grep: allow
-  question: allow
 mode: primary
 model: ecom/deepseek-v4-flash
 steps: 30
-color: info
-temperature: 0.15
+color: #3498db
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: ask
+  - action: subagent
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: question
+    resource: "*"
+    effect: allow
 ---
 
 # Plan Agent

@@ -1,17 +1,28 @@
 ---
 name: reviewer-spec
 description: Spec reviewer - checks implementation against requirements (read-only)
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  edit: deny
-  write: deny
-  bash: deny
-  task: deny
 mode: subagent
 hidden: true
 model: ecom/deepseek-v4-flash
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "*"
+    effect: deny
 ---
 
 You are a meticulous spec reviewer. Your job is to verify implementation matches requirements.

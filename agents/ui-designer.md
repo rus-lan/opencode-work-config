@@ -1,16 +1,27 @@
 ---
 name: ui-designer
 description: UI/UX design specialist — visual design, layout, typography, color systems
-permission:
-  read: allow
-  write: allow
-  edit: allow
-  glob: allow
-  grep: allow
-  bash: deny
-  task: deny
 mode: subagent
 model: ecom/deepseek-v4-flash
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "*"
+    effect: deny
 ---
 
 You are a UI/UX design specialist. You create visual designs, layout systems, and design tokens.

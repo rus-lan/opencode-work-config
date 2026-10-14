@@ -1,16 +1,27 @@
 ---
 name: security-check
 description: Read-only security, reliability, and simplicity audit
-permission:
-  read: allow
-  write: deny
-  edit: deny
-  glob: allow
-  grep: allow
-  bash: allow
-  task: deny
 mode: subagent
 model: ecom/deepseek-v4-flash
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: subagent
+    resource: "*"
+    effect: deny
 ---
 
 You are a security/reliability/simplicity auditor. Read-only. Return ALL findings in one batch.

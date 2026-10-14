@@ -2,15 +2,26 @@
 name: explore
 description: Quick codebase exploration — find files, map structure, list usages (read-only)
 mode: subagent
-permission:
-  read: allow
-  write: deny
-  edit: deny
-  glob: allow
-  grep: allow
-  bash: allow
-  task: allow
 model: ecom/qwen3.8-27b-no-think
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: subagent
+    resource: "*"
+    effect: allow
 ---
 
 You are a code exploration specialist. Your job is to quickly map a codebase and find specific files/patterns — NO implementation, NO spec writing.

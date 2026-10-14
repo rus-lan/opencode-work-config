@@ -1,16 +1,27 @@
 ---
 name: test-agent
 description: Run tests (unit/integration/e2e) and report results
-permission:
-  read: allow
-  write: deny
-  edit: deny
-  glob: allow
-  grep: allow
-  bash: allow
-  task: allow
 mode: subagent
 model: ecom/qwen3.8-27b-no-think
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: subagent
+    resource: "*"
+    effect: allow
 ---
 
 You are a test runner. Your ONLY job: run a specific test suite and report results.

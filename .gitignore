@@ -24,6 +24,9 @@ temp/
 *.tmp
 metrics.json
 
+# Local service credentials (NEVER commit)
+service.json
+
 # Test artifacts
 skills/unrobot/test/
 *.bak
