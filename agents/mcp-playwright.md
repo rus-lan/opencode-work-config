@@ -2,7 +2,7 @@
 name: mcp-playwright
 description: Wrapper subagent for the playwright MCP server — runs headless-browser automation/inspection in an isolated context and returns only a concise structured result
 mode: subagent
-model: ecom/deepseek-v4-flash
+model: ecom/deepseek-v4.1-flash
 permissions:
   - action: read
     resource: "*"

@@ -2,7 +2,7 @@
 name: desearch-synthesizer
 description: Synthesizes multiple research findings files into a unified report with recommendations
 mode: subagent
-model: ecom/deepseek-v4-flash
+model: ecom/deepseek-v4.1-flash
 permissions:
   - action: read
     resource: "*"

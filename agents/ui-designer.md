@@ -2,7 +2,7 @@
 name: ui-designer
 description: UI/UX design specialist — visual design, layout, typography, color systems
 mode: subagent
-model: ecom/deepseek-v4-flash
+model: ecom/deepseek-v4.1-flash
 permissions:
   - action: read
     resource: "*"

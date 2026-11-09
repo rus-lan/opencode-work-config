@@ -1,0 +1,148 @@
+# services-slogen.yaml
+# -----------------------------------------------------------------------------
+# Источник правды: список сервисов, для которых генерируется SLO-мониторинг
+# (sloth.yaml / slo.yaml / alerts.yaml).
+#
+# Поля:
+#   name         — уникальное имя сервиса (база каталога ./apps/<company>/<name>)
+#   namespace    — kubernetes namespace (ИС)
+#   company      — компания (smkt | sbl | mm | kpr | ecomtech). Определяет
+#                  helm-репозиторий: git.ecom.tech/ecom/cicd/<company>/helm,
+#                  который клонируется в ./helm/<company>.
+#   repo         — git-url репозитория сервиса (клонируется в ./apps/)
+#   profile      — slo-kit профиль (нормализуется при генерации)
+#   team         — команда
+#   cost_centre  — cost centre
+#   helm         — список каталогов в helm-репо <company>, куда копируется
+#                  sloth.yaml (пути относительно корня ./helm/<company>).
+#
+# При обходе всегда переключаемся на master + git pull, затем создаётся
+# уникальная ветка feature/sloth-<дата-время>, чтобы не было пересечений по
+# веткам между запусками.
+# -----------------------------------------------------------------------------
+
+services:
+  - name: cc-exchanger
+    namespace: cc-exchanger
+    company: mm
+    repo: https://git.ecom.tech/ecom/dev/is/mm/cc-exchanger/cc-exchanger
+    profile: ecom-go-legacy
+    team: t100
+    cost_centre: E001
+    helm:
+      - ./cc-exchanger/sbercare-adapter
+      - ./cc-exchanger/task-api
+      - ./cc-exchanger/task-dispatcher
+      - ./cc-exchanger/voxys-adapter
+
+  - name: sbercare-adapter
+    namespace: cc-exchanger
+    company: smkt
+    repo: https://git.ecom.tech/ecom/dev/is/smkt/cc-exchanger/sbercare-adapter
+    profile: ecomtech-letsgo
+    team: t100
+    cost_centre: E001
+    helm:
+      - ./cc-exchanger/sbercare-adapter
+
+  - name: erm-backend
+    namespace: erm
+    company: mm
+    repo: https://git.ecom.tech/ecom/dev/is/mm/erm/backend
+    profile: ecom-go-legacy
+    team: t100
+    cost_centre: E001
+    helm:
+      - ./erm/erm-backend
+
+  - name: erm-communications
+    namespace: erm
+    company: mm
+    repo: https://git.ecom.tech/ecom/dev/is/mm/erm/communications
+    profile: ecomtech-letsgo
+    team: t100
+    cost_centre: E001
+    helm:
+      - ./erm/erm-communications
+
+  - name: erm-customers
+    namespace: erm
+    company: mm
+    repo: https://git.ecom.tech/ecom/dev/is/mm/erm/customers
+    profile: ecomtech-letsgo
+    team: t100
+    cost_centre: E001
+    helm:
+      - ./erm/erm-customers
+
+  - name: erm-loyalty
+    namespace: erm
+    company: mm
+    repo: https://git.ecom.tech/ecom/dev/is/mm/erm/loyalty
+    profile: ecomtech-letsgo
+    team: t100
+    cost_centre: E001
+    helm:
+      - ./erm/erm-loyalty
+
+  - name: erm-orders
+    namespace: erm
+    company: mm
+    repo: https://git.ecom.tech/ecom/dev/is/mm/erm/orders
+    profile: ecomtech-letsgo
+    team: t100
+    cost_centre: E001
+    helm:
+      - ./erm/erm-orders
+
+  - name: gi-fps
+    namespace: gi
+    company: mm
+    repo: https://git.ecom.tech/ecom/dev/is/mm/gi/file-processing-service
+    profile: ecom-go-legacy
+    team: t102
+    cost_centre: E001
+    helm:
+      - ./gi/file-processing-service
+
+  - name: gi-goods-issues
+    namespace: gi
+    company: mm
+    repo: https://git.ecom.tech/ecom/dev/is/mm/gi/goods-issues
+    profile: ecom-go-legacy
+    team: t102
+    cost_centre: E001
+    helm:
+      - ./gi/goods-issues
+      - ./gi/goods-issues-sync
+
+  - name: gi-tfs
+    namespace: gi
+    company: mm
+    repo: https://git.ecom.tech/ecom/dev/is/mm/gi/tfs
+    profile: ecom-go-legacy
+    team: t102
+    cost_centre: E001
+    helm:
+      - ./gi/tfs
+
+  - name: ts-ma
+    namespace: ts
+    company: mm
+    repo: https://git.ecom.tech/ecom/dev/is/mm/ts/mail-adapter
+    profile: ecomtech-letsgo
+    team: t102
+    cost_centre: E001
+    helm:
+      - ./ts/mail-adapter
+
+  - name: faq-api
+    namespace: faq
+    company: mm
+    repo: https://git.ecom.tech/ecom/dev/is/mm/faq/api
+    profile: ecom-go-legacy
+    team: t100
+    cost_centre: E001
+    helm:
+      - ./faq/cc-api
+      - ./faq/customer-api

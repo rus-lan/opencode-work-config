@@ -2,7 +2,7 @@
 name: build
 description: Исполнитель с полным доступом — пишет код, запускает команды, редактирует файлы
 mode: primary
-model: ecom/deepseek-v4-flash
+model: ecom/deepseek-v4.1-flash
 steps: 50
 color: #2ecc71
 permissions:
@@ -52,7 +52,7 @@ permissions:
 - **webfetch/websearch**: allow — может работать с веб-контентом
 
 ## Модель
-- **Default**: `ecom/deepseek-v4-flash`
+- **Default**: `ecom/deepseek-v4.1-flash`
 - **Temperature**: 0.15 (стабильный код)
 - **Steps**: 50 (глубокая проработка)
 

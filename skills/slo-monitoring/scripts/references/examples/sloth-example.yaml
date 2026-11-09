@@ -1,0 +1,142 @@
+# Пример сгенерированного sloth.yaml
+# Автоматически сгенерировано slo-kit
+
+prometheusServiceLevel:
+  service: cs-com-hub-tracker
+  labels:
+    component: consumers
+    context: cs-com-hub
+    costCentre: E080
+    product: cs-e080-core-platform
+    repo: cs-com-hub
+    serviceTier: "2"
+    team: t080
+    userImpacting: "true"
+  slos:
+    # Aggregated SLO для группы ticket
+    - name: ticket
+      objective: 99.8
+      description: Ticket API endpoints
+      labels:
+        category: aggregated
+        context: cs-com-hub
+        desc: Ticket API endpoints
+        service_humanized: Tracker Service
+      sli:
+        raw:
+          errorRatioQuery: |-
+            ((sum by(repo)(sum by(repo)(slo:sli_error:ratio_rate{{.window}}{sloth_slo=~"(ticket-h-get-v1-ticket-system-tickets-ticketKey--avl|ticket-h-get-v1-ticket-system-tickets-ticketKey--lat|ticket-h-post-v1-ticket-system-tickets-getpersonallist-avl|ticket-h-post-v1-ticket-system-tickets-getpersonallist-lat|ticket-h-get-v1-ticket-system-tickets-doubleCheck-ticketKey--avl|ticket-h-get-v1-ticket-system-tickets-doubleCheck-ticketKey--lat)"} OR on() vector(0))) and on(repo) absent(n{repo="cs-com-hub"})))/6.00
+      alerting:
+        pageAlert:
+          disable: true
+        ticketAlert:
+          disable: true
+    
+    # Availability SLO для GET /v1/ticket-system/tickets/{ticketKey}
+    - name: ticket-h-get-v1-ticket-system-tickets-ticketKey--avl
+      objective: 99.8
+      description: GET /v1/ticket-system/tickets/{ticketKey} HTTP method availability, w1
+      labels:
+        category: availability
+        context: cs-com-hub
+        desc: GET /v1/ticket-system/tickets/{ticketKey} HTTP method availability, w1
+      sli:
+        events:
+          errorQuery: |2
+            (sum(increase(http_incoming_requests_total{
+                    namespace="cs-com-hub",
+                    service="tracker",
+                    method="GET",
+                    endpoint="/v1/ticket-system/tickets/{ticketKey}",
+                    code=~"(0)|(5[0-9][0-9])|(5xx)"}[{{.window}}]))
+            OR on() vector(0))
+          totalQuery: |2
+            (sum(increase(http_incoming_requests_total{
+                    namespace="cs-com-hub",
+                    service="tracker",
+                    method="GET",
+                    endpoint="/v1/ticket-system/tickets/{ticketKey}"}[{{.window}}]))
+            > 0 OR on() vector(1))
+      alerting:
+        pageAlert:
+          disable: true
+        ticketAlert:
+          disable: true
+    
+    # Latency SLO для GET /v1/ticket-system/tickets/{ticketKey}
+    - name: ticket-h-get-v1-ticket-system-tickets-ticketKey--lat
+      objective: 99.8
+      description: GET /v1/ticket-system/tickets/{ticketKey} HTTP method avg latency[500ms], w1
+      labels:
+        category: latency
+        context: cs-com-hub
+        desc: GET /v1/ticket-system/tickets/{ticketKey} HTTP method avg latency[500ms], w1
+      sli:
+        events:
+          errorQuery: |2
+            (sum_over_time(count(((sum(rate(http_incoming_requests_duration_sum{
+                                                    namespace="cs-com-hub",
+                                                    service="tracker",
+                                                    method="GET",
+                                                    endpoint="/v1/ticket-system/tickets/{ticketKey}",
+                                                    code=~"2.."}[30s]))
+                                          /sum(rate(http_incoming_requests_duration_count{
+                                                    namespace="cs-com-hub",
+                                                    service="tracker",
+                                                    method="GET",
+                                                    endpoint="/v1/ticket-system/tickets/{ticketKey}",
+                                                    code=~"2.."}[30s])))
+                                          OR on() vector(0))
+                                          > 0.5)
+                                        [{{.window}}:30s])
+            OR on() vector(0))
+          totalQuery: |-
+            (sum_over_time(count(vector(1))[{{.window}}:30s]))
+      alerting:
+        pageAlert:
+          disable: true
+        ticketAlert:
+          disable: true
+    
+    # Consumer latency SLO
+    - name: consumers-c-kuper-k-ecom-prod-ecom-megamarket-fct-cw-issues-0-lat
+      objective: 99.8
+      description: kuper.k-ecom-prod.ecom.megamarket.fct.cw-issues.0 consumer avg latency[5s], w1
+      labels:
+        category: latency
+        context: cs-com-hub
+        desc: kuper.k-ecom-prod.ecom.megamarket.fct.cw-issues.0 consumer avg latency[5s], w1
+      sli:
+        events:
+          errorQuery: |-
+            (sum_over_time(count(((sum(rate(event_consumer_handle_duration_sum{namespace="cs-com-hub",service="tracker",topic="kuper.k-ecom-prod.ecom.megamarket.fct.cw-issues.0"}[30s]))/sum(rate(event_consumer_handle_duration_count{namespace="cs-com-hub",service="tracker",topic="kuper.k-ecom-prod.ecom.megamarket.fct.cw-issues.0"}[30s]))) OR on() vector(0)) > 5)[{{.window}}:30s]) OR on() vector(0))
+          totalQuery: |-
+            (sum_over_time(count(vector(1))[{{.window}}:30s]))
+      alerting:
+        pageAlert:
+          disable: true
+        ticketAlert:
+          disable: true
+
+# VMRule для алертов
+vmRule:
+  groups:
+    - name: cs-com-hub-slo
+      rules:
+        # Alert для нарушения SLO группы ticket
+        - alert: SLOBurnRate
+          expr: |
+            (
+              1 - (
+                sum(slo:sli_error:ratio_rate1h{sloth_slo=~"ticket.*"})
+                / sum(slo:sli_total:ratio_rate1h{sloth_slo=~"ticket.*"})
+              )
+            ) > 0.001
+          for: 5m
+          labels:
+            severity: warning
+            namespace: cs-com-hub
+            destination: keephq
+          annotations:
+            summary: "SLO burn rate для ticket API превысила порог"
+            description: "Текущий burn rate: {{ $value | humanizePercentage }}"

@@ -2,7 +2,7 @@
 name: plan
 description: Планировщик — read-only анализ и план-ревью
 mode: primary
-model: ecom/deepseek-v4-flash
+model: ecom/deepseek-v4.1-flash
 steps: 30
 color: #3498db
 permissions:
@@ -42,7 +42,7 @@ permissions:
 - **task**: allow — может спавнить сабагентов (explore/project-mapper/test-agent) для декомпозиции анализа
 
 ## Модель
-- **Default**: `ecom/deepseek-v4-flash`
+- **Default**: `ecom/deepseek-v4.1-flash`
 - **Temperature**: 0.15 (стабильный анализ)
 - **Steps**: 30 (достаточно для анализа)
 - **Color**: info (синий)

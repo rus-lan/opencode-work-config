@@ -1,0 +1,203 @@
+# =============================================================================
+# ПРИМЕР /.gitlab-ci.yml — как запускать генерацию SLO через Docker в GitLab CI.
+# -----------------------------------------------------------------------------
+# Этот файл — ШАБЛОН/ПРИМЕР, а не управляющий CI hub. Он НЕ подменяет корневой
+# .gitlab-ci.yml репозитория (у hub там валидация/релиз скиллов). Кладите его в
+# собственный приватный проект / ветку, которая ведёт «набор сервисов» (то есть
+# `services-slogen.yaml`), и адаптируйте под свой раннер.
+#
+# Что он делает:
+#   1) в `before_script` подготавливает окружение (git / python3+pyyaml / bash /
+#      curl), настраивает git-креды для git.ecom.tech (~/.netrc) и проверяет /
+#      ставит бинарники slokit и slo-kit в $HOME/.local/bin;
+#   2) в `script` запускает ИЗОЛИРОВАННЫЙ прогон генерации через Docker:
+#      `bash <skill>/scripts/docker/run.sh` (сборка образа sloth-verify + прогон).
+#      Для полного автоматического цикла (обновление инструментов + генерация +
+#      отчёт) используйте `bash <skill>/scripts/sloth-bot.sh --docker`.
+#   3) в `artifacts` фиксирует отчёт и сгенерированные sloth.yaml из helm/.
+#
+# КРИТИЧНО для docker/run.sh: бинарники `$HOME/.local/bin/slokit` и
+# `$HOME/.local/bin/slo-kit` ДОЛЖНЫ лежать на раннере ДО запуска — скрипт монтирует
+# их в контейнер томами (см. scripts/docker/run.sh). Поэтому ниже они готовятся в
+# `before_script`.
+#
+# Требования к раннеру:
+#   * доступен Docker (docker build/run). Либо shell-раннер с docker в PATH, либо
+#     docker:dind (см. секцию services внизу — раскомментируйте при необходимости);
+#   * доступ к внутренней сети git.ecom.tech (клоны репозиториев сервисов и
+#     helm-репо). Если раннер не видит внутренний DNS — раскомментируйте блок
+#     "internal DNS" ниже.
+# =============================================================================
+
+# ---
+# CI-переменные, которые нужно задать на проекте (Settings > CI/CD > Variables):
+#
+#   GITLAB_TOKEN  (masked / protected) — git-токен с правами:
+#                 ReadRepository на все репозитории сервисов и helm-репо компании
+#                 (git.ecom.tech/ecom/cicd/<company>/helm). Записывается в
+#                 ~/.netrc и используется для HTTPS-клонирования.
+#                 (Альтернатива: токен, доступный как GITLAB_NETRC_PASSWORD.)
+#
+#   SLOTH_SKILL_PATH — путь к скиллу slo-monitoring на раннере. Указывает, где
+#                      лежат scripts/docker/run.sh и scripts/sloth-bot.sh.
+#                      Варианты:
+#                        * установленный скилл: ~/.config/opencode/skills/slo-monitoring;
+#                        * каталог из клона hub: ./skills/slo-monitoring.
+#
+#   Внутренний DNS — если раннер не резолвит git.ecom.tech, см. комментарий
+#   "internal DNS" ниже (нужен IP internal DNS и дописать его в DOCKER_DNS).
+#
+#   Пути к бинарникам — см. SLOTKIT_BIN / SLOKIT_BIN ниже (по умолчанию
+#   $HOME/.local/bin). Если бинарники приходят артефактом/секретом — укажите
+#   каталог, откуда они копируются, в SLOTH_TOOLS_CACHE.
+# ---
+
+# Общая конфигурация для всех джоб этого pipeline.
+# Свою ветку/тег раннер сам подберёт по системным тегам; при необходимости
+# добавьте `tags: [docker]` / `tags: [shell]` под свой раннер.
+image: docker:24          # базовый образ с docker CLI (для docker:dind-подхода)
+
+stages:
+  - generate
+
+# ---
+# Шаблон-before_script: используется всеми джобами ниже.
+# Раскомментируйте "services:" на уровне job/шаблона, если раннер НЕ умеет
+# docker build/run напрямую (тогда нужен DinD = docker-within-docker):
+#   services:
+#     - name: docker:24-dind
+#       alias: docker
+# ---
+.generate-slo:
+  stage: generate
+  tags:          # выберите под свой раннер (docker или shell-runner с docker)
+    - docker
+  # --- services для DinD. Оставьте активными, если раннер использует
+  # `docker:dind` вместо прямого доступа к /var/run/docker.sock:
+  # services:
+  #   - name: docker:24-dind
+  #     alias: docker
+  variables:
+    # Указываем, где лежит скилл (путь до установленного скилла или клона hub).
+    SLOTH_SKILL_PATH: "$HOME/.config/opencode/skills/slo-monitoring"
+    # Default-каталог, куда docker/run.sh ожидает бинарники.
+    BIN_DIR: "$HOME/.local/bin"
+    # Если бинарники восстанавливаются из артефакта/секрета — каталог-кэш.
+    SLOTH_TOOLS_CACHE: "$HOME/.sloth-tools-cache"
+  before_script:
+    - |
+      set -eux
+
+      # --- 1. Базовое окружение (alpine: docker-образ уже содержит git/bash,
+      #      добавляем python3 + pyyaml + curl при необходимости). Без `|| true`:
+      #      сбой установки должен уронить джобу, а не уйти молча. ----------
+      apk add --no-cache git python3 py3-yaml curl ca-certificates bash
+
+      # fail fast, если что-то не поставилось (нет apk / таймаут / etc.)
+      for c in git python3 curl bash; do
+        command -v "$c" >/dev/null 2>&1 || {
+          echo "Не найден $c после apk add (нет apk? нет пакета?) — установка окружения сорвалась"; exit 1; }
+      done
+
+      echo ">>> SKILL dir: $SLOTH_SKILL_PATH"
+      ls -la "$SLOTH_SKILL_PATH/scripts" || \
+        { echo "Не найден скилл: $SLOTH_SKILL_PATH (задайте SLOTH_SKILL_PATH)"; exit 1; }
+
+      # --- 2. Git-креды для git.ecom.tech (HTTPS через ~/.netrc) -----------
+      # docker/run.sh монтирует $HOME/.netrc в контейнер (read-only), поэтому
+      # готовим его ЗДЕСЬ, на раннере. Токен берём из CI-переменной. Основной
+      # вариант — GITLAB_TOKEN; если он не задан, подставляется альтернатива
+      # GITLAB_NETRC_PASSWORD (см. шапку). Пустое значение в обоих — .netrc
+      # всё равно запишется пустым и клоны упадут на аутентификации.
+      umask 077
+      mkdir -p "$HOME"
+      cat > "$HOME/.netrc" <<EOF
+      machine git.ecom.tech
+        login gitlab-ci-token
+        password ${GITLAB_TOKEN:-${GITLAB_NETRC_PASSWORD:-}}
+      EOF
+      chmod 600 "$HOME/.netrc"
+
+      # --- 3. Бинарники slokit + slo-kit в $BIN_DIR -------------------------
+      # docker/run.sh монтирует $BIN_DIR/slokit и $BIN_DIR/slo-kit в контейнер.
+      # Способ приготовления — на выбор:
+      #
+      #   (a) восстановить из артефакта/секрета/кэша (быстро, нет докер-зависимости
+      #       для сборки; самый надёжный для CI):
+      mkdir -p "$BIN_DIR"
+      for t in slokit slo-kit; do
+        if [[ -f "$SLOTH_TOOLS_CACHE/$t" ]]; then
+          install -m 755 "$SLOTH_TOOLS_CACHE/$t" "$BIN_DIR/$t"
+        elif [[ -f "$HOME/.local/bin/$t" ]]; then
+          : # уже есть (например, раннер заранее подготовлен)
+        else
+          echo "[WARN] $t не найден ни в кэше, ни на раннере — попробую установить (см. install-tools.sh)"
+          # (b) установить инструменты скриптом скилла. Внимание: install-tools.sh
+          #     для slokit требует Go-тулчейн и клон slo-kit-generator (SLOTKIT_SRC),
+          #     а для slo-kit — доступ к dreg.sbmt.io. Убедитесь, что они доступны,
+          #     либо предпочтите способ (a) и подготовьте бинарники отдельно.
+          # bash "$SLOTH_SKILL_PATH/scripts/install-tools.sh" "$t" || exit 1
+        fi
+      done
+      test -x "$BIN_DIR/slokit" && test -x "$BIN_DIR/slo-kit" || \
+        { echo "Бинарники slokit/slo-kit не готовы в $BIN_DIR — остановка"; exit 1; }
+
+      # --- 4. Внутренний DNS (ТОЛЬКО если раннер не резолвит git.ecom.tech) --
+      # docker/run.sh пробрасывает nameserver'ы из /etc/resolv.conf host'а.
+      # Если раннер вообще не видит внутреннюю зону, пропишите IP internal DNS и
+      # передайте его в docker через переменную DOCKER_DNS (см. шаблон ниже):
+      #
+      # echo "nameserver ${INTERNAL_DNS_IP}" >> /etc/resolv.conf
+      # docker network create --driver bridge \
+      #   --opt com.docker.network.driver.mtu=1500 sloth-net \
+      #   || true
+      # (а в script запускать docker/run.sh уже после создания сети/настройки DNS;
+      #  run.sh считывает resolv.conf — достаточно поправить его на раннере заранее.)
+      #
+      # Простейший способ — заранее добавить запись в hosts раннера:
+      # echo "10.x.x.x git.ecom.tech" >> /etc/hosts
+      #
+  script:
+    - |
+      set -eux
+      # Изолированный прогон генерации SLO через Docker (все сервисы из
+      # services-slogen.yaml). Можно ограничить одним сервисом/флагами:
+      #   bash "$SLOTH_SKILL_PATH/scripts/docker/run.sh" <service>
+      #   bash "$SLOTH_SKILL_PATH/scripts/docker/run.sh" --skip-git
+      bash "$SLOTH_SKILL_PATH/scripts/docker/run.sh"
+
+      # Для ПОЛНОГО автоцикла (обновление инструментов + генерация + отчёт
+      # sloth-bot-report-<дата>.md) вместо строки выше используйте:
+      #   bash "$SLOTH_SKILL_PATH/scripts/sloth-bot.sh" --docker --no-tools
+      # (--no-tools, т.к. бинарники уже подготовлены в before_script).
+
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      # Отчёт автоматического цикла (если используете sloth-bot.sh --docker)
+      - "$SLOTH_SKILL_PATH/scripts/sloth-bot-report-*.md"
+      # Лог по отдельному сервису
+      - "$SLOTH_SKILL_PATH/scripts/.sloth-logs/*.log"
+      # Сгенерированные sloth.yaml в helm-репо компании
+      - "$SLOTH_SKILL_PATH/scripts/helm/**/sloth.yaml"
+
+# ---
+# Джоба: ручной запуск (when: manual) — по кнопке Run pipeline > Generate SLO.
+# ---
+generate-slo-manual:
+  extends: .generate-slo
+  rules:
+    - when: manual
+      allow_failure: false
+
+# ---
+# Джоба: по расписанию (cron — раз в 3 дня). Задайте расписание в
+# CI/CD > Schedules (напр. `0 3 */3 * *`). Джоба запускается только на
+# scheduled-pipeline, поэтому переменные (токены) маркируйте protected/masked.
+# ---
+generate-slo-schedule:
+  extends: .generate-slo
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: always

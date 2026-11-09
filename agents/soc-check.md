@@ -2,7 +2,7 @@
 name: soc-check
 description: Check Single Source of Truth (SOC), contracts, and test coverage
 mode: subagent
-model: ecom/deepseek-v4-flash
+model: ecom/deepseek-v4.1-flash
 permissions:
   - action: read
     resource: "*"

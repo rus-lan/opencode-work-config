@@ -1,0 +1,94 @@
+# Пример конфигурации для внешних интеграций (исходящие HTTP запросы)
+#
+# Нативный `outgoing` rule type для метрик http_outgoing_requests_*
+# (letsgo RoundTripper adapters).
+#
+# ВАЖНО: exported_endpoint содержит полный URL с хостом:
+#   http://api.prod.lan/api/market/v1/userConductor/userProfile/find
+# Используйте regex с .* префиксом для матчит host часть.
+#
+# ВАЖНО: job label = scrape job (имя сервиса-источника), не целевой сервис.
+# Фильтрация только по exported_endpoint.
+#
+# oif тип НЕ подходит — он хардкожен на oif_duration метрику.
+
+profile: ecomtech-letsgo
+namespace: ts
+service: ticket-system
+product: ts
+service_name_humanized: Ticket System
+team: t102
+cost_centre: E001
+
+title: Ticket System
+description: Система учёта тикетов
+user_impact:
+  degraded: Замедление обработки тикетов
+  outage: Невозможность создания тикетов
+
+alerts:
+  enabled: true
+  notify:
+    - t102
+  min_severity: warning
+
+defaults:
+  latency_limit: "2.0"
+
+groups:
+  # ============================================================
+  # Вариант 1: Один внешний сервис
+  # ============================================================
+
+  payments-external:
+    description: Внешние интеграции с платежной системой
+    labels:
+      serviceTier: "1"
+    defaults:
+      latency_limit: "2.0"
+    consists_of:
+      outgoing:
+        - name: payments-gateway
+          description: Платёжный шлюз
+          endpoint: .*/api/v1/charge
+
+  # ============================================================
+  # Вариант 2: Несколько внешних сервисов в одной группе
+  # ============================================================
+
+  third-party-integrations:
+    description: Интеграции со сторонними сервисами
+    labels:
+      serviceTier: "2"
+    consists_of:
+      outgoing:
+        - name: crm-service
+          description: CRM система
+          endpoint: .*/api/v1/customers
+        - name: sms-gateway
+          description: SMS шлюз
+          endpoint: .*/send
+          method: POST
+        - name: email-service
+          description: Email сервис
+          endpoint: .*/api/v1/send
+
+  # ============================================================
+  # Вариант 3: Комбинация HTTP + External в одной группе
+  # ============================================================
+
+  orders-processing:
+    description: Обработка заказов (входящие + исходящие)
+    labels:
+      serviceTier: "1"
+    consists_of:
+      http:
+        - method: POST
+          handler: /api/v1/orders
+        - method: GET
+          handler: /api/v1/orders/{id}
+
+      outgoing:
+        - name: delivery-service
+          description: Сервис доставки
+          endpoint: .*/api/v1/shipment

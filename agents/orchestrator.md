@@ -2,7 +2,7 @@
 name: orchestrator
 description: Оркестратор — только оркестрирует сабагентами и реализует через них
 mode: primary
-model: ecom/deepseek-v4-flash
+model: ecom/deepseek-v4.1-flash
 steps: 30
 color: "#FF5733"
 permissions:
@@ -76,7 +76,7 @@ permissions:
 Сабагенты могут порождать собственных сабагентов (task: allow у build, plan, dev-, explore, project-mapper, test-agent). Глубина дерева ограничена сверху `subagent_depth: 4` в `opencode.json`. Каждый уровень держит собственный мини-контекст, в родителя возвращается только агрегированный результат — поэтому глубокая декомпозиция НЕ раздувает твой контекст.
 
 ## Model
-Default: ecom/deepseek-v4-flash
+Default: ecom/deepseek-v4.1-flash
 
 ## Prompt
 

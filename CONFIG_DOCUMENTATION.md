@@ -2,7 +2,7 @@
 
 **Репозиторий:** `git@github.com:rus-lan/opencode-work-config.git`
 **Версия opencode:** 1.18.24
-**Модель по умолчанию:** `ecom/deepseek-v4-flash`
+**Модель по умолчанию:** `ecom/deepseek-v4.1-flash`
 **Агент по умолчанию:** `orchestrator`
 
 > Документация обновлена на основе фактического состояния файлов конфигурации.
@@ -68,7 +68,7 @@
 | Поле | Значение | Описание |
 |------|----------|----------|
 | `$schema` | `https://opencode.ai/config.json` | Ссылка на JSON-схему |
-| `model` | `ecom/deepseek-v4-flash` | Модель по умолчанию |
+| `model` | `ecom/deepseek-v4.1-flash` | Модель по умолчанию |
 | `default_agent` | `orchestrator` | Агент, запускаемый по умолчанию |
 | `small_model` | `ecom/qwen3.8-27b` | Лёгкая модель для нетворческих задач (тайтлы, компактизация) |
 | `subagent_depth` | `4` | Максимальная вложенность сабагентов (глубокое дерево декомпозиции) |
@@ -141,25 +141,25 @@ Watcher не реагирует на изменения в шумных дире
 
 | Агент | Модель | Steps | Color | Temp | Роль |
 |-------|--------|-------|-------|------|------|
-| **orchestrator** | `ecom/deepseek-v4-flash` | 30 | `#FF5733` | 0.15 | Оркестратор — только спавнит сабагентов |
-| **build** | `ecom/deepseek-v4-flash` | 50 | `success` | 0.15 | Исполнитель — пишет код, запускает команды |
-| **plan** | `ecom/deepseek-v4-flash` | 30 | `info` | — | Планировщик — read-only анализ и план-ревью |
+| **orchestrator** | `ecom/deepseek-v4.1-flash` | 30 | `#FF5733` | 0.15 | Оркестратор — только спавнит сабагентов |
+| **build** | `ecom/deepseek-v4.1-flash` | 50 | `success` | 0.15 | Исполнитель — пишет код, запускает команды |
+| **plan** | `ecom/deepseek-v4.1-flash` | 30 | `info` | — | Планировщик — read-only анализ и план-ревью |
 
 #### Orchestrator (`agents/orchestrator.md`)
 - **Роль:** Диспетчер — распределяет задачи между сабагентами. НИЧЕГО не делает сам.
-- **Модель:** `ecom/deepseek-v4-flash`, temperature 0.15
+- **Модель:** `ecom/deepseek-v4.1-flash`, temperature 0.15
 - **Permissions:** `task=allow`, `skill=allow`, `todowrite=allow`, `question=allow`, всё остальное `deny` (read/edit/write/bash/glob/grep = deny)
 - **Запуск:** Автоматически (агент по умолчанию)
 
 #### Build (`agents/build.md`)
 - **Роль:** Исполнитель с полным доступом — пишет код, запускает команды, редактирует файлы, спавнит сабагентов
-- **Модель:** `ecom/deepseek-v4-flash`, temperature 0.15
+- **Модель:** `ecom/deepseek-v4.1-flash`, temperature 0.15
 - **Permissions:** Всё `allow` (task, skill, read, write, edit, bash, glob, grep, webfetch, websearch, question)
 - **Запуск:** `/build <задача>` или через оркестратора
 
 #### Plan (`agents/plan.md`)
 - **Роль:** Планировщик и ревьюер — read-only анализ кода, создание планов, архитектурное ревью. НЕ пишет код.
-- **Модель:** `ecom/deepseek-v4-flash`
+- **Модель:** `ecom/deepseek-v4.1-flash`
 - **Permissions:** `read=allow`, `glob=allow`, `grep=allow`, `question=allow`, `bash=ask`, `edit=deny`, `write=deny`, `task=deny`
 
 ### 3.2 Subagents
@@ -168,25 +168,25 @@ Watcher не реагирует на изменения в шумных дире
 |---|-------|--------|--------|------|---------------------|
 | 1 | `explore` | `ecom/qwen3.8-27b-no-think` | — | Быстрое исследование кодовой базы (read-only) | read/glob/grep/bash=allow, write/edit=deny, task=allow |
 | 2 | `project-mapper` | `ecom/qwen3.8-27b-no-think` | — | Построение карты проекта | read/glob/grep/bash=allow, edit=deny, write=allow, task=allow |
-| 3 | `desearch-researcher` | `ecom/deepseek-v4-flash` | — | Глубокий веб-ресёрч | read/write/edit/glob/grep/bash/websearch/webfetch=allow |
-| 4 | `desearch-synthesizer` | `ecom/deepseek-v4-flash` | — | Синтез ресёрч-отчётов | read/write/edit/glob/grep/bash/websearch=allow, webfetch=deny |
+| 3 | `desearch-researcher` | `ecom/deepseek-v4.1-flash` | — | Глубокий веб-ресёрч | read/write/edit/glob/grep/bash/websearch/webfetch=allow |
+| 4 | `desearch-synthesizer` | `ecom/deepseek-v4.1-flash` | — | Синтез ресёрч-отчётов | read/write/edit/glob/grep/bash/websearch=allow, webfetch=deny |
 | 5 | `react-dev` | `ecom/qwen3.8-27b` | — | React/TS разработка | read/write/edit/glob/grep/bash=allow, task=allow |
 | 6 | `go-dev` | `ecom/qwen3.8-27b` | — | Go backend разработка | read/write/edit/glob/grep/bash=allow, task=allow |
 | 7 | `rust-dev` | `ecom/qwen3.8-27b` | — | Rust разработка | read/write/edit/glob/grep/bash/task=allow |
 | 8 | `seo-writer` | `ecom/qwen3.8-27b` | — | SEO-контент (read-only, через task) | read/glob/grep/task/webfetch=allow, write/edit=deny, bash=ask |
-| 9 | `reviewer` | `ecom/deepseek-v4-flash` | ✅ hidden | Общий code review (standards + spec) | read/glob/grep=allow, write/edit/bash/task=deny |
-| 10 | `reviewer-standards` | `ecom/deepseek-v4-flash` | ✅ hidden | Ревью кодстайла и конвенций | read/glob/grep=allow, edit/write/bash/task=deny |
-| 11 | `reviewer-spec` | `ecom/deepseek-v4-flash` | ✅ hidden | Ревью соответствия спецификации | read/glob/grep=allow, edit/write/bash/task=deny |
-| 12 | `reviewer-arch` | `ecom/deepseek-v4-flash` | ✅ hidden | Архитектурное ревью | read/glob/grep=allow, edit/write/bash/task=deny |
+| 9 | `reviewer` | `ecom/deepseek-v4.1-flash` | ✅ hidden | Общий code review (standards + spec) | read/glob/grep=allow, write/edit/bash/task=deny |
+| 10 | `reviewer-standards` | `ecom/deepseek-v4.1-flash` | ✅ hidden | Ревью кодстайла и конвенций | read/glob/grep=allow, edit/write/bash/task=deny |
+| 11 | `reviewer-spec` | `ecom/deepseek-v4.1-flash` | ✅ hidden | Ревью соответствия спецификации | read/glob/grep=allow, edit/write/bash/task=deny |
+| 12 | `reviewer-arch` | `ecom/deepseek-v4.1-flash` | ✅ hidden | Архитектурное ревью | read/glob/grep=allow, edit/write/bash/task=deny |
 | 13 | `test-agent` | `ecom/qwen3.8-27b-no-think` | — | Запуск тестов и отчёт | read/glob/grep/bash=allow, write/edit=deny, task=allow |
-| 14 | `security-check` | `ecom/deepseek-v4-flash` | — | Аудит security/reliability/simplicity | read/glob/grep/bash=allow, write/edit/task=deny |
-| 15 | `soc-check` | `ecom/deepseek-v4-flash` | — | Проверка SOC/контрактов/покрытия | read/glob/grep/bash=allow, write/edit/task=deny |
-| 16 | `ui-designer` | `ecom/deepseek-v4-flash` | — | UI/UX дизайн (только спецификации) | read/write/edit/glob/grep=allow, bash/task=deny |
+| 14 | `security-check` | `ecom/deepseek-v4.1-flash` | — | Аудит security/reliability/simplicity | read/glob/grep/bash=allow, write/edit/task=deny |
+| 15 | `soc-check` | `ecom/deepseek-v4.1-flash` | — | Проверка SOC/контрактов/покрытия | read/glob/grep/bash=allow, write/edit/task=deny |
+| 16 | `ui-designer` | `ecom/deepseek-v4.1-flash` | — | UI/UX дизайн (только спецификации) | read/write/edit/glob/grep=allow, bash/task=deny |
 | 17 | `mcp-aistats` | `ecom/qwen3.8-27b-no-think` | — | MCP-обёртка aistats (метрики) | только MCP-инструменты aistats; read/write/edit/bash/glob/grep/task=deny |
 | 18 | `mcp-confluence` | `ecom/qwen3.8-27b-no-think` | — | MCP-обёртка Confluence (read/write) | только MCP-инструменты Confluence; file/task=deny |
 | 19 | `mcp-jira` | `ecom/qwen3.8-27b-no-think` | — | MCP-обёртка Jira (read/write) | только MCP-инструменты Jira; file/task=deny |
 | 20 | `mcp-adr-drawio` | `ecom/qwen3.8-27b` | — | MCP-обёртка ADR drawio (схемы) | MCP-adr-drawio + read/write/glob/grep=allow (для артефактов), bash=deny, task=deny |
-| 21 | `mcp-playwright` | `ecom/deepseek-v4-flash` | — | MCP-обёртка playwright (browser-автоматизация) | только MCP-инструменты playwright; file/task=deny |
+| 21 | `mcp-playwright` | `ecom/deepseek-v4.1-flash` | — | MCP-обёртка playwright (browser-автоматизация) | только MCP-инструменты playwright; file/task=deny |
 
 > **Hidden-агенты** (`hidden: true` в frontmatter) — не появляются в списке доступных агентов UI, но могут вызываться оркестратором через `task()`.
 
@@ -194,7 +194,7 @@ Watcher не реагирует на изменения в шумных дире
 
 | Модель | Агенты |
 |--------|--------|
-| `ecom/deepseek-v4-flash` | orchestrator, build, plan, reviewer, reviewer-standards, reviewer-spec, reviewer-arch, security-check, soc-check, desearch-researcher, desearch-synthesizer, ui-designer, mcp-playwright |
+| `ecom/deepseek-v4.1-flash` | orchestrator, build, plan, reviewer, reviewer-standards, reviewer-spec, reviewer-arch, security-check, soc-check, desearch-researcher, desearch-synthesizer, ui-designer, mcp-playwright |
 | `ecom/qwen3.8-27b` | react-dev, go-dev, rust-dev, seo-writer, mcp-adr-drawio |
 | `ecom/qwen3.8-27b-no-think` | explore, project-mapper, test-agent, mcp-aistats, mcp-confluence, mcp-jira |
 
@@ -306,7 +306,7 @@ Playwright MCP дополнительно настраивает environment: `P
 | `mcp-confluence` | Confluence RO + Write | qwen3.8-27b-no-think | Чтение и запись wiki; file/task=deny |
 | `mcp-jira` | Jira RO + Write | qwen3.8-27b-no-think | Чтение и запись тикетов; file/task=deny |
 | `mcp-adr-drawio` | MCP_adr_drawio | qwen3.8-27b | Генерация ADR-схем; read/write/glob/grep=allow (артефакты), bash=deny, task=deny |
-| `mcp-playwright` | playwright | deepseek-v4-flash | Тяжёлая browser-автоматизация/исследование страниц; file/task=deny |
+| `mcp-playwright` | playwright | deepseek-v4.1-flash | Тяжёлая browser-автоматизация/исследование страниц; file/task=deny |
 
 Все обёртки: `task: deny` (терминальные на своём уровне), возвращают только агрегированный итог (ID/ключ/статус/числа), не разворачивая промежуточные подробности. Оркестратор и `build` делегируют обёрткам вместо прямых вызовов MCP-инструментов.
 
@@ -354,7 +354,7 @@ Playwright MCP дополнительно настраивает environment: `P
 
 | Провайдер | Модель | Context | Output | API Key Env | npm-пакет | Base URL |
 |----------|--------|---------|--------|-------------|-----------|----------|
-| `ecom` | deepseek-v4-flash | 256K | 16K | `ECOM_LLM_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
+| `ecom` | deepseek-v4.1-flash | 256K | 16K | `ECOM_LLM_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
 | `ecom` | qwen3.8-27b | 256K | 16K | `ECOM_LLM_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
 | `ecom` | qwen3.8-27b-no-think | 128K | 8K | `ECOM_LLM_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
 | `ecom-exp` | glm-5.2 *(экспериментальная)* | 256K | 16K | `ECOM_LLM_EXP_TOKEN` | `@ai-sdk/openai-compatible` | `https://llm-core-olap.samokat.ru/v1` |
@@ -370,11 +370,11 @@ Playwright MCP дополнительно настраивает environment: `P
 
 ### Модель по умолчанию
 
-Поле `model` в `opencode.json` = `ecom/deepseek-v4-flash`. Малая модель (`small_model`) = `ecom/qwen3.8-27b`.
+Поле `model` в `opencode.json` = `ecom/deepseek-v4.1-flash`. Малая модель (`small_model`) = `ecom/qwen3.8-27b`.
 
 ### glm-5.2 — экспериментальная модель
 
-`ecom-exp/glm-5.2` и `zai-coding-plan/glm-5.2` — **экспериментальные** и не всегда доступны. Они **не назначены ни одному агенту на постоянной основе** и по умолчанию не задействованы. Допускается ТОЛЬКО опциональное использование с fallback-проверкой: в случае недоступности glm-5.2 использовать `ecom/deepseek-v4-flash`. Не подключать как жёсткий дефолт ни одному агенту.
+`ecom-exp/glm-5.2` и `zai-coding-plan/glm-5.2` — **экспериментальные** и не всегда доступны. Они **не назначены ни одному агенту на постоянной основе** и по умолчанию не задействованы. Допускается ТОЛЬКО опциональное использование с fallback-проверкой: в случае недоступности glm-5.2 использовать `ecom/deepseek-v4.1-flash`. Не подключать как жёсткий дефолт ни одному агенту.
 
 ---
 
@@ -562,7 +562,7 @@ README заявляет «10 правил» и индекс-таблица со�
 Агенты `reviewer`, `reviewer-standards`, `reviewer-spec`, `reviewer-arch` имеют `hidden: true` в frontmatter — не появляются в UI списке. Старая документация не упоминала этот атрибут.
 
 ### 16.9 Модель giga3-10b удалена
-Модель `giga3-10b` (провайдер `ecom`) удалена из `opencode.json` и из документации. Ни один агент ранее её не использовал (была не задействована). Теперь провайдер `ecom` содержит 3 модели: `qwen3.8-27b`, `qwen3.8-27b-no-think`, `deepseek-v4-flash`.
+Модель `giga3-10b` (провайдер `ecom`) удалена из `opencode.json` и из документации. Ни один агент ранее её не использовал (была не задействована). Теперь провайдер `ecom` содержит 3 модели: `qwen3.8-27b`, `qwen3.8-27b-no-think`, `deepseek-v4.1-flash`.
 
 ### 16.10 Модель qwen3.8-27b-no-think теперь задействована
 `qwen3.8-27b-no-think` (128K/8K) ранее не использовалась. Теперь назначена на простые/механические задачи: `explore`, `project-mapper`, `test-agent` и MCP-обёртки (`mcp-aistats`, `mcp-confluence`, `mcp-jira`).

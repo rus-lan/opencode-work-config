@@ -3,7 +3,7 @@ name: reviewer-standards
 description: Standards reviewer - checks code style, naming, conventions (read-only)
 mode: subagent
 hidden: true
-model: ecom/deepseek-v4-flash
+model: ecom/deepseek-v4.1-flash
 permissions:
   - action: read
     resource: "*"

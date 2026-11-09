@@ -3,7 +3,7 @@ name: reviewer-arch
 description: Architecture reviewer - checks design soundness, layering, scalability (read-only)
 mode: subagent
 hidden: true
-model: ecom/deepseek-v4-flash
+model: ecom/deepseek-v4.1-flash
 permissions:
   - action: read
     resource: "*"

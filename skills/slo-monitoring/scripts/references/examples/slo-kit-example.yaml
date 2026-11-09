@@ -1,0 +1,110 @@
+# Пример slo-kit.yaml конфигурации
+# Полный пример с HTTP и Kafka consumer группами
+
+profile: ecomtech-letsgo
+namespace: cs-com-hub
+service: tracker
+product: cs-e080-core-platform
+service_name_humanized: Tracker
+team: t080
+cost_centre: E080
+
+title: Tracker
+description: Сервис отслеживания обращений
+user_impact:
+  degraded: Замедление обработки обращений
+  outage: Невозможность создания и обработки обращений
+
+# Глобальные настройки алертов
+alerts:
+  enabled: true
+  notify:
+    - t080
+  min_severity: warning
+  approved_runbook_min_severity: critical
+  labels:
+    jiraproject: none
+
+# Дефолты для групп
+defaults:
+  latency_limit: "0.5"
+
+groups:
+  # HTTP API endpoints - по тегам из OpenAPI
+  ticket:
+    description: Ticket API endpoints
+    labels:
+      serviceTier: "2"
+      runbook: "https://space.samokat.ru/display/ECOMCS/E080+Runbooks"
+    defaults:
+      latency_limit: "0.5"
+    consists_of:
+      http:
+        - method: GET
+          handler: /v1/ticket-system/tickets/{ticketKey}
+          exported_endpoint: /v1/ticket-system/tickets/{ticketKey}
+        - method: POST
+          handler: /v1/ticket-system/tickets/getpersonallist
+          exported_endpoint: /v1/ticket-system/tickets/getpersonallist
+        - method: GET
+          handler: /v1/ticket-system/tickets/doubleCheck/{ticketKey}
+          exported_endpoint: /v1/ticket-system/tickets/doubleCheck/{ticketKey}
+
+  comment:
+    description: Comment API endpoints
+    labels:
+      serviceTier: "2"
+      runbook: "https://space.samokat.ru/display/ECOMCS/E080+Runbooks"
+    defaults:
+      latency_limit: "0.5"
+    consists_of:
+      http:
+        - method: POST
+          handler: /v1/ticket-system/comments/create
+          exported_endpoint: /v1/ticket-system/comments/create
+        - method: POST
+          handler: /v1/ticket-system/comments/list
+          exported_endpoint: /v1/ticket-system/comments/list
+
+  workLog:
+    description: Work log API endpoints
+    labels:
+      serviceTier: "2"
+      runbook: "https://space.samokat.ru/display/ECOMCS/E080+Runbooks"
+    defaults:
+      latency_limit: "0.5"
+    consists_of:
+      http:
+        - method: POST
+          handler: /v1/ticket-system/work-log/create
+          exported_endpoint: /v1/ticket-system/work-log/create
+        - method: GET
+          handler: /v1/ticket-system/work-log/state
+          exported_endpoint: /v1/ticket-system/work-log/state
+
+  attachment:
+    description: Attachment API endpoints
+    labels:
+      serviceTier: "2"
+      runbook: "https://space.samokat.ru/display/ECOMCS/E080+Runbooks"
+    defaults:
+      latency_limit: "0.5"
+    consists_of:
+      http:
+        - method: POST
+          handler: /v1/ticket-system/attachments/upload
+          exported_endpoint: /v1/ticket-system/attachments/upload
+
+  # Kafka consumers
+  consumers:
+    description: Kafka issue event consumers
+    labels:
+      serviceTier: "2"
+      runbook: "https://space.samokat.ru/display/ECOMCS/E080+Runbooks"
+    defaults:
+      latency_limit: "5"
+    consists_of:
+      consumers:
+        - topic: kuper.k-ecom-prod.ecom.megamarket.fct.cw-issues.0
+        - topic: kuper.k-ecom-prod.ecom.samokat.fct.cw-issues.0
+        - topic: kuper.k-prod.yc.operations.fct.cw-issues.0

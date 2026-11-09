@@ -1,0 +1,18 @@
+# Основной файл slo-kit конфигурации
+# Телефонный сервис - пример многоконтекстной конфигурации
+
+profile: ecomtech-letsgo
+namespace: cs-com-hub
+service: phone-service
+product: cs-telecom-platform
+team: team-telecom
+cost_centre: T080
+
+alerts:
+  enabled: true
+  notify:
+    - team-telecom
+    - oncall
+  min_severity: warning
+
+# Контексты автоматически загружаются из директории ./slo-kit/

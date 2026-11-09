@@ -2,7 +2,7 @@
 name: security-check
 description: Read-only security, reliability, and simplicity audit
 mode: subagent
-model: ecom/deepseek-v4-flash
+model: ecom/deepseek-v4.1-flash
 permissions:
   - action: read
     resource: "*"

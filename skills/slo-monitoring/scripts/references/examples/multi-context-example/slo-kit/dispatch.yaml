@@ -1,0 +1,41 @@
+# Контекст: маршрутизация
+# Функциональная область: маршрутизация вызовов
+
+team: team-dispatch
+
+groups:
+  routing:
+    description: Маршрутизация вызовов
+    labels:
+      serviceTier: "1"
+    defaults:
+      latency_limit: "0.1"  # Маршрутизация должна быть быстрой
+    consists_of:
+      custom:
+        - name: routing-availability
+          description: Доступность маршрутизации
+          error_query: sum(rate(routing_errors[{{.window}}]))
+          total_query: sum(rate(routing_total[{{.window}}]))
+
+        - name: routing-latency
+          description: Задержка маршрутизации (100ms порог)
+          error_query: |
+            sum_over_time(count(((sum(rate(routing_duration_sum[10s]))
+          /sum(rate(routing_duration_count[10s])))
+          OR on() vector(0))
+          > 0.1)
+        [{{.window}}:10s])
+          total_query: sum_over_time(count(vector(1))[{{.window}}:10s])
+
+  failover:
+    description: Failover механизмы
+    labels:
+      serviceTier: "1"
+    defaults:
+      latency_limit: "0.2"
+    consists_of:
+      custom:
+        - name: failover-success-rate
+          description: Успешность failover
+          error_query: sum(rate(failover_failures[{{.window}}]))
+          total_query: sum(rate(failover_attempts[{{.window}}]))

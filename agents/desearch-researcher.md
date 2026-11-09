@@ -2,7 +2,7 @@
 name: desearch-researcher
 description: Deep web research agent — searches the web, fetches pages, writes structured findings to files
 mode: subagent
-model: ecom/deepseek-v4-flash
+model: ecom/deepseek-v4.1-flash
 permissions:
   - action: read
     resource: "*"

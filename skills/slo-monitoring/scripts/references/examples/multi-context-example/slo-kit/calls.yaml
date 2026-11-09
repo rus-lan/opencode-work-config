@@ -1,0 +1,43 @@
+# Контекст: звонки
+# Функциональная область: управление звонками
+
+team: team-calls  # дефолтный team для всех групп контекста
+
+groups:
+  calls-setup:
+    description: Настройка звонков
+    labels:
+      serviceTier: "1"
+    # team не указан → team-calls из контекста
+    defaults:
+      latency_limit: "0.5"
+    consists_of:
+      custom:
+        - name: call-setup-avl
+          description: Доступность настройки звонков
+          error_query: sum(rate(call_errors{type="setup"}[{{.window}}]))
+          total_query: sum(rate(call_total{type="setup"}[{{.window}}]))
+
+        - name: call-setup-latency
+          description: Задержка настройки звонков (500ms порог)
+          error_query: |
+            sum_over_time(count(((sum(rate(call_setup_duration_sum[30s]))
+          /sum(rate(call_setup_duration_count[30s])))
+          OR on() vector(0))
+          > 0.5)
+        [{{.window}}:30s])
+          total_query: sum_over_time(count(vector(1))[{{.window}}:30s])
+
+  calls-active:
+    description: Активные звонки
+    labels:
+      serviceTier: "1"
+      team: team-calls-core  # переопределение team для этой группы
+    defaults:
+      latency_limit: "0.3"
+    consists_of:
+      custom:
+        - name: active-calls-availability
+          description: Доступность активных звонков
+          error_query: sum(rate(call_drops_unexpected[{{.window}}]))
+          total_query: sum(rate(call_active_total[{{.window}}]))

@@ -21,7 +21,7 @@ cp .env.example .env
 opencode
 ```
 
-> **Важно:** Конфигурация использует 3 провайдера (ecom, ecom-exp, zai-coding-plan) с моделями qwen3.8-27b, qwen3.8-27b-no-think, deepseek-v4-flash и экспериментальной glm-5.2. Модель по умолчанию — `ecom/deepseek-v4-flash`. Все провайдеры используют **2 общих токена** — `ECOM_LLM_TOKEN` и `ECOM_LLM_EXP_TOKEN` (без per-model токенов). Убедитесь что ключи указаны в `.env`.
+> **Важно:** Конфигурация использует 3 провайдера (ecom, ecom-exp, zai-coding-plan) с моделями qwen3.8-27b, qwen3.8-27b-no-think, deepseek-v4.1-flash и экспериментальной glm-5.2. Модель по умолчанию — `ecom/deepseek-v4.1-flash`. Все провайдеры используют **2 общих токена** — `ECOM_LLM_TOKEN` и `ECOM_LLM_EXP_TOKEN` (без per-model токенов). Убедитесь что ключи указаны в `.env`.
 
 ## 🏗 Архитектура
 
@@ -29,9 +29,9 @@ opencode
 
 | Агент | Модель | Роль |
 |-------|--------|------|
-| `@orchestrator` | deepseek-v4-flash | 🧠 Оркестратор — ничего не делает сам, только спавнит сабагентов |
-| `@build` | deepseek-v4-flash | 🔧 Исполнитель с полным доступом (пишет код, запускает команды) |
-| `@plan` | deepseek-v4-flash | 📋 Планирование и ревью (read-only, bash=ask) |
+| `@orchestrator` | deepseek-v4.1-flash | 🧠 Оркестратор — ничего не делает сам, только спавнит сабагентов |
+| `@build` | deepseek-v4.1-flash | 🔧 Исполнитель с полным доступом (пишет код, запускает команды) |
+| `@plan` | deepseek-v4.1-flash | 📋 Планирование и ревью (read-only, bash=ask) |
 
 ### Сабагенты (21)
 
@@ -43,21 +43,21 @@ opencode
 | `react-dev` | qwen3.8-27b | ⚛ React/TS разработка |
 | `go-dev` | qwen3.8-27b | 🔵 Go backend разработка |
 | `rust-dev` | qwen3.8-27b | 🦀 Rust разработка |
-| `ui-designer` | deepseek-v4-flash | 🎨 UI/UX дизайн |
-| `desearch-researcher` | deepseek-v4-flash | 🌐 Глубокий веб-ресёрч |
-| `desearch-synthesizer` | deepseek-v4-flash | 📄 Синтез ресёрч-отчётов |
+| `ui-designer` | deepseek-v4.1-flash | 🎨 UI/UX дизайн |
+| `desearch-researcher` | deepseek-v4.1-flash | 🌐 Глубокий веб-ресёрч |
+| `desearch-synthesizer` | deepseek-v4.1-flash | 📄 Синтез ресёрч-отчётов |
 | `test-agent` | qwen3.8-27b-no-think | 🧪 Запуск тестов |
-| `reviewer` *(hidden)* | deepseek-v4-flash | 👀 Code review |
-| `reviewer-arch` *(hidden)* | deepseek-v4-flash | 🏛 Архитектурное ревью |
-| `reviewer-spec` *(hidden)* | deepseek-v4-flash | 📐 Ревью по спецификации |
-| `reviewer-standards` *(hidden)* | deepseek-v4-flash | 📏 Ревью по кодстайлам |
-| `security-check` | deepseek-v4-flash | 🔒 Аудит безопасности |
-| `soc-check` | deepseek-v4-flash | ✅ Проверка SOC/контрактов |
+| `reviewer` *(hidden)* | deepseek-v4.1-flash | 👀 Code review |
+| `reviewer-arch` *(hidden)* | deepseek-v4.1-flash | 🏛 Архитектурное ревью |
+| `reviewer-spec` *(hidden)* | deepseek-v4.1-flash | 📐 Ревью по спецификации |
+| `reviewer-standards` *(hidden)* | deepseek-v4.1-flash | 📏 Ревью по кодстайлам |
+| `security-check` | deepseek-v4.1-flash | 🔒 Аудит безопасности |
+| `soc-check` | deepseek-v4.1-flash | ✅ Проверка SOC/контрактов |
 | `mcp-aistats` | qwen3.8-27b-no-think | 📊 Обёртка MCP aistats (метрики, изолированный контекст) |
 | `mcp-confluence` | qwen3.8-27b-no-think | 📄 Обёртка MCP Confluence (read/write) |
 | `mcp-jira` | qwen3.8-27b-no-think | 📋 Обёртка MCP Jira (read/write) |
 | `mcp-adr-drawio` | qwen3.8-27b | 🖊 Обёртка MCP_adr_drawio (схемы ADR) |
-| `mcp-playwright` | deepseek-v4-flash | 🎭 Обёртка MCP playwright (browser-автоматизация) |
+| `mcp-playwright` | deepseek-v4.1-flash | 🎭 Обёртка MCP playwright (browser-автоматизация) |
 
 ### Workflow
 
@@ -65,12 +65,12 @@ opencode
 
 ```
   0: Project Map         → qwen3.8-27b
-  1: Grill-me + Research  → deepseek-v4-flash (researcher × 2-3) + deepseek-v4-flash (synthesizer)
+  1: Grill-me + Research  → deepseek-v4.1-flash (researcher × 2-3) + deepseek-v4.1-flash (synthesizer)
   2: Implementation       → react-dev / go-dev / rust-dev (qwen3.8-27b)
-  3: Code Review          → reviewer-standards + reviewer-spec + reviewer-arch (deepseek-v4-flash)
+  3: Code Review          → reviewer-standards + reviewer-spec + reviewer-arch (deepseek-v4.1-flash)
   4: Testing              → test-agent (qwen3.8-27b)
-  5: Security Check       → security-check (deepseek-v4-flash)
-  6: SOC / Contracts      → soc-check (deepseek-v4-flash)
+  5: Security Check       → security-check (deepseek-v4.1-flash)
+  6: SOC / Contracts      → soc-check (deepseek-v4.1-flash)
 ```
 
 ### Model Strategy
@@ -78,14 +78,14 @@ opencode
 | Этап | Модель |
 |------|--------|
 | Project Map | qwen3.8-27b-no-think |
-| Grill-me | deepseek-v4-flash |
-| Research | deepseek-v4-flash |
-| Synthesis | deepseek-v4-flash |
+| Grill-me | deepseek-v4.1-flash |
+| Research | deepseek-v4.1-flash |
+| Synthesis | deepseek-v4.1-flash |
 | Implementation | qwen3.8-27b |
-| Code Review | deepseek-v4-flash |
+| Code Review | deepseek-v4.1-flash |
 | Testing | qwen3.8-27b-no-think |
-| Security Check | deepseek-v4-flash |
-| SOC Check | deepseek-v4-flash |
+| Security Check | deepseek-v4.1-flash |
+| SOC Check | deepseek-v4.1-flash |
 | Titles / Compaction | qwen3.8-27b (`small_model`) |
 
 ### 🔱 Глубокая вложенность сабагентов
@@ -103,7 +103,7 @@ opencode
 
 | Провайдер | Модель | Контекст | Output | Токен |
 |-----------|--------|----------|--------|-------|
-| `ecom` | deepseek-v4-flash | 256K | 16K | `ECOM_LLM_TOKEN` |
+| `ecom` | deepseek-v4.1-flash | 256K | 16K | `ECOM_LLM_TOKEN` |
 | `ecom` | qwen3.8-27b | 256K | 16K | `ECOM_LLM_TOKEN` |
 | `ecom` | qwen3.8-27b-no-think | 128K | 8K | `ECOM_LLM_TOKEN` |
 | `ecom-exp` | glm-5.2 *(экспериментальная)* | 256K | 16K | `ECOM_LLM_EXP_TOKEN` |
@@ -114,7 +114,7 @@ opencode
 ### Модели провайдеров
 
 - `qwen3.8-27b-no-think` (ecom) — вариант без thinking-режима (128K/8K). Используется для **простых/механических** задач без аналитики: `explore`, `project-mapper`, `test-agent` и все MCP-обёртки (кроме `mcp-playwright` и `mcp-adr-drawio`).
-- `ecom-exp/glm-5.2` и `zai-coding-plan/glm-5.2` — **экспериментальные** модели. Используются **ТОЛЬКО опционально** с fallback-проверкой: в случае недоступности glm-5.2 использовать `ecom/deepseek-v4-flash`. По умолчанию **не задействованы ни в одном агенте**, и подключать их на постоянной основе запрещено.
+- `ecom-exp/glm-5.2` и `zai-coding-plan/glm-5.2` — **экспериментальные** модели. Используются **ТОЛЬКО опционально** с fallback-проверкой: в случае недоступности glm-5.2 использовать `ecom/deepseek-v4.1-flash`. По умолчанию **не задействованы ни в одном агенте**, и подключать их на постоянной основе запрещено.
 
 ## ⚙️ Версии opencode
 
