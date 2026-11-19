@@ -136,12 +136,12 @@ opencode
 | `bmad-impl` | BMAD-цикл: эпики → истории → ревью → Fable-гейт |
 | `bmad-retrospective` | Ретроспектива спринта |
 | `bmad-sprint-planning` | Планирование спринта |
+| `calendar-sync` | Обновление календаря Obsidian (Confluence + праздники РФ) |
 | `caveman` | Ультра-краткий режим (lite/full/ultra) |
 | `config-pull` | Пулл конфига из ~/claude-config |
 | `context-metrics` | Мониторинг метрик контекста |
 | `desearch` | Параллельный глубокий веб-ресёрч |
 | `design` | UI дизайн из скриншотов и промптов |
-
 | `full-workflow` | Полный 7-этапный workflow |
 | `graphify` | Построение графа знаний кодовой базы |
 | `grill-me` | Интерактивный допрос плана/решения |
@@ -155,10 +155,11 @@ opencode
 
 > **Примечание:** Дополнительные скиллы (ask-matt, code-review, tdd, research, triage и др.) доступны в `~/.agents/skills/`.
 
-## ⌨ Команды (6)
+## ⌨ Команды (7)
 
 | Команда | Описание |
 |---------|----------|
+| `/calendar-sync` | 📅 Обновление календаря в Obsidian (события + праздники) |
 | `/context` | 📊 Метрики контекста и лимиты |
 | `/get-session-metrics` | 📈 Получение метрик сессии из aiStats |
 | `/grill-me [тема]` | 🔥 Интерактивный допрос |
@@ -208,7 +209,7 @@ opencode
 
 ## ⚙ Правила (Rules)
 
-`rules/` — 11 правил для сабагентов: frontend-components, frontend-hooks, frontend-theme, frontend-zustand, go-backend, go-observability, rust-errors, tauri-bridge, opencode-implementer, bmad-impl-story-cycle, git-commit-push.
+`rules/` — 13 правил для сабагентов: frontend-components, frontend-hooks, frontend-theme, frontend-zustand, go-backend, go-observability, rust-errors, tauri-bridge, opencode-implementer, bmad-impl-story-cycle, git-commit-push, confluence-links, confluence-calendar.
 
 Автоматически загружаются через `instructions: ["rules/*.md"]`.
 

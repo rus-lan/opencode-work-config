@@ -38,7 +38,7 @@
     { "action": "shell", "resource": "/tmp*", "effect": "allow" },
     { "action": "shell", "resource": "rm -rf *", "effect": "deny" },
     { "action": "shell", "resource": "rm *", "effect": "deny" },
-    { "action": "shell", "resource": "git push*", "effect": "deny" },
+    { "action": "shell", "resource": "git push*", "effect": "ask" },
     { "action": "shell", "resource": "git reset --hard*", "effect": "deny" },
     { "action": "shell", "resource": "*", "effect": "allow" },
     { "action": "webfetch", "resource": "*", "effect": "allow" },
@@ -118,6 +118,12 @@
   },
   "mcp": {
     "servers": {
+      "grafana": {
+        "type": "local",
+        "enabled": true,
+        "command": ["bash", "/home/ruslan/.local/bin/run-grafana-mcp.sh"],
+        "timeout": 10000
+      },
       "aistats": {
         "type": "local",
         "command": ["aistats", "mcp"]
@@ -137,6 +143,10 @@
           "HOME": "/home/ruslan",
           "PLAYWRIGHT_HOST_PLATFORM_OVERRIDE": "ubuntu24.04-x64"
         }
+      },
+      "holst": {
+        "type": "remote",
+        "url": "http://127.0.0.1:47641/mcp"
       },
       "confluence_samokat_read_only": {
         "type": "remote",

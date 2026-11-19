@@ -3,7 +3,7 @@
 Правила для сабагентов-разработчиков (react-dev, go-dev, rust-dev).
 Загружаются через `skill("rule-name")` или по совпадению с задачей.
 
-## Индекс (11 правил)
+## Индекс (13 правил)
 
 | Правило | Для кого | Описание |
 |---------|----------|----------|
@@ -19,6 +19,7 @@
 | bmad-impl-story-cycle | orchestrator | BMAD цикл реализации — эпики, ревью по классу, Fable-гейт |
 | git-commit-push | orchestrator | Глобальный запрет на git commit/push без явного разрешения пользователя |
 | confluence-links | mcp-confluence | Поиск и формирование ссылок в Confluence при работе через MCP |
+| confluence-calendar | mcp-confluence / orchestrator | Календарь Confluence Team Calendars — REST events.json, формат дат, headful-перехват |
 
 ## Замечание о размере правил
 
