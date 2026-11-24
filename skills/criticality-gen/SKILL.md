@@ -1,10 +1,11 @@
 ---
 name: criticality-gen
 title: criticality-gen — оценка и переоценка критичности ИС
-version: 1.1.0
+version: 2.2.1
 description: |
   Генерация и переоценка паспортов критичности ИС по процессу D6.1.1 — из is.yaml
-  через SSoT-репозиторий (INFORMATION.yaml) и детерминированный расчёт по
+  через карточку ИС в SSoT (MCP `ssot_get` → `ssot-import`, снимок в
+  INFORMATION.yaml) и детерминированный расчёт по
   criteria/criticality-criteria.yaml. Артефакты рендерятся только по шаблонам и
   только из фактов: нет данных — блокировка, а не догадка.
   Используйте когда нужно: оценить критичность ИС, переоценить критичность,
@@ -14,7 +15,7 @@ description: |
   Grafana по плану (RESEARCH-PLAN) и карте обхода ссылок (LINK-MAP), принять
   найденные факты (SOURCES-FINDINGS), прочитать документацию клонов сервисов
   (docs/ и openspec/ → SERVICE-FINDINGS), вписать подтверждённые значения,
-  обогатить SSoT критичностью (`severity`) и подготовить MR по шаблону,
+  обогатить SSoT критичностью (`severity`) через MCP-форму (MR создаёт SSoT),
   исключить ИС из расчёта, обновить INDEX.md или найти просроченные переоценки.
 user-invocable: true
 compatibility: opencode
@@ -28,7 +29,7 @@ allowed-tools:
 purpose: Вести ИС по конвейеру оценки критичности — от is.yaml до артефактов и передачи человеку.
 audience: [ai-agent]
 read_when: [запрос на оценку или переоценку ИС, установка скилла, разбор BLOCKED]
-updated: 2026-11-19
+updated: 2026-11-24
 status: actual
 related: [references/workflow.md, references/commands.md, references/rules.md, references/search.md]
 ---
@@ -37,17 +38,19 @@ related: [references/workflow.md, references/commands.md, references/rules.md, r
 
 Скилл ведёт одну ИС по конвейеру оценки критичности. Канон фаз, гейтов и
 порядок шагов — один: **[references/workflow.md](references/workflow.md)**
-(`init → prepare → contacts → check → collect → сбор → services → check → enrich
-→ score → start → validate → publish → ssot → handoff`; боковые этапы `due`,
+(`init → ssot-import → prepare → contacts → check → collect → сбор → services →
+check → ask → enrich → score → start → validate → publish → ssot-plan →
+MCP-форма → ssot-record → ssot-verify → handoff`; боковые этапы `due`,
 `reassess`, `exclude`, `scaffold` — там же). Этот файл последовательность не
 дублирует.
 
 Порядок — инвариант (R18): **исследование → критерии → расчёт → валидация ВСЕХ
-результатов → внешние изменения (MR в dochub, затем SSoT) → тред**. `publish` и
-`ssot` (с `--apply` и без) отказывают, пока `validate` даёт ERROR, фингерпринт
-критериев не совпадает или blocking-входы не закрыты; обход — только `FORCE=1`
-с записью в `is/<код>/.gate-overrides.log`. Action-пакет сообщения не
-переводится в `requested`, пока в отрендеренном тексте есть `⛔ не заполнено`.
+результатов → внешние изменения (MR в dochub, затем SSoT через MCP-форму) →
+тред**. `publish`, `ssot-plan` и `ssot-record` отказывают, пока `validate` даёт
+ERROR, фингерпринт критериев не совпадает или blocking-входы не закрыты; обход —
+только `FORCE=1` с записью в `is/<код>/.gate-overrides.log`. Action-пакет
+сообщения не переводится в `requested`, пока в отрендеренном тексте есть
+`⛔ не заполнено`.
 
 Нет данных — конвейер не идёт дальше: `check`/`start` сами пишут
 `DATA-REQUIREMENTS.md` и `.yaml` с формой «что это → зачем → где взять →
@@ -125,7 +128,8 @@ E2E-процессы ИС (Product scope продукта) и какие зап�
 `make requirements`, `make collect-apply`, `make services-apply`,
 `make research`, `make ask`, `make ask-answers`, `make enrich-apply`,
 `make score`, `make start-apply`, `make validate`, `make verify-titles`,
-`make verify`, `make finalize`, `make ssot` / `make ssot-apply`, `make publish` /
+`make verify`, `make finalize`, `make ssot-import` / `make ssot-plan` /
+`make ssot-record` (`ENTITY_JSON=-` из ответа `ssot_get`), `make publish` /
 `make publish-apply`, `make index`, `make due`.
 
 `make finalize IS=<код>` — финализация: одной командой проставляет
@@ -149,8 +153,8 @@ E2E-процессы ИС (Product scope продукта) и какие зап�
   паспорт в MR уже содержит их, а повторный `finalize` идемпотентен.
 
 `make contacts IS=<код>` собирает контакты команды-владельца (TA/TL и остальные
-роли) из `ssot/entities/teams/<team>/team.yaml` в `INFORMATION.yaml → contacts`
-(`APPLY=1` — запись, `JSON=1` — машинная форма). Без этого в публикации не будет
+роли) из ответа MCP `ssot_team(code=<team>)` (`TEAM_JSON=-`) в
+`INFORMATION.yaml → contacts` (`APPLY=1` — запись, `JSON=1` — машинная форма). Без этого в публикации не будет
 упоминаний: в тексте стоит `@<полный username>` (`@dkozlov@ecom.tech`).
 Короткий логин в `mentions[]` RocketChat не попадает, поэтому `start` резолвит
 `login → users.info → username` и кеширует результат в
@@ -240,16 +244,17 @@ object_sla`. Для `check` / `validate` / `index` — сводка по все�
    клонируется, не анализируется, не служит основанием для входов и не попадает
    в план `collect`. Пропущенные перечислены в разделе «Пропущенные сервисы»
    отчёта и строкой `<имя>: пропущен (lifecycle: closed)`: R15.
-7. **SSoT обогащается точечно и по шаблону.** `ssot` — единственный этап,
-   который пишет в клон SSoT, и только блок `severity` файла
-   `entities/information-systems/<код>/base.yaml`: `type` — из
-   `levels.ssot_enum` критериев, `confirmation` — из `approve_link` реестра.
-   Остальные ключи, их порядок, комментарии и форматирование сохраняются
-   побайтово; расхождений нет — `изменений нет`, ветка и коммит не создаются.
-   Запись идёт веткой `feature/<task>` и MR строго по шаблону
-   `templates/MR-ssot.md`: незаполненная переменная шаблона — ошибка, а не
-   пустая строка в MR. `--push` допустим только вместе с `--apply` и только по
-   подтверждению человека.
+7. **SSoT обогащается точечно и только через MCP.** Чтение — `ssot_get` /
+   `ssot_team` → `criticality.py ssot-import` (снимок в
+   `INFORMATION.yaml → ssot_snapshot`). Целевые значения считает только
+   `ssot-plan`. Изменение — только поля `severity.type` и `severity.confirmation`
+   формы base через `ssot_entity_open` → `ssot_form_fields` →
+   `ssot_ui_select`/`ssot_ui_fill` → `ssot_form_save`; MR создаёт SSoT, `mrUrl`
+   и `version` фиксирует `ssot-record`. Независимая проверка —
+   `ssot_verify_change` → `ssot-verify`. Локального клона SSoT, ветки, commit,
+   push и `GITLAB_TOKEN` для SSoT нет. Апрув и применение MR — только человек
+   через `ssot_mr_approve`/`ssot_apply_changes` с `confirm:true` (или агент по
+   явному разрешению).
 8. **Язык — только русский.** Все артефакты, вопросы пользователю, сообщения CLI
    и тексты ошибок — на русском. Скилл ожидает ответы пользователя только на
    русском: ответ на другом языке не принимается как значение входа. Значения
@@ -263,14 +268,14 @@ object_sla`. Для `check` / `validate` / `index` — сводка по все�
 
 | Файл | Содержимое |
 |------|------------|
-| [references/workflow.md](references/workflow.md) | канон флоу: фазы 0–10 (включая 2c `services`, 8 `publish`, 9 `ssot`, 10 `handoff`) и боковые этапы, вход/команда/выход/гейт |
+| [references/workflow.md](references/workflow.md) | канон флоу: фазы 0–10 (включая 2c `services`, 8 `publish`, 9 `ssot` через MCP, 10 `handoff`) и боковые этапы, вход/команда/выход/гейт |
 | [references/interactive.md](references/interactive.md) | интерактивный слой `ask`: когда спрашивать, как превратить `--json` в вопросы, язык ответов, приём ответов, разобранный пример |
 | [references/commands.md](references/commands.md) | синтаксис и все флаги подкоманд, коды возврата |
 | [references/data-sources.md](references/data-sources.md) | карта источников (код сервиса / Confluence / Grafana / эксперт), процедуры сбора, формулы, статусы, запреты и ловушки |
 | [references/search.md](references/search.md) | протокол поиска: tier 1 (точные идентификаторы) → tier 2 (комбинации), фиксация в `CANDIDATES.yaml → search`, доказательство «не найдено», «симптом → следующий запрос» |
 | [references/rules.md](references/rules.md) | правила R1–R19 с проверкой и реакцией на нарушение |
 | [references/artifacts.md](references/artifacts.md) | реестр артефактов, шаблоны, политика перезаписи |
-| [references/dependencies.md](references/dependencies.md) | python3, git, ssh к SSoT, MCP; что делать, если нет |
+| [references/dependencies.md](references/dependencies.md) | python3, git, MCP `ssot-mcp` (SSoT), MCP Confluence/Grafana; что делать, если нет |
 | [references/failure-modes.md](references/failure-modes.md) | симптом → причина → действие → как чинить |
 | [references/checklist.md](references/checklist.md) | приёмочный чеклист до/во время/перед сдачей/после |
 
@@ -279,7 +284,7 @@ object_sla`. Для `check` / `validate` / `index` — сводка по все�
 ```bash
 make init                                  # 1. каркас: is.yaml, catalog.yaml, INDEX.md, is/, .gitignore
 make check-prepare NO_CLONE=1              # 2. подготовка данных (INFORMATION.yaml) + гейт
-make contacts IS=erm.mm APPLY=1            # 2b. контакты TA/TL из SSoT team.yaml → contacts
+make contacts IS=erm.mm APPLY=1            # 2b. контакты TA/TL из ответа MCP ssot_team → contacts
 make check-diag                            #    только гейт в диагностическом режиме (код 0)
 make start IS=erm.mm DIFF=1                # 3. dry-run: показать, что будет сгенерировано
 ```
@@ -291,11 +296,17 @@ make start-apply IS=erm.mm FORCE=1         # записать паспорт и 
 make validate                              # проверить: 0 ERROR
 make publish IS=erm.mm TASK=E001-31245     # план публикации паспорта в dochub: файл, ключ, ветка, MR
 make publish-apply IS=erm.mm TASK=E001-31245  # ветка и коммит в клоне dochub (без push)
-make ssot IS=erm.mm TASK=E001-31245        # план обогащения SSoT: severity + confirmation, MR со ссылкой на dochub-MR
-make ssot-apply IS=erm.mm TASK=E001-31245  # ветка feature/<task> и коммит в клоне SSoT (без push)
+make ssot-import IS=erm.mm ENTITY_JSON=-   # снимок карточки ИС из ответа MCP ssot_get
+make ssot-plan IS=erm.mm                   # целевые severity.type/confirmation + гейт R18
+# MCP: ssot_entity_open → ssot_form_fields → ssot_ui_select/ssot_ui_fill → ssot_form_save
+make ssot-record IS=erm.mm MR_URL=<mrUrl>  # mrUrl и version из ssot_form_save
+make ssot-verify IS=erm.mm VERIFY_JSON=-   # ssot_verify_change: значение на ветке MR
 make handoff IS=erm.mm DRY_RUN=1           # предпросмотр: канал, транспорт, текст; ничего не отправлено
 make handoff IS=erm.mm SEND=auto           # тред в #Criticality_assessment: MCP, при отказе — REST API
 make handoff IS=erm.mm SEND=manual         # не отправлять: пакет остаётся pending_manual
+make handoff IS=erm.mm SEND=auto THREAD=<tmid>  # ответ в существующий тред (?msg=<tmid>)
+make handoff IS=erm.mm SEND=auto REPORT=1 THREAD_NEW=1  # отчёт тредом: родитель + детализация
+make handoff IS=erm.mm SEND=auto REPORT=1 UPDATE_PARENT=1 SSOT_MR_URL=<URL>  # правка родителя (chat.update)
 make handoff-result IS=erm.mm MESSAGE_URL=<ссылка на сообщение>  # результат MCP → thread_link
 ```
 
@@ -325,7 +336,7 @@ make check                                 # повторить гейт
 Если данных нет и взять их негде — ИС исключается, а не заполняется догадкой:
 `make exclude IS=erm.mm REASON="..."` (обратно — `make include IS=erm.mm`).
 `INFORMATION.yaml` — версионируемый слой ручных данных: он **коммитится в git**;
-`ssot/`, `apps/`, `is.yaml` — нет.
+`apps/`, `is.yaml` — нет.
 
 ## Чего скилл НЕ делает
 
@@ -340,19 +351,21 @@ make check                                 # повторить гейт
   (R12). Клон — источник документации, а не способ «проверить, что работает».
 - **Не заполняет лист требований за человека.** `enrich` только проверяет и
   переносит уже подтверждённые значения; придумать `source` он не может.
-- **Не мержит MR** в dochub и не пушит в SSoT: это шаг `handoff`, его делает человек.
+- **Не мержит MR** в dochub и не применяет MR SSoT: апрув (`ssot_mr_approve`) и
+  применение (`ssot_apply_changes`) — человек с `confirm:true` (или агент по
+  явному разрешению).
 - **Не публикует в тред без подтверждения.** `handoff` — последний этап конвейера:
   он собирает финальное сообщение из текущего состояния (паспорт, `catalog.yaml`,
-  `.publish`/`.ssot`, `INFORMATION.yaml` → `facts`/`notes`), печатает его ЦЕЛИКОМ и
+  `.publish` / `INFORMATION.yaml → ssot_snapshot`, `facts`/`notes`), печатает его ЦЕЛИКОМ и
   отправляет только по явному согласию (`--send auto`; MCP, при отказе — REST),
   всегда ОДНИМ сообщением: разбивать текст на части запрещено, сокращать надо
   источник. `handoff-apply` с `CONFIRM=1` — тонкая обёртка того же пути только по
   REST (идемпотентность и дедупликация общие). Текст с `⛔` не публикуется без
   `--allow-incomplete`; без кредов `ROCKETCHAT_TOKEN`/`ROCKETCHAT_USER_ID`
   (алиасы `RC_*`, `STRELKA_*`) команда падает, ничего не отправив.
-- **Не правит SSoT сверх `severity`.** `ssot` пишет только `severity.type` и
-  `severity.confirmation` в `base.yaml` (по флагу `--apply`, в ветку
-  `feature/<task>`) и ничего не пушит без `--push` и подтверждения человека.
+- **Не правит SSoT сверх `severity`.** `ssot-plan` считает только
+  `severity.type` и `severity.confirmation`; запись — исключительно через
+  MCP-форму (`ssot_ui_select`/`ssot_ui_fill` → `ssot_form_save`), MR создаёт SSoT.
   Остальные поля SSoT меняет человек через свой MR.
 - **Не отправляет сообщения без явного ответа.** `handoff` сначала спрашивает
   («отправить автоматически?»); без `--send` вне TTY отказывает, а `SEND=manual`
@@ -360,6 +373,19 @@ make check                                 # повторить гейт
   `.handoff-request.json`, результат через `handoff-result`) и REST
   `chat.postMessage` (фолбэк, токен из env). Оба отказали — отправляет человек
   по `actions/rocketchat-message.md`, ссылка возвращается `handoff-result`.
+- **Умеет отвечать в существующий тред.** `handoff --thread <tmid>` (env
+  `HANDOFF_THREAD` → `ROCKETCHAT_THREAD` → `RC_THREAD`), где `tmid` — id
+  сообщения-родителя из ссылки Rocket.Chat `?msg=<tmid>`. REST шлёт
+  `roomId` + `tmid` (roomId резолвится по каналу; не резолвится — WARN и
+  `channel` + `tmid`), `thread_link`/`approve_link` указывают на созданный ответ,
+  а дедупликация сравнивает `tmid`, поэтому существующее топ-сообщение не
+  блокирует ответ.
+- **Умеет публиковать отчёт тредом.** `handoff --report --thread-new` создаёт
+  родителя (итог, участники, основные ссылки) и три ответа с детализацией
+  (входы с провенансом, расчёт, артефакты); `thread_link`/`approve_link` = родитель,
+  `handoff_thread: true`, повтор идемпотентен. Появившийся позже SSoT-MR
+  подставляется в родителя через `--update-parent --ssot-mr-url <URL>`
+  (`chat.update`), без второго треда.
 - **Не разрешает расхождения молча.** Конфликт SSoT ↔ расчёт фиксируется в
   `conflicts` и в `GENERATION.md`, оба значения остаются в артефакте.
 - **Не обходит гейт.** «Почти полный набор» — это `BLOCKED`, а не `preliminary`.

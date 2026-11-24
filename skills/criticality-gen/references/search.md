@@ -58,8 +58,9 @@ related: [data-sources.md, workflow.md, interactive.md, commands.md]
 7. **Grafana**: `namespace=<namespace>` по каждому компоненту-шлюзу из
    `components.yaml`; namespace неизвестен — поиск дашборда по коду ИС (папка
    продукта → подпапка ИС).
-8. **SSoT**: `grep -r "<код ИС>" ssot/entities/` — карточка ИС, компоненты,
-   связи, команда, `links.yaml` / `resources.yaml`.
+8. **SSoT**: `ssot_get(group="information-systems", entity="<код ИС>")`
+   (`ssot_list` — если код неизвестен) — карточка ИС, компоненты, связи,
+   команда, `links` / `resources`.
 
 **Результат tier 1** — одно из трёх: значение (tier 2 не нужен), основание
 (кандидат `value: null` + tier 2 для значения) или пусто по всем 8 запросам
@@ -102,8 +103,8 @@ gitlab_group`) в бюджет tier 1 не входит: её разбор — �
 10. `grafana: namespace=<namespace> + панель «<термин>»`; без namespace —
     `заголовок дашборда "<код ИС>" + "<термин>"`.
 11. `gitlab: группа <gitlab_group> + "<термин>"` — нормативы в `docs/`, `openspec/`.
-12. `ssot: grep -r "<код ИС>" ssot/entities/ и связи links.yaml`, плюс
-    `ssot/entities/products/<продукт>/links.yaml` — цепочка ссылок продукта.
+12. `ssot: ssot_get(<код ИС>)` и `ssot_get` продукта — связи `links` и
+    цепочка ссылок продукта.
 
 Глубокий поиск не «перебирает всё»: он идёт по маршруту входа из таблицы плюс
 общие комбинации и **записывает каждый выполненный запрос**, включая пустые.
@@ -145,7 +146,7 @@ search:
       - 'confluence: "opercrm.smkt"'
       - 'confluence: "Операционный CRM"'
       - 'grafana: namespace=opercrm-gateway'
-      - 'ssot: grep -r "opercrm.smkt" ssot/entities/'
+      - 'ssot: ssot_get(information-systems/opercrm.smkt)'
     deep:
       - 'confluence: "opercrm.smkt" and "SLA"'
       - 'confluence: "opercrm.smkt" and "RTO"'

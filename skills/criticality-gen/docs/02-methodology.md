@@ -3,7 +3,7 @@ title: Методика оценки критичности
 purpose: Описать расчёт уровня критичности — оси 0–4, матрицу «время × оценка», CIA и итоговую матрицу final_matrix (бизнес-уровень × уровень защищённости).
 audience: [ai-agent, human]
 read_when: [считаете уровень критичности, проверяете расчёт, объясняете итоговое значение]
-updated: 2026-11-12
+updated: 2026-11-24
 status: actual
 related: [08-criteria.md, ../criteria/criticality-criteria.yaml, 03-fields.md, 04-reassessment.md]
 ---
@@ -58,7 +58,7 @@ related: [08-criteria.md, ../criteria/criticality-criteria.yaml, 03-fields.md, 0
 | **Business operational** | Простой снижает операционную эффективность, но обязательства перед клиентами выполняются в заявленный SLA. Возможны задержки внутренних процессов. |
 | **Business critical** | Простой приводит к невыполнению обязательств перед клиентами в заявленный SLA либо к остановке клиентского процесса. Требуются компенсирующие действия. |
 | **Mission critical** | Простой приводит к прямым убыткам клиентов и/или остановке критичных процессов компании. Последствия выходят за пределы одной ИС. |
-| **Mission critical+** | Только в dochub-паспорте: методикой не производится, в SSoT маппится в `Mission critical`. |
+| **Mission critical+** | Только в dochub-паспорте: методикой не производится, в карточке SSoT записывается как `severity.type: mission-critical`. |
 
 ## 3. Этап 1. Сбор данных
 
@@ -199,8 +199,8 @@ V = 6 × (F(C) + F(I) + F(A))
 
 Порядок старшинства: `Office productivity < Business operational <
 Business critical < Mission critical`. Уровень `Mission critical+`
-существует только в dochub-паспорте: методикой он не производится, в SSoT
-маппится в `Mission critical`.
+существует только в dochub-паспорте: методикой он не производится, в карточке
+SSoT записывается как `severity.type: mission-critical`.
 
 ## 9. Матрицы обрабатываемых данных по критичности
 

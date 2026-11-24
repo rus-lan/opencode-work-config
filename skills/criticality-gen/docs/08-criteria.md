@@ -3,7 +3,7 @@ title: Критерии расчёта критичности
 purpose: Разобрать файл критериев — что за правило, откуда оно, как применяется и что делать при нехватке данных.
 audience: [ai-agent, human]
 read_when: [меняете правила расчёта, нужен kind и провенанс правила, гейт заблокировал расчёт]
-updated: 2026-11-12
+updated: 2026-11-24
 status: actual
 related: [02-methodology.md, ../criteria/criticality-criteria.yaml, 09-pipeline.md, 07-scripts.md]
 ---
@@ -65,12 +65,12 @@ related: [02-methodology.md, ../criteria/criticality-criteria.yaml, 09-pipeline.
 
 | Правило | kind | Источник | Как применяется |
 |---------|------|----------|-----------------|
-| `external_refs` | **convention** | — | Именованные внешние документы процесса/методики (`base_url` + `refs.<name>.id/title`): `page_id` живут только здесь, шаблоны не содержат знаний об инстансе Confluence; незаполненная ссылка → `⛔ не заполнено` + `WARN`. `jira_base` (`{key}`) — шаблон ссылки на задачу Jira: ключ из `catalog.yaml → jira_task`, нет ключа — `⛔`. `repos.<dochub\|ssot>` (`url` + `branch` + `note`) — канон адресов репозиториев: `publish`/`ssot` печатают из них готовую команду клонирования (`--clone` выполняет её), `prepare` проверяет доступность (`git ls-remote`, таймаут 10 с, недоступность — `WARN`) |
+| `external_refs` | **convention** | — | Именованные внешние документы процесса/методики (`base_url` + `refs.<name>.id/title`): `page_id` живут только здесь, шаблоны не содержат знаний об инстансе Confluence; незаполненная ссылка → `⛔ не заполнено` + `WARN`. `jira_base` (`{key}`) — шаблон ссылки на задачу Jira: ключ из `catalog.yaml → jira_task`, нет ключа — `⛔`. `repos.dochub` (`url` + `branch` + `note`) — канон адреса репозитория публикации: `publish` печатает из него готовую команду клонирования (`--clone` выполняет её), `prepare` проверяет доступность (`git ls-remote`, таймаут 10 с, недоступность — `WARN`). `repos.ssot` — только адрес карточки для проверки доступности: данные SSoT приходят из MCP `ssot_get` → `ssot-import`, клон SSoT не используется |
 | `provenance` | documented | 4567212024 | Допустимые типы провенанса (`types`) — **10** в порядке канона: `ssot`, `is_yaml_override`, `catalog`, `confluence`, `gitlab`, `jira`, `grafana`, `attachment`, `ssot_links`, `manual`; у каждого типа — `description`. Список обязан совпадать с `PROVENANCE_TYPES` в скрипте (состав и порядок) |
 | `provenance.manual_decision` | documented | 4567212024 | Решение владельца без дословной цитаты — это `manual` с ref вида «решение PdM, `<YYYY-MM-DD>`; `INFORMATION.yaml#notes`». Без ссылки на решение — `missing`, а не `manual` |
 | `levels` | documented | 4207454433 (**архив**, `archived_carrier`) | Шкала из 4 уровней и их определения; `levels.rank` задаёт порядок старшинства. Страница в архиве, но заменить шкалу нечем — правило помечено `source_status: archived_carrier` и несёт `source_note` |
-| `levels.dochub_extra_level` | documented | 4566730084 | Уровень `Mission critical+` существует только в dochub-паспорте; методикой не производится (балл 5 калькулятора даёт `Mission critical`), в SSoT маппится в `Mission critical` |
-| `levels.dochub_to_ssot` | documented | 4566730084 | Маппинг 5 dochub-уровней в 3 уровня SSoT |
+| `levels.dochub_extra_level` | documented | 4566730084 | Уровень `Mission critical+` существует только в dochub-паспорте; методикой не производится (балл 5 калькулятора даёт `Mission critical`), в карточке SSoT записывается как `severity.type: mission-critical` |
+| `levels.dochub_to_ssot` | documented | 4566730084 | Маппинг 5 dochub-уровней в 3 уровня SSoT; вместе с `levels.ssot_enum` (kebab-case enum формы) задаёт целевое значение поля `severity.type`, которое записывается через MCP-форму (`ssot-plan` → `ssot_form_save`) |
 | `ssot_severity_normalization` | **convention** | — | kebab-case `severity.type` из SSoT → Title Case уровень паспорта (`office-productivity` → `Office productivity`); значение вне карты → `null` + `WARN`, а не догадка |
 | `axes` | documented | 4207454433 (**архив**) | Четыре оси 0–4; агрегация `max` |
 | `time_buckets` | documented | 4207454433 (**архив**) | Четыре корзины времени до негативных последствий |
@@ -120,7 +120,7 @@ related: [02-methodology.md, ../criteria/criticality-criteria.yaml, 09-pipeline.
 Обязательно учитывать два правила:
 
 - Ранг задаёт старшинство: `Office productivity` < `Business operational` < `Business critical` < `Mission critical`.
-- `Mission critical+` существует только в dochub-паспорте: методикой не производится, в SSoT маппится в `Mission critical`.
+- `Mission critical+` существует только в dochub-паспорте: методикой не производится, в карточке SSoT записывается как `severity.type: mission-critical`.
 
 Два набора уровней различаются в контексте рендера и в проверках:
 
@@ -128,6 +128,12 @@ related: [02-methodology.md, ../criteria/criticality-criteria.yaml, 09-pipeline.
 |-------|--------------|-----------------|
 | `levels.calculated` (`levels.order`) | только уровни, которые может выдать расчёт | `CRITICALITY.md` (возможные результаты расчёта), шапка и поле `object_criticality_estimation` паспорта |
 | `levels.all` (`level_set`: `levels.order` + `levels.dochub_extra_level`) | плюс внешний dochub-уровень | `publication.md` (публикация в dochub), проверка enum в `validate` |
+
+Для SSoT тот же уровень переводится в enum карточки: `levels.dochub_to_ssot` и
+`levels.ssot_enum` дают kebab-case значение поля формы `severity.type`
+(`mission-critical` / `business-critical` / `business-operational`); оно
+записывается через MCP-форму (`ssot-plan` → `ssot_form_save`), клон и git не
+участвуют.
 
 `validate` принимает `Mission critical+` как значение enum (оно приходит из
 dochub-реестра), но если этот уровень стоит в паспорте как результат расчёта —

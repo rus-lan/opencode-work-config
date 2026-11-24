@@ -61,7 +61,7 @@
 
 - [ ] Задача в Jira создана, её номер подставлен выше (сейчас: {{ actions.jira.task_key | or_missing }}).
 - [ ] MR в dochub создан, метка `criticality` проставлена (сейчас: {{ actions.mr_link | or_missing }}).
-- [ ] MR в SSoT создан, в «Основании» — ссылка на dochub-MR (сейчас: {{ actions.ssot_mr_text | or_missing }}).
+- [ ] MR в SSoT создан через MCP-форму (`ssot_form_save`), `mrUrl` записан `ssot-record` (сейчас: {{ actions.ssot_mr_text | or_missing }}).
 - [ ] Ссылка на карточку ИС в SSoT указана (сейчас: {{ actions.ssot_card_link | or_missing }}).
 - [ ] `make validate` проходит без ERROR.
 - [ ] В сообщении заполнены обязательные поля: технический архитектор, MR паспорта (dochub), ссылка на SSOT (в тексте нет `⛔` в этих строках).
@@ -88,8 +88,9 @@
 ## 6. Чего в этом пакете нет
 
 - **Ссылки на MR** — появляются только после создания обоих MR: паспорт в
-  dochub (`make publish-apply … PUSH=1`) и критичность в SSoT
-  (`make ssot-apply … PUSH=1`). В сообщении их **две**; пока их нет, в тексте
+  dochub (`make publish-apply … PUSH=1`) и MR критичности в SSoT (его создаёт
+  SSoT по форме MCP: `make ssot-plan` → … → `ssot_form_save` →
+  `make ssot-record`). В сообщении их **две**; пока их нет, в тексте
   стоит `⛔ не заполнено` — отправлять такое сообщение нельзя.
   Исключение — `catalog.yaml → systems.<код>.ssot_status: no_change`: severity
   в SSoT уже соответствует расчёту, MR не требуется, и в тексте стоит

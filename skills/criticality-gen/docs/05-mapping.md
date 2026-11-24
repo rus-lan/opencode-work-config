@@ -3,7 +3,7 @@ title: Маппинг и идентификаторы
 purpose: Свести в одном месте коды, page_id и правила соответствия между репозиторием, dochub, SSoT, Confluence и GitLab.
 audience: [ai-agent, human]
 read_when: [паспорт «не находится» по коду, переносите критичность в SSoT, нужен page_id или GitLab-группа ИС]
-updated: 2026-11-13
+updated: 2026-11-24
 status: actual
 related: [09-pipeline.md, 03-fields.md, 08-criteria.md]
 ---
@@ -40,9 +40,10 @@ related: [09-pipeline.md, 03-fields.md, 08-criteria.md]
 
 ## 1.1. Маппинг SSoT `severity.type` → критичность паспорта
 
-В карточке ИС SSoT критичность лежит в `base.yaml → severity.type` и записана
-в **kebab-case**. В паспорте и SSoT-карточке уровень пишется Title Case, поэтому
-`make prepare` нормализует значение по карте
+В карточке ИС SSoT критичность лежит в блоке `severity` (`severity.type`) и
+записана в **kebab-case**; карточку приносит ответ MCP `ssot_get` (снимок —
+`INFORMATION.yaml → ssot_snapshot`). В паспорте уровень пишется Title Case,
+поэтому `make prepare` нормализует значение по карте
 [`ssot_severity_normalization`](../criteria/criticality-criteria.yaml)
 (`kind: convention`, `status: needs_validation`).
 
@@ -60,7 +61,8 @@ related: [09-pipeline.md, 03-fields.md, 08-criteria.md]
    реестр автоматически не перезаписывается.
 
 Провенанс значения: `criticality_source: {type: ssot, ref:
-"ssot/entities/information-systems/<код>/base.yaml#severity.type"}`.
+"entities/information-systems/<код>/base.yaml#severity.type"}` — путь внутри
+снимка `ssot_snapshot` (секция `base` ответа `ssot_get`).
 
 ## 2. Схема кодов
 
@@ -156,7 +158,7 @@ architecture/app/<контур>/<сущность>/criticality_passport.yaml
 |-----------|--------------|
 | Актуальный TL/SA/владелец ИС | Реестр изменений ответственных 2026: [4323248283](https://space.samokat.ru/pages/viewpage.action?pageId=4323248283) |
 | Ответственные 2024–2025 (история) | [3774661271](https://space.samokat.ru/pages/viewpage.action?pageId=3774661271) |
-| Команда и роли в SSoT | Карточка ИС в `ssot.ecom.tech`, файлы `roles.yaml`, `duty.yaml` |
+| Команда и роли в SSoT | Карточка ИС в `ssot.ecom.tech` (ответ `ssot_get`, секции `roles` и `duty`; ростер команды — `ssot_team`) |
 | Системный архитектор продукта | `catalog.yaml` → `sa` (сейчас Рожков Р.А.) |
 
 Если ответственный сменился — сначала обновите реестр ответственных и SSoT,
@@ -166,30 +168,36 @@ architecture/app/<контур>/<сущность>/criticality_passport.yaml
 ## 7. Перенос в SSoT
 
 1. Взять `criticality_ssot` из паспорта/реестра.
-2. Открыть карточку ИС в SSoT (`entities/information-systems/<is>/base.yaml`).
-3. Проставить критичность и дату оценки.
-4. Убедиться, что `components.yaml` содержит актуальные репозитории сервисов.
+2. Прочитать карточку ИС: ответ MCP `ssot_get(group="information-systems",
+   entity=<код>)` → `make ssot-import IS=<код> ENTITY_JSON=-` (снимок в
+   `INFORMATION.yaml → ssot_snapshot`). Навигация по карточке в UI —
+   `ssot_entity_open`.
+3. Посчитать цель и шаги формы: `make ssot-plan IS=<код>` — целевые
+   `severity.type`/`severity.confirmation`, гейт R18 и план
+   `.ssot/<код>-apply-plan.json`.
+4. Убедиться, что секция `components` карточки содержит актуальные репозитории
+   сервисов; если расходится — это отдельная правка карточки через SSoT-UI, а
+   не этап `ssot`.
 
-Критичность (`severity.type` и `severity.confirmation`) переносит
-`make ssot-apply IS=<код> TASK=<key>`: он правит только блок `severity`,
-создаёт ветку `feature/<task>` в клоне SSoT и описание MR по шаблону
-`MR-ssot.md`; остальные поля карточки (дата оценки, компоненты, роли) — вручную,
-как в шагах 3–4. Этап идёт **после** публикации паспорта в dochub
-(`make publish-apply`): в «Основании» SSoT-MR — ссылка на dochub-MR, без неё
-MR не создаётся. Порядок этапов — `references/workflow.md`.
+Критичность (`severity.type` и `severity.confirmation`) меняется только через
+MCP-форму: MR создаёт SSoT, остальные поля карточки (компоненты, роли,
+размещение, дата оценки) в этой правке не трогаются. Этап идёт **после**
+публикации паспорта в dochub (`make publish-apply`); ссылка на dochub-MR для
+SSoT-MR не требуется — `mrUrl` возвращает `ssot_form_save`. Порядок этапов —
+`references/workflow.md`.
 
-### Запись severity: два пути
+### Запись severity: только через MCP-форму
 
 **Гейт CI.** Для путей `entities/**` джоб `codeowners` требует минимум один апрув от ботов
 `project_14598_bot_*`. Эти боты апрувят только MR, созданные через SSoT-UI, поэтому MR,
-созданный из ветки `feature/<task>` напрямую в GitLab, пройти проверку не может — независимо
+созданный напрямую в GitLab мимо SSoT-UI, пройти проверку не может — независимо
 от содержимого и от апрувов людей.
 
 Проверено на практике: MR !5404–!5409 в data-storage упали на пункте
 «МР можно создавать только через SSoT-UI», имея апрувы техлида и других сотрудников.
 Все шесть были закрыты и пересозданы через UI как !5551–!5556.
 
-**Дополнительный гейт для критичности.** Если меняется `severity.*` в `base.yaml`, бот SSOT
+**Дополнительный гейт для критичности.** Если меняется `severity.*` в карточке, бот SSOT
 добавляет в MR блок `@codeowners extend`, требующий **один** апрув от SRE или руководства
 технической архитектуры: `@akolomytov`, `@evolvenkova`, `@santonov`, `@schurikov`.
 Точный список на конкретном MR — в артефакте джоба `codeowners.json` (поле `required`).
@@ -197,23 +205,27 @@ MR не создаётся. Порядок этапов — `references/workflow
 
 | Что меняется | Кто обязан апрувить |
 |---|---|
-| `links.yaml`, `components.yaml`, `roles.yaml`, `resources.yaml`, `duty.yaml` | Техлид ИС |
-| `base.yaml` с изменением `severity.*` | Техлид ИС **+ минимум один** из SRE/техархитектуры |
+| `links`, `components`, `roles`, `resources`, `duty` | Техлид ИС |
+| карточка с изменением `severity.*` | Техлид ИС **+ минимум один** из SRE/техархитектуры |
 
-**Путь 1 — штатный, через SSoT-UI** (MCP `ssot`):
+**Порядок записи** (MCP `ssot-mcp`):
 
-1. `ssot_form_save` — правка формы; создаётся бот-MR `api/information-systems/<код>/<stamp>-<suffix>`.
-2. Апрувы: техлид ИС и (для `severity.*`) один из SRE/техархитектуры.
-3. `ssot_apply_changes(confirm: true)` после того, как `canApply` станет `true`.
+1. `ssot_entity_open` → `ssot_form_fields` → `ssot_ui_select`/`ssot_ui_fill` →
+   `ssot_form_save` — правка формы; создаётся бот-MR
+   `api/information-systems/<код>/<stamp>-<suffix>`, ответ содержит `mrUrl` и
+   `version`.
+2. `make ssot-record IS=<код> MR_URL=<mrUrl>` — `.ssot/<код>-MR.url`,
+   `.ssot/<код>-MR.md` и поля `ssot_*` в `INFORMATION.yaml`.
+3. Апрувы: техлид ИС и (для `severity.*`) один из SRE/техархитектуры.
+4. `ssot_mr_approve(confirm: true)` → `ssot_apply_changes(confirm: true)` после
+   того, как `canApply` станет `true` → `ssot_wait_master`.
+5. `ssot_verify_change` → `make ssot-verify IS=<код> VERIFY_JSON=-` — сверка
+   применённого значения (`.ssot/<код>-verify.json`).
 
-**Путь 2 — fallback, git + force-approve.** `make ssot-apply IS=<код> TASK=<key>` создаёт ветку
-`feature/<task>` и MR. Такой MR обязан получить `@codeowners approve` от maintainer'а проекта
-(access level ≥ 40) отдельным комментарием. Без этого он красный всегда. Прецедент обхода
-SRE-секции: !5342, force-approve от `@pavlukin`.
-
-SSoT-репозиторий данных:
+Клона SSoT и git-операций у скилла нет: MR вне SSoT-UI не пройдёт джоб
+`codeowners` для путей `entities/**`. Данные SSoT живут в репозитории
 `ssh://git@git.ecom.tech:5022/ecom/infrastructure/products-and-services/ssot/ecomtech/data-storage.git`
-(см. `is.yaml` в корне проекта).
+(`is.yaml → ssot.url`); скилл читает их только через MCP `ssot_get`.
 
 ## 8. Источники данных об ИС
 
@@ -222,7 +234,7 @@ SSoT-репозиторий данных:
 
 | # | Источник | Что даёт | Приоритет |
 |---|----------|----------|-----------|
-| 1 | **SSoT** — `ssh://git@git.ecom.tech:5022/ecom/infrastructure/products-and-services/ssot/ecomtech/data-storage.git` (веб-UI: https://ssot.ecom.tech/) | канонические атрибуты ИС: название, тип, продукт, команда, критичность, сервисы и их репозитории, дежурства, размещение, роли | **высший**: при расхождении прав SSoT |
+| 1 | **SSoT** — карточка ИС через MCP `ssot_get` (данные в `ssh://git@git.ecom.tech:5022/ecom/infrastructure/products-and-services/ssot/ecomtech/data-storage.git`, веб-UI: https://ssot.ecom.tech/) | канонические атрибуты ИС: название, тип, продукт, команда, критичность, сервисы и их репозитории, дежурства, размещение, роли | **высший**: при расхождении прав SSoT |
 | 2 | **Confluence** | процесс (D6.1.1), методика, архитектура ИС, DR, Decision Log, оценка критичности, сервисные страницы; значения входов: тип клиентов, влияние при простое, SLA/RTO, сценарии отказа | высокий: источник истины по процессу и архитектуре |
 | 3 | **Grafana** | измеренная нагрузка: панели трафика шлюзов папки продукта E001 → пик RPS → `peak_hour_load` | высокий для нагрузки: единственный измеренный источник; для остальных полей не применяется |
 | 4 | **`catalog.yaml`** (этот репозиторий) | курируемый реестр: код ИС, путь, arch code, команда, критичность и маппинг в SSoT, все page_id, GitLab-группа, статус | производная от SSoT + Confluence |
@@ -235,7 +247,7 @@ SSoT-репозиторий данных:
 
 | `type` | Что берём | Форма `ref` |
 |--------|-----------|-------------|
-| `ssot` | атрибуты карточки ИС: название, тип, продукт, команда, критичность, компоненты, дежурства, размещение, роли | `ssot/entities/information-systems/<код>/base.yaml#severity.type` |
+| `ssot` | атрибуты карточки ИС: название, тип, продукт, команда, критичность, компоненты, дежурства, размещение, роли | `entities/information-systems/<код>/base.yaml#severity.type` — путь внутри снимка `ssot_snapshot` (ответ `ssot_get`) |
 | `confluence` | тип клиентов, влияние при простое, SLA/RTO, сценарии отказа, E2E, ПДн, ADR | `<page_id>, раздел «<название>»` — дословная цитата в `evidence` |
 | `grafana` | пиковая нагрузка (`peak_rps` → `peak_hour_load = peak_rps × 3600`) | `dashboard uid=<uid>, panel <id>, datasource <uid>, expr: <точный PromQL>, окно 7d/30d` |
 | `catalog` | arch code, актив, page_id, GitLab-группа | `catalog.yaml#systems.<код>.<поле>` |
@@ -243,7 +255,7 @@ SSoT-репозиторий данных:
 | `gitlab` | документация клонов сервисов (`docs/`, `openspec/`), SLO-конфиг; репозиторий или MR | цитата из клона — `apps/<код ИС>/<сервис>/<файл>:<строка>`; репозиторий — `https://git.ecom.tech/ecom/dev/is/<контур>/<name_is>` |
 | `jira` | задача процесса | `E001-1234` |
 | `attachment` | вложение Confluence: таблица, выгрузка, калькулятор | `docs/reference/calculator/<файл>.xlsx` или `page_id=<id>, вложение <имя>` |
-| `ssot_links` | ссылка из карточки ИС в SSoT (`links.yaml`): дашборды, DRP, паспорт поддержки | `ssot/entities/information-systems/<код>/links.yaml` |
+| `ssot_links` | ссылка из карточки ИС в SSoT (секция `links`): дашборды, DRP, паспорт поддержки | `entities/information-systems/<код>/links.yaml` — путь внутри снимка `ssot_snapshot` |
 | `manual` | экспертное решение: `axes_scores`, `cia`, финансовые потери | `<роль: логин>` + `status: confirmed`; решение владельца без цитаты — `решение PdM, <YYYY-MM-DD>; INFORMATION.yaml#notes` |
 
 Правила: `confluence` без `page_id` и раздела — не источник; `grafana` без
@@ -265,30 +277,32 @@ uid/панели/PromQL — не источник; `gitlab` без сервис�
 (`lifecycle: closed`, `criteria.service_lifecycle.skip`) в отчёт не попадают: они
 не клонируются и основанием для входов не служат.
 
-### 8.1. Структура SSoT-репозитория
+### 8.1. Структура карточки ИС в SSoT
 
-```
-entities/information-systems/<is>/
-├── base.yaml        # name, type, product, team, criticality
-├── components.yaml  # сервисы: name, описание, языки, статусы, gitRepository
-├── duty.yaml        # ответственные за дежурства (on-call)
-├── links.yaml       # основные ссылки по ИС для навигации
-├── resources.yaml   # размещение ИС в инфраструктуре
-└── roles.yaml       # ролевая модель: код, тип роли, критичность роли, ответственный
+Ответ `ssot_get` (снимок `INFORMATION.yaml → ssot_snapshot`) приходит ключами по
+разделам карточки:
+
+```text
+base        # name, type, product, team, criticality (severity.type)
+components  # сервисы: name, описание, языки, статусы, gitRepository
+duty        # ответственные за дежурства (on-call)
+links       # основные ссылки по ИС для навигации
+resources   # размещение ИС в инфраструктуре
+roles       # ролевая модель: код, тип роли, критичность роли, ответственный
 ```
 
 Полезные детали:
 
-- `base.yaml` — первое, что нужно сверить с `catalog.yaml` (название, продукт,
+- `base` — первое, что нужно сверить с `catalog.yaml` (название, продукт,
   команда, критичность).
-- `components.yaml` → поле `gitRepository` — единственный надёжный способ
+- `components` → поле `gitRepository` — единственный надёжный способ
   получить список репозиториев сервисов ИС: по нему `make services-apply`
   клонирует сервисы в `apps/<код ИС>/<сервис>/` и читает их документацию
   (`docs/`, `openspec/`), не собирая и не запуская код. GitLab API из окружения
   недоступен, поэтому всё, чего нет в `gitRepository` (MR, пайплайны, покрытие),
   в паспорт не попадает и остаётся TODO для TL.
-- `duty.yaml` — кто реально дежурит; нужен для эскалации при инциденте.
-- `resources.yaml` — размещение (кластеры/ДЦ), сверяется с разделами
+- `duty` — кто реально дежурит; нужен для эскалации при инциденте.
+- `resources` — размещение (кластеры/ДЦ), сверяется с разделами
   «Зависимости» в `CRITICALITY.md`.
 
 ### 8.2. `catalog.yaml` — производная, а не источник
@@ -304,7 +318,7 @@ entities/information-systems/<is>/
 
 ### 8.3. `is.yaml` — список ИС для анализа
 
-`is.yaml` лежит в корне и **gitignored** (как и `apps/`, `ssot/`). Формат и
+`is.yaml` лежит в корне и **gitignored** (как и `apps/`). Формат и
 процесс подготовки данных описаны в `INFORMATION.md` в корне проекта:
 
 ```yaml
@@ -329,7 +343,7 @@ SSoT и ручные входы критериев. Его собирает `mak
 только отсюда.
 
 ```text
-SSoT (entities/information-systems/<код ИС>/*.yaml)
+SSoT (ответ `ssot_get` → `ssot_snapshot`)
         │  + переопределения is.yaml (product, teamName)
         ▼
 INFORMATION.yaml ── автоматические секции: meta, identity, components,

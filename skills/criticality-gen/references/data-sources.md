@@ -107,11 +107,12 @@ t = порог / E × 60 + SLA          пороги: 100 / 1 000 / 10 000 / 50 
 
 ## 1.2. Критичность в SSoT: где лежит и что не добавлять
 
-Критичность ИС в SSoT хранится **только** в
-`entities/information-systems/<код>/base.yaml` → блок `severity`. Отдельной
-сущности/файла критичности нет; остальные файлы карточки (`components.yaml`,
-`links.yaml`, `resources.yaml`, `duty.yaml`, `roles.yaml`) к уровню отношения не
-имеют.
+Критичность ИС в SSoT хранится **только** в карточке ИС
+(`information-systems/<код>`) → блок `severity`; читается ответом MCP
+`ssot_get(group="information-systems", entity=<код>)`, снимок которого пишет
+`ssot-import` в `INFORMATION.yaml → ssot_snapshot`. Отдельной сущности/файла
+критичности нет; остальные части карточки (`components`, `links`, `resources`,
+`duty`, `roles`) к уровню отношения не имеют.
 
 | Поле | Тип | Допустимые значения | Когда обязательно |
 |------|-----|---------------------|-------------------|
@@ -131,9 +132,9 @@ t = порог / E × 60 + SLA          пороги: 100 / 1 000 / 10 000 / 50 
   (источник — `catalog.yaml → approve_link`, а не прежнее значение в SSoT);
 - `addon` не выдумывается: существующее значение сохраняется, новое не
   добавляется;
-- правка точечная: переписывается только блок `severity`, остальное содержимое
-  `base.yaml` (порядок ключей, комментарии, форматирование) остаётся прежним;
-- эталон изменения — MR, где в `base.yaml` меняются 1–3 строки
+- правка точечная: в MCP-форме меняются только `severity.type` и
+  `severity.confirmation`, остальные поля карточки не трогаются;
+- эталон изменения — MR, созданный `ssot_form_save`, где меняются 1–3 строки
   (`severity.type` и `severity.confirmation`), других файлов в коммите нет.
 
 **Чего в SSoT нет и куда это не добавляют:** `review_date`, `assigned_date`,
@@ -141,50 +142,55 @@ t = порог / E × 60 + SLA          пороги: 100 / 1 000 / 10 000 / 50 
 `base.schema.json` нет. Они живут в `catalog.yaml` и Confluence; SSoT получает
 только `severity`.
 
-### Запись severity: два пути
+### Запись severity: только через MCP-форму
 
 **Гейт CI.** Для путей `entities/**` джоб `codeowners` требует минимум один апрув от ботов
 `project_14598_bot_*`. Эти боты апрувят только MR, созданные через SSoT-UI, поэтому MR,
-созданный из ветки `feature/<task>` напрямую в GitLab, пройти проверку не может — независимо
+созданный напрямую в GitLab (мимо SSoT-UI), пройти проверку не может — независимо
 от содержимого и от апрувов людей.
 
 Проверено на практике: MR !5404–!5409 в data-storage упали на пункте
 «МР можно создавать только через SSoT-UI», имея апрувы техлида и других сотрудников.
 Все шесть были закрыты и пересозданы через UI как !5551–!5556.
 
-**Дополнительный гейт для критичности.** Если меняется `severity.*` в `base.yaml`, бот SSOT
+**Дополнительный гейт для критичности.** Если меняется `severity.*` в карточке, бот SSOT
 добавляет в MR блок `@codeowners extend`, требующий **один** апрув от SRE или руководства
 технической архитектуры: `@akolomytov`, `@evolvenkova`, `@santonov`, `@schurikov`.
 Точный список на конкретном MR — в артефакте джоба `codeowners.json` (поле `required`).
 Этот гейт действует и на MR, созданных через UI.
 
-| Что меняется | Кто обязан апрувить |
+| Что меняется | Кто обязан аппрувить |
 |---|---|
-| `links.yaml`, `components.yaml`, `roles.yaml`, `resources.yaml`, `duty.yaml` | Техлид ИС |
-| `base.yaml` с изменением `severity.*` | Техлид ИС **+ минимум один** из SRE/техархитектуры |
+| `links`, `components`, `roles`, `resources`, `duty` | Техлид ИС |
+| `severity.*` | Техлид ИС **+ минимум один** из SRE/техархитектуры |
 
-**Путь 1 — штатный, через SSoT-UI** (MCP `ssot`):
+**Порядок записи — только через MCP-форму:**
 
-1. `ssot_form_save` — правка формы; создаётся бот-MR `api/information-systems/<код>/<stamp>-<suffix>`.
-2. Апрувы: техлид ИС и (для `severity.*`) один из SRE/техархитектуры.
-3. `ssot_apply_changes(confirm: true)` после того, как `canApply` станет `true`.
+1. `ssot_entity_open` → `ssot_form_fields` → `ssot_ui_select`/`ssot_ui_fill` →
+   `ssot_form_save` — правка формы; создаётся бот-MR
+   `api/information-systems/<код>/<stamp>-<suffix>`, ответ содержит `mrUrl`.
+2. `ssot-record --mr-url <mrUrl>` — ссылка в `.ssot/<код>-MR.url` и поля
+   `ssot_*` в `INFORMATION.yaml`.
+3. Апрувы: техлид ИС и (для `severity.*`) один из SRE/техархитектуры.
+4. `ssot_mr_approve(confirm: true)` → `ssot_apply_changes(confirm: true)` →
+   `ssot_wait_master`.
+5. `ssot-verify --verify-json <ssot_get после применения>` — сверка.
 
-**Путь 2 — fallback, git + force-approve.** `make ssot-apply IS=<код> TASK=<key>` создаёт ветку
-`feature/<task>` и MR. Такой MR обязан получить `@codeowners approve` от maintainer'а проекта
-(access level ≥ 40) отдельным комментарием. Без этого он красный всегда. Прецедент обхода
-SRE-секции: !5342, force-approve от `@pavlukin`.
+Клона SSoT и git-операций у скилла нет: MR вне SSoT-UI не пройдёт джоб
+`codeowners` для путей `entities/**`.
 
-## 1.3. Команда-владелец: `entities/teams/<team>/team.yaml`
+## 1.3. Команда-владелец: ответ MCP `ssot_team`
 
-Единственный источник контактов TA/TL (и остальных ролей команды). Код команды —
-`catalog.yaml → systems[].team` (например `t006`); в SSoT каталог называется
-**нижним регистром**, поэтому путь собирается как
-`ssot/entities/teams/<team.lower()>/team.yaml`.
+Единственный источник контактов TA/TL (и остальных ролей команды) — ответ MCP
+`ssot_team(code=<team>)`, который передаётся в `make contacts` через
+`--team-json`. Код команды — `catalog.yaml → systems[].team` (например `t006`);
+в SSoT каталог называется **нижним регистром**, поэтому код приводится к
+`t006`.
 
 Реестр изменений ответственных по продуктам/технологиям 2026
 ([4323248283](https://space.samokat.ru/pages/viewpage.action?pageId=4323248283)) —
 это **журнал заявок на оргизменения, а не ростер**: актуальный ростер всегда
-`team.yaml`; реестр используется как fallback при свежей передаче продукта,
+`ssot_team`; реестр используется как fallback при свежей передаче продукта,
 когда SSoT ещё не обновлён.
 
 | Поле | Тип | Что это |
@@ -224,10 +230,10 @@ SRE-секции: !5342, force-approve от `@pavlukin`.
   Сам логин при этом остаётся участником `contacts.groups`: это факт SSoT,
   подавляется только упоминание;
 - код команды — слаг (`t006`), а не путь: `team: "../x"` отвергается
-  (`некорректный код команды`), иначе читался бы файл вне `ssot/entities/teams/`;
+  (`некорректный код команды`), иначе читались бы данные чужой команды;
 - пустая группа — `[]`, участники не выдумываются; пустые `ta`/`tl` — `WARN`
   (`make contacts`, `make validate`), публикация соберётся без упоминания;
-- пишет секцию только `prepare` / `make contacts`; `INFORMATION.yaml → roles`
+- пишет секцию только `ssot-import --team-json` / `make contacts`; `INFORMATION.yaml → roles`
   (ФИО, заполняется руками) остаётся fallback для `assignee_*`.
 
 ## 2. Процедура Confluence
@@ -402,7 +408,7 @@ peak_hour_load = peak_rps × 3600
 | Писать в SSoT что-то кроме блока `severity` | остальные поля карточки приходят из SSoT в паспорт, а не наоборот; лишние поля ломают схему |
 | Добавлять в SSoT `review_date` / `assigned_date` / `tech_architect` | таких полей в `base.schema.json` нет — они живут в `catalog.yaml` и Confluence |
 | Оставлять в `confirmation` прежнюю ссылку | подтверждать нужно актуальный тред; источник — `catalog.yaml → approve_link` |
-| Собирать описание SSoT-MR «свободным текстом» | описание рендерится только по `templates/MR-ssot.md`; пустое поле — ошибка, MR не создаётся |
+| Собирать описание SSoT-MR «свободным текстом» | описание собирает SSoT-приложение из полей формы; наши данные — только `severity.type`/`severity.confirmation` |
 
 ## 6. Проверка результата
 

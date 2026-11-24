@@ -46,8 +46,8 @@ meta:
   sources:
     - page_id: 4566730084
       title: "Методика и оригинальные расчёты"
-      title_version: 11
-      title_verified_at: "2026-11-19"
+      title_version: 13
+      title_verified_at: "2026-11-24"
       space: ECOMCS
       version: 11
       updated: "2026-11-17"
@@ -56,9 +56,9 @@ meta:
       kind: documented
       source_status: current
     - page_id: 4567543163
-      title: "Критерии оценки: входы и варианты заполнения"
-      title_version: 12
-      title_verified_at: "2026-11-19"
+      title: "Критерии, формулы и числа"
+      title_version: 13
+      title_verified_at: "2026-11-24"
       space: ECOMCS
       version: 12
       updated: "2026-11-17"
@@ -67,9 +67,9 @@ meta:
       kind: documented
       source_status: current
     - page_id: 4567212024
-      title: "Данные, источники и провенанс"
-      title_version: 11
-      title_verified_at: "2026-11-19"
+      title: "Источники, провенанс и LINK-MAP"
+      title_version: 12
+      title_verified_at: "2026-11-24"
       space: ECOMCS
       version: 11
       updated: "2026-11-17"
@@ -79,8 +79,8 @@ meta:
       source_status: current
     - page_id: 4552328348
       title: "Заполнение паспорта критичности (ЧЕРНОВИК)"
-      title_version: 14
-      title_verified_at: "2026-11-19"
+      title_version: 17
+      title_verified_at: "2026-11-24"
       space: SMKT
       version: 14
       updated: "2026-11-16"
@@ -88,21 +88,10 @@ meta:
       role_note: "Артефакт экспресса + карта полей yaml; списки enum дефектны (канон — xlsx-калькулятор)"
       kind: documented
       source_status: draft
-    - page_id: 4566714956
-      title: "Заполнение паспорта критичности (детальная оценка) (ЧЕРНОВИК)"
-      title_version: 3
-      title_verified_at: "2026-11-19"
-      space: SMKT
-      version: 3
-      updated: "2026-11-13"
-      role: detailed_artifact
-      role_note: "Артефакт детальной оценки; уникальных правил относительно методики нет"
-      kind: documented
-      source_status: draft
     - page_id: 4553977278
       title: "ЧЕРНОВИК 2026-10 D6.1.1. Процесс оценки критичности ИС"
-      title_version: 14
-      title_verified_at: "2026-11-19"
+      title_version: 16
+      title_verified_at: "2026-11-24"
       space: SMKT
       version: 14
       updated: "2026-11-18"
@@ -113,7 +102,7 @@ meta:
     - page_id: 3855374712
       title: "D6.1.1. Процесс оценки критичности ИС"
       title_version: 67
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       space: SMKT
       version: 67
       updated: "2026-10-08"
@@ -124,7 +113,7 @@ meta:
     - page_id: 4207454433
       title: "[DRAFT] Методика оценки критичности ИС (новая)"
       title_version: 3
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       space: infrastructure
       version: 3
       updated: "2025-12-01"
@@ -135,7 +124,7 @@ meta:
     - page_id: 3823234487
       title: "Требования к ИС, в зависимости от критичности"
       title_version: 45
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       space: SMKT
       version: 45
       updated: "2026-03-16"
@@ -179,9 +168,10 @@ external_refs:
   jira_base: "https://jira.samokat.ru/browse/{key}"
   # Репозитории, в которых живут публикуемые артефакты. URL — канон здесь:
   # в коде они не хардкодятся, чтобы инструмент переносился в другой контур.
-  # `publish`/`ssot` при отсутствии клона печатают готовую команду
+  # `publish` при отсутствии клона dochub печатает готовую команду
   # `git clone <url> <путь> --depth 1` (флаг --clone выполняет её сам),
-  # `prepare` проверяет доступность (git ls-remote, таймаут 10 с; WARN).
+  # `prepare` проверяет доступность обоих репозиториев (git ls-remote,
+  # таймаут 10 с; WARN).
   repos:
     dochub:
       url: "https://git.ecom.tech/ecom/dev/is/ecomtech/dochub/aaac.git"
@@ -204,121 +194,121 @@ external_refs:
       id: 4553986100
       title: "Шаблон для публикации данных по оценки критичности (ЧЕРНОВИК на время пилота)"
       title_version: 3
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "Источник дословного текста публикации (templates/publication.md)"
     responsibility_registry:
       id: 4323248283
       title: "Реестр изменений ответственных по продуктам/технологиям 2026"
-      title_version: 275
-      title_verified_at: "2026-11-19"
+      title_version: 279
+      title_verified_at: "2026-11-24"
       note: "Журнал заявок на оргизменения, НЕ ростер. Актуальный ростер — SSoT entities/teams/<team>/team.yaml; реестр — fallback при свежей передаче продукта."
     express_method_page:
       id: 4552328348
       title: "Заполнение паспорта критичности (ЧЕРНОВИК)"
-      title_version: 14
-      title_verified_at: "2026-11-19"
+      title_version: 17
+      title_verified_at: "2026-11-24"
       note: "meta.sources; по этой странице заполняется criticality-passport.yaml"
     methodology_page:
       id: 4566730084
       title: "Методика и оригинальные расчёты"
-      title_version: 11
-      title_verified_at: "2026-11-19"
+      title_version: 13
+      title_verified_at: "2026-11-24"
       note: "Канон формул E/t, интервалов, выбора сценария, границ CIA, маппинга уровней и правила «итог — ячейка final_matrix»"
     inputs_page:
       id: 4567543163
-      title: "Критерии оценки: входы и варианты заполнения"
-      title_version: 12
-      title_verified_at: "2026-11-19"
+      title: "Критерии, формулы и числа"
+      title_version: 13
+      title_verified_at: "2026-11-24"
       note: "Канон требований к семи входам; источник поля where в criteria.inputs"
     provenance_page:
       id: 4567212024
-      title: "Данные, источники и провенанс"
-      title_version: 11
-      title_verified_at: "2026-11-19"
+      title: "Источники, провенанс и LINK-MAP"
+      title_version: 12
+      title_verified_at: "2026-11-24"
       note: "Канон 10 типов провенанса и статусов значения"
     process_page:
       id: 3855374712
       title: "D6.1.1. Процесс оценки критичности ИС"
       title_version: 67
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "Действующий процесс оценки критичности"
     process_draft_page:
       id: 4553977278
       title: "ЧЕРНОВИК 2026-10 D6.1.1. Процесс оценки критичности ИС"
-      title_version: 14
-      title_verified_at: "2026-11-19"
+      title_version: 16
+      title_verified_at: "2026-11-24"
       note: "Черновик процесса 2026-10; формулировок гейта не содержит"
     tier_framework:
       id: 4433941403
       title: "Фреймворк управления нефункциональными требованиями"
       title_version: 3
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "TIER-1 SLA ≥ 99,95 %/мес, RTO ≤ 60 мин, RPO ≤ 240 мин; TIER-2 SLA ≥ 99,5 %; TIER-3 SLA ≥ 99,0 %. TIER ≠ уровень критичности 1:1 — перенос подтверждает SRE"
     is_registry:
       id: 4541626830
       title: "Список ИС Самоката по критичности и state"
       title_version: 133
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "Колонки «Ссылка на DRP план» и «TIER DR (0,1,2,3)» — маршрут к DRP-плану и TIER"
     e2e_catalog:
       id: 3790195333
       title: "🗃 Каталог сквозных процессов 2.0"
       title_version: 36
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "Карточки процессов (метка e2e-process-card) и таблицы шагов процесса (метка checkliste2e) — основной маршрут входа e2e"
     e2e_registry:
       id: 3700777856
       title: "Реестр сквозных процессов"
       title_version: 41
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "Перечень сквозных процессов и участвующих в них ИС — маршрут, когда карточка процесса не находится по метке"
     is_process_registry:
       id: 4060332274
       title: "Реестр информационных систем"
       title_version: 11
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "Колонки «Наименование ИС / Код ИС / Название процесса» — обратный поиск процессов по коду ИС, когда метки таблиц шагов не сработали"
     mm_registry:
       id: 4541630532
       title: "Список ИС ММ mission critical (по данным backstage)"
       title_version: 93
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "Реестр мастер-микросервисов; заголовок сверен с Confluence (title_verified_at)"
     drp_template:
       id: 4545516731
       title: "Шаблон DRP плана"
       title_version: 4
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "Шаблон плана аварийного восстановления; заголовок сверен с Confluence (title_verified_at)"
     protection_classes:
       id: 3762360880
       title: "Перечень классов защищенности систем"
       title_version: 12
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "Уровни защищённости и категории данных для ИБ-части; заголовок сверен с Confluence (title_verified_at)"
     sec_methodology:
       id: 4566723467
       title: "Методика оценки критичности ИС для целей ИБ"
       title_version: 3
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "Категории данных — 5 классов; 5 классов ≠ low/medium/high, напрямую в cia не подставляются"
     pilot:
       id: 4552335523
       title: "Пилот по критичности 2026-10"
-      title_version: 18
-      title_verified_at: "2026-11-19"
+      title_version: 19
+      title_verified_at: "2026-11-24"
       note: "Страница пилота процесса; заголовок сверен с Confluence (title_verified_at)"
     requirements_page:
       id: 3823234487
       title: "Требования к ИС, в зависимости от критичности"
       title_version: 45
-      title_verified_at: "2026-11-19"
+      title_verified_at: "2026-11-24"
       note: "Вспомогательный источник требований; числовых SLA не содержит, правил файла не обосновывает"
     decision_log:
       id: null
-      title: "Данные, источники и провенанс"
-      title_version: 11
-      title_verified_at: "2026-11-19"
+      title: "Источники, провенанс и LINK-MAP"
+      title_version: 12
+      title_verified_at: "2026-11-24"
       note: "Заполняется в catalog.yaml: systems.<код>.decision_log_page_id"
 
 handoff:
@@ -420,7 +410,7 @@ levels:
   ssot_enum:
     kind: convention
     status: validated
-    rationale: "Enum severity.type в SSoT (schemas/information-systems/base.schema.json) записан kebab-case и содержит три значения. Уровень Office productivity методикой производится, но в SSoT отсутствует — публикуется как business-operational (это же следует из ssot_severity_normalization: office-productivity → Office productivity). Маппинг нужен только на этапе обогащения SSoT (make ssot): в паспорте уровень остаётся Title Case, иначе make validate его не примет."
+    rationale: "Enum severity.type в SSoT (schemas/information-systems/base.schema.json) записан kebab-case и содержит три значения. Уровень Office productivity методикой производится, но в SSoT отсутствует — публикуется как business-operational (это же следует из ssot_severity_normalization: office-productivity → Office productivity). Маппинг нужен только на этапе обогащения SSoT (make ssot-plan): в паспорте уровень остаётся Title Case, иначе make validate его не примет."
     enum:
       - mission-critical
       - business-critical

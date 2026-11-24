@@ -565,7 +565,7 @@ TEXT_SUFFIXES = {".md", ".yaml", ".yml"}
 
 # Клоны чужих репозиториев в корне проекта: их файлы не проверяются как данные
 # проекта (см. _check_cyrillic_codes).
-CLONE_DIRS = {"apps", "ssot", "dochub"}
+CLONE_DIRS = {"apps", "dochub"}
 
 
 # ---------------------------------------------------------------------------
@@ -981,6 +981,24 @@ def review_period(catalog, entry, criteria=None) -> int:
 def due_date(review, months: int) -> dt.date:
     """Дата, к которой переоценка должна быть выполнена."""
     return add_months(review, months)
+
+
+def review_date_from_generation(catalog, entry, criteria=None, reference=None):
+    """`review_date = дата генерации + период переоценки` — единственное правило.
+
+    Обе даты паспорта привязаны к ДАТЕ ГЕНЕРАЦИИ (`generated_at`, параметр
+    `--date`), а не к моменту `finalize` или публикации: иначе одна и та же
+    оценка получала бы разные даты в зависимости от того, когда человек нажал
+    кнопку, а повторный прогон сдвигал бы срок переоценки. Функция — одна точка
+    расчёта для `start` (builder), `scaffold`, `finalize` и `publish`.
+    """
+    if reference is None:
+        return None
+    months = review_period(catalog or {}, entry or {}, criteria)
+    try:
+        return add_months(reference, int(months))
+    except (TypeError, ValueError):
+        return None
 
 
 def review_staleness(entry, body, catalog=None, criteria=None, reference=None):
@@ -1449,6 +1467,13 @@ def dump_yaml(data) -> str:
         _dump_sequence(data, 0, lines)
     else:
         lines.append(dump_scalar(data))
+    return "\n".join(lines) + "\n"
+
+
+def _dump_block(data, indent=2) -> str:
+    """Тело вложенной секции YAML: `_dump_mapping` с отступом + перевод строки."""
+    lines = []
+    _dump_mapping(data, indent, lines)
     return "\n".join(lines) + "\n"
 
 # ---------------------------------------------------------------------------
@@ -2069,6 +2094,9 @@ def _input_specs(criteria):
         specs.append(
             {
                 "id": identifier,
+                # `title` — подпись входа для отчёта (`handoff --report`) и
+                # листа требований; гейт её не использует.
+                "title": str(item.get("title") or identifier),
                 "method": method,
                 "blocking": bool(item.get("blocking")),
                 "switches_scenario": item.get("switches_scenario") is True,
@@ -3037,8 +3065,8 @@ def _start_conflicts(entry, computed, info=None, criteria=None):
 
 
 # --- контакты команды (TA/TL) из SSoT ---------------------------------------
-# `contacts` в INFORMATION.yaml — копия ростера команды-владельца из
-# `ssot/entities/teams/<team>/team.yaml`. Нужна для упоминаний в RocketChat
+# `contacts` в INFORMATION.yaml — копия ростера команды-владельца из ответа
+# MCP `ssot_team(code=<team>)`. Нужна для упоминаний в RocketChat
 # (`@<login>`) и для исполнителя задачи Jira (логин, а не ФИО). Соответствия
 # login -> ФИО в SSoT нет, поэтому в публикации печатается логин.
 CONTACTS_SECTION = "contacts"
@@ -3046,7 +3074,7 @@ CONTACTS_MENTION_GROUPS = ("ta", "tl")
 CONTACTS_COMMENT_MARKER = "# contacts"
 CONTACTS_COMMENT = (
     "# contacts — контакты команды-владельца (TA/TL/SRE и др.).\n"
-    "# contacts: сгенерировано make contacts из ssot/entities/teams/<team>/team.yaml; "
+    "# contacts: сгенерировано make contacts из ответа MCP ssot_team(code=<team>); "
     "вручную не править.\n"
     "# contacts: упоминание в RocketChat — @<login> (соответствия login -> ФИО "
     "в SSoT нет).\n"
@@ -3557,14 +3585,12 @@ def build_render_context(
     )
     review_date_value, review_date_source_label = review_date_source(entry, info, existing)
     if review_date_value is None:
-        months = review_period(catalog or {}, entry, criteria)
-        try:
-            review_date_value = add_months(generated_date, int(months))
-        except (TypeError, ValueError):
-            review_date_value = None
+        review_date_value = review_date_from_generation(
+            catalog, entry, criteria, generated_date
+        )
         review_date_source_label = (
             f"generated_at ({generated_date.isoformat()}) + "
-            f"review_period_months={months}"
+            f"review_period_months={review_period(catalog or {}, entry, criteria)}"
         )
     review_date_warning = None
 
@@ -3967,13 +3993,11 @@ def build_render_context(
         artifact = _mr_url_artifact_read(root, code, DOCHUB_MR_DIR)
         if artifact and _mr_url_problem(artifact) is None:
             mr_link = artifact
-        artifact = _mr_url_artifact_read(
-            Path(root) / SSOT_DEFAULT_DIR, code, SSOT_MR_DIR
-        )
+        artifact = _mr_url_artifact_read(root, code, SSOT_MR_DIR)
         if artifact and _mr_url_problem(artifact) is None:
             ssot_mr_link = artifact
         elif _ssot_level_matches(root, code, entry, criteria) is True:
-            # Уровень критичности в SSoT уже целевой: `ssot` не изменит
+            # Уровень критичности в SSoT уже целевой: `ssot-plan` не изменит
             # `severity.type`, MR по критичности не требуется. Это не «забыли
             # заполнить», а «не нужно».
             ssot_mr_note = "не требуется — критичность в SSoT уже совпадает"
@@ -4021,8 +4045,8 @@ def build_render_context(
         "reassessment": reassessment,
         "labels": labels,
         # Ссылки на MR появляются только после внешних шагов: паспорт — после
-        # `publish --push` (dochub-MR), критичность — после `ssot --push`
-        # (SSoT-MR). Тред `handoff` ссылается на ОБА, поэтому в action-пакете
+        # `publish --push` (dochub-MR), критичность — после `ssot-record`
+        # (SSoT-MR создаёт MCP-форма `ssot_form_save`). Тред `handoff` ссылается на ОБА, поэтому в action-пакете
         # два отдельных поля; выдумывать URL скрипт не может.
         # `mr_link` — имя, которое читают шаблоны; `publish_mr_link` — то же
         # значение под явным именем этапа (заполняются вместе в `_start_one`).
@@ -4031,9 +4055,6 @@ def build_render_context(
         "ssot_mr_link": ssot_mr_link,
         "ssot_mr_note": ssot_mr_note,
         "ssot_mr_ref": ssot_mr_ref,
-        # Текст строки «MR в SSoT»: ссылка, «не требуется» (ssot_status:
-        # no_change) или None → ⛔. Ссылка появляется позже (`_start_one`),
-        # поэтому поле пересчитывается там же через `_ssot_mr_text`.
         # Текст строки «MR в SSoT»: артефакт этапа (`ssot_mr_ref`) приоритетнее
         # статуса реестра; иначе — решение по `ssot_status: no_change`.
         "ssot_mr_text": ssot_mr_ref or _ssot_mr_cell_text(entry, None, info),
@@ -5715,7 +5736,7 @@ def _check_catalog(report: Report, root: Path, systems, criteria=None, catalog=N
                 where,
                 f"{code}: {SSOT_STATUS_FIELD}={ssot_stage!r} "
                 f"(допустимо {', '.join(SSOT_STATUS_VALUES)}; "
-                "выставляется командой make ssot)",
+                "выставляется командой make ssot-record)",
             )
         # Этап handoff: режим и статус отправки — производные команд
         # `handoff`/`handoff-result`. Опечатка исказила бы идемпотентность
@@ -5832,17 +5853,14 @@ def _check_contacts(report: Report, root: Path, systems):
         info = _load_info_file(root / rel)
         contacts = _info_contacts(info) if isinstance(info, dict) else {}
         groups = _contacts_groups(contacts)
-        team = _normalize_team(entry.get("team"))
-        team_file, _team_problem = _team_contacts_path(root, team)
         # Пустой блок пишется как `contacts: {team: null, groups: {}}` — это
         # truthy-словарь, поэтому «не собраны» проверяется по содержимому.
         if not _contacts_groups(contacts) and not contacts.get("team"):
-            if team_file is not None and team_file.exists():
-                report.warn(
-                    f"{rel}/{INFORMATION_FILE}",
-                    "контакты TA/TL не собраны — выполните "
-                    f"make contacts IS={code} APPLY=1",
-                )
+            report.warn(
+                f"{rel}/{INFORMATION_FILE}",
+                "контакты TA/TL не собраны — выполните "
+                f"make contacts IS={code} APPLY=1",
+            )
             continue
         for name in CONTACTS_MENTION_GROUPS:
             if not _contact_logins(groups, name):
@@ -7446,12 +7464,31 @@ def cmd_scaffold(args) -> int:
         "status": "draft",
     }
 
+    # Даты оценки фиксируются СРАЗУ, как только запись ИС появляется в реестре, и
+    # считаются от ДАТЫ ГЕНЕРАЦИИ (`--date` или сегодня), а не от момента
+    # finalize/публикации. Иначе до финализации паспорт уходил бы в dochub без
+    # assigned_date/review_date (publish не отправляет пустые значения), и даты
+    # вообще не попадали бы в репозиторий. Явно заданное значение не
+    # перетирается — повторный запуск идемпотентен.
+    generated = today()
+    if getattr(args, "date", None):
+        try:
+            generated = parse_date_arg(args.date, "--date")
+        except ValueError as exc:
+            print(f"ERROR: {exc}")
+            return 2
+    if not entry.get("assigned_date"):
+        entry["assigned_date"] = generated.isoformat()
+    if not entry.get("review_date"):
+        scaffold_review = review_date_from_generation(catalog, entry, criteria, generated)
+        entry["review_date"] = (
+            scaffold_review.isoformat() if scaffold_review is not None else None
+        )
+
     try:
         ctx = build_render_context(
-            code, entry, {"components": []}, criteria, None, today(), catalog=catalog
+            code, entry, {"components": []}, criteria, None, generated, catalog=catalog
         )
-        ctx["passport"]["review_date"] = None
-        ctx["identity"]["review_date"] = None
         passport_text = render_template_file(passport_tpl, ctx)
         criticality_text = _trim_frontmatter_gap(render_template_file(criticality_tpl, ctx))
     except (YamlError, TemplateError) as exc:
@@ -9663,6 +9700,240 @@ def _selftest_publish(criteria, expect, expect_raises_yaml, skip):
             (True, False),
         )
 
+        # --- P19: нормализация enum перед записью паспорта ----------------
+        # Паспорт пишется в dochub, где enum-поля обязаны совпадать со схемой.
+        # Точное значение — как есть; смысловое (без скобок/регистра) —
+        # каноническое значение схемы + WARN; иначе — ERROR со списком.
+        consumers = list(CONSUMERS_TYPES)
+        exact_value = consumers[0]
+        expect(
+            "P19: точное значение enum — как есть, без WARN",
+            _publish_normalize_enum(
+                exact_value, consumers, "object_consumers_type", "enum"
+            ),
+            (exact_value, None, None),
+        )
+        semantic_value = exact_value.split(" (")[0].upper()
+        norm, warning, problem = _publish_normalize_enum(
+            semantic_value, consumers, "object_consumers_type", "enum"
+        )
+        expect(
+            "P19: смысловое совпадение → каноническое значение схемы",
+            (norm, problem),
+            (exact_value, None),
+        )
+        expect(
+            "P19: смысловое совпадение сопровождается WARN",
+            bool(warning) and "каноническое" in str(warning),
+            True,
+        )
+        bad, bad_warning, bad_problem = _publish_normalize_enum(
+            "Неизвестный тип клиента", consumers,
+            "object_consumers_type", "enum типов клиентов",
+        )
+        expect(
+            "P19: нет совпадения → ERROR со списком допустимых",
+            (
+                bad,
+                bad_warning,
+                bool(bad_problem) and "Допустимо:" in str(bad_problem)
+                and exact_value in str(bad_problem),
+            ),
+            ("Неизвестный тип клиента", None, True),
+        )
+        expect(
+            "P19: пустое значение не нормализуется",
+            _publish_normalize_enum("", consumers, "k", "l"),
+            ("", None, None),
+        )
+
+        # --- P20: автономный клон dochub ----------------------------------
+        # Клона нет и --dochub не задан: публикация сама клонирует URL из
+        # критериев (https и ssh://), отсутствие клона — WARN, а не ERROR.
+        saved_run_git = globals()["_run_git"]
+        clone_calls = []
+
+        def fake_clone_git(command, cwd, allow=None, boundary=None,
+                           purpose="services", timeout=None):
+            clone_calls.append([str(part) for part in command])
+            target = Path(command[3]) if len(command) > 3 else None
+            if target is not None:
+                target.mkdir(parents=True, exist_ok=True)
+                _atomic_write(target / DOCHUB_ROOT_FILE, "imports: []\n")
+            return True, ""
+
+        ssh_url = (
+            "ssh://git@git.ecom.tech:5022/ecom/dev/is/ecomtech/dochub/aaac.git"
+        )
+        clone_criteria = {
+            "external_refs": {"repos": {"dochub": {"url": ssh_url}}},
+        }
+        existing = base / "clone-exists"
+        existing.mkdir(parents=True, exist_ok=True)
+        expect(
+            "P20: существующий клон — True без git",
+            _dochub_ensure_clone(clone_criteria, existing, None, base),
+            True,
+        )
+        expect("P20: существующий клон не клонируется", len(clone_calls), 0)
+        globals()["_run_git"] = fake_clone_git
+        auto_target = base / "auto" / "dochub"
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            auto_ok = _dochub_ensure_clone(clone_criteria, auto_target, None, base)
+        out_auto = buffer.getvalue()
+        expect(
+            "P20: без клона и без --dochub — клонирует сам",
+            (auto_ok, auto_target.is_dir()),
+            (True, True),
+        )
+        expect(
+            "P20: ssh-URL клонируется как есть",
+            clone_calls[-1][2] if clone_calls else None,
+            ssh_url,
+        )
+        expect(
+            "P20: авто-клон сопровождается WARN",
+            "WARN" in out_auto and "автоматически" in out_auto,
+            True,
+        )
+        clone_calls.clear()
+        manual_target = base / "manual" / "dochub"
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            manual_ok = _dochub_ensure_clone(
+                clone_criteria, manual_target, str(manual_target), base
+            )
+        expect(
+            "P20: явный --dochub без клона — не клонируем",
+            (manual_ok, len(clone_calls)),
+            (False, 0),
+        )
+        expect(
+            "P20: явный --dochub — подсказка с командой",
+            "git clone" in buffer.getvalue(),
+            True,
+        )
+        no_url_target = base / "nourl" / "dochub"
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            no_url_ok = _dochub_ensure_clone({}, no_url_target, None, base)
+        expect(
+            "P20: нет URL — отказ «URL не задан»",
+            (no_url_ok, "URL не задан" in buffer.getvalue()),
+            (False, True),
+        )
+        globals()["_run_git"] = saved_run_git
+
+        # --- P21: ветка MR по задаче и «Было» с целевой ветки --------------
+        # Реальная ветка MR — `feature/E001-31346-opercrm-criticality`, а
+        # дефолт `feature/<task>` создавал вторую ветку. «Было» тоже читалось
+        # с master, а не с ветки MR, и обновление паспорта печаталось как
+        # «НЕ ОЦЕНЕНО».
+        repo = base / "branch-detect"
+        repo.mkdir(parents=True, exist_ok=True)
+        branch_rel = "architecture/app/smkt/opercrm/criticality_passport.yaml"
+
+        def git_in_repo(*parts):
+            return _run_git(
+                ["git", "-C", str(repo)] + list(parts),
+                repo,
+                allow=DOCHUB_SELFTEST_SUBCOMMANDS,
+                boundary=repo,
+                purpose="publish",
+            )
+
+        for parts in (
+            ("init", "-q"),
+            ("config", "user.email", "selftest@example"),
+            ("config", "user.name", "Selftest"),
+            ("commit", "-q", "--allow-empty", "-m", "init"),
+        ):
+            ok, output = git_in_repo(*parts)
+            expect(f"P21: git {parts[0]} — ok", ok, True)
+        passport_file = repo / branch_rel
+        passport_file.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_write(
+            passport_file,
+            dump_yaml({
+                "ecom.criticality_passport": {
+                    "sber.ecom.smkt.criticality_passport.opercrm": {
+                        "object_criticality_estimation": "BUSINESS CRITICAL",
+                    },
+                },
+            }),
+        )
+        for parts in (
+            ("checkout", "-q", "-b", "feature/E001-1-opercrm-criticality"),
+            ("add", "--", branch_rel),
+            ("commit", "-q", "-m", "passport"),
+            ("update-ref", "refs/remotes/origin/feature/E001-1-opercrm-criticality", "HEAD"),
+        ):
+            ok, output = git_in_repo(*parts)
+            expect(f"P21: git {parts[0]} — ok", ok, True)
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            detected, ambiguous = _publish_existing_branch(
+                repo, "feature/E001-1", "E001-1"
+            )
+        expect(
+            "P21: одна ветка по задаче — используется она",
+            (detected, ambiguous),
+            ("feature/E001-1-opercrm-criticality", None),
+        )
+        expect(
+            "P21: подмена ветки сопровождается WARN",
+            "использую существующую ветку" in buffer.getvalue(),
+            True,
+        )
+        ok, _output = git_in_repo(
+            "update-ref", "refs/remotes/origin/feature/E001-1-other", "HEAD"
+        )
+        expect("P21: вторая ветка создана", ok, True)
+        with contextlib.redirect_stdout(io.StringIO()):
+            _detected, ambiguous_many = _publish_existing_branch(
+                repo, "feature/E001-1", "E001-1"
+            )
+        expect(
+            "P21: несколько веток — список для --branch",
+            ambiguous_many,
+            ["feature/E001-1-opercrm-criticality", "feature/E001-1-other"],
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            detected_none, ambiguous_none = _publish_existing_branch(
+                repo, "feature/E001-2", "E001-2"
+            )
+        expect(
+            "P21: веток нет — дефолт feature/<task>",
+            (detected_none, ambiguous_none),
+            ("feature/E001-2", None),
+        )
+        had, level = _publish_branch_passport(
+            repo, "feature/E001-1-opercrm-criticality", branch_rel
+        )
+        expect(
+            "P21: «Было» — уровень с целевой ветки",
+            (had, level),
+            (True, "BUSINESS CRITICAL"),
+        )
+        missing, missing_level = _publish_branch_passport(
+            repo, "feature/E001-2", branch_rel
+        )
+        expect(
+            "P21: новой ветки нет — паспорта не было",
+            (missing, missing_level),
+            (None, None),
+        )
+        expect(
+            "P21: одинаковый уровень не рисуется стрелкой",
+            "→" in _publish_change_summary("BUSINESS CRITICAL", "CRITICAL")
+            and "→" not in _publish_change_summary(
+                "BUSINESS CRITICAL", "BUSINESS CRITICAL"
+            ),
+            True,
+        )
+
         # --- P1: паспорта из is/ → ключ, путь, имя файла, поля, уровень ----
         project = _project_fixture_with_fresh_fingerprint(base, criteria)
         passports = []
@@ -9773,8 +10044,47 @@ def _selftest_publish(criteria, expect, expect_raises_yaml, skip):
             expect("P2: generated_at отсутствует", "generated_at" in text, False)
             expect("P2: комментариев # нет", "#" in text, False)
             expect("P2: null-полей нет", ": null" in text, False)
-            expect("P3: assigned_date: null → строки нет",
-                   "assigned_date" in text, False)
+
+            # P3: пустые даты НЕ теряются при публикации — они выводятся из
+            # даты генерации (assigned_date = generated_at, review_date =
+            # generated_at + review_period_months), иначе в dochub не попадали
+            # бы обе даты, хотя они привязаны к генерации, а не к finalize.
+            dated_body = dict(
+                body, assigned_date=None, review_date=None,
+                generated_at="2026.01.15",
+            )
+            dated_doc, dated_problems = _publish_transform(
+                dated_body,
+                _publish_key(contour, name),
+                _publish_object(contour, name),
+                publish_level(criteria, dated_body.get("object_criticality_estimation")),
+                schema,
+            )
+            dated_out = dated_doc[DOCHUB_ENTITY][_publish_key(contour, name)]
+            expect("P3: трансформация с выведенными датами без проблем",
+                   dated_problems, [])
+            expect("P3: assigned_date выведен из generated_at",
+                   dated_out.get("assigned_date"), "2026.01.15")
+            expect("P3: review_date = generated_at + период (12 мес)",
+                   dated_out.get("review_date"), "2027.01.15")
+
+            # P3b: нет ни дат, ни generated_at — поле не выдумывается и не
+            # уходит как null (dochub такой документ отклонит).
+            empty_body = dict(
+                body, assigned_date=None, review_date=None, generated_at=None,
+            )
+            empty_doc, _empty_problems = _publish_transform(
+                empty_body,
+                _publish_key(contour, name),
+                _publish_object(contour, name),
+                publish_level(criteria, empty_body.get("object_criticality_estimation")),
+                schema,
+            )
+            empty_text = dump_yaml(empty_doc)
+            expect("P3b: null-полей нет", ": null" in empty_text, False)
+            expect("P3b: без дат и generated_at поля отсутствуют",
+                   ("assigned_date" in empty_text, "review_date" in empty_text),
+                   (False, False))
 
         # --- P4: cc-exchanger → cc_exchanger в ключе и evaluated_object ----
         expect(
@@ -10401,162 +10711,124 @@ def _selftest_publish(criteria, expect, expect_raises_yaml, skip):
 
 # --- ssot --selftest --------------------------------------------------------
 
-SSOT_SELFTEST_BASE_YAML = """\
-# комментарий до severity
-title: Демо ИС
-description: Демо ИС
-other:
-  type: product
-  product: e001
-teamName: t100
-severity:
-  type: business-operational   # текущий тип
-  method: expert
-lifecycle: production
-onSupport: true
-releaseJiraTask: {}
-"""
-
-SSOT_SELFTEST_NOOP_YAML = """\
-title: Демо ИС без изменений
-severity:
-  type: business-critical
-  addon: contact
-  method: target
-  confirmation: https://rocketchat.samokat.ru/channel/Criticality_assessment?msg=ok
-lifecycle: production
-"""
-
 SSOT_SELFTEST_PASSPORT = """\
 ecom.criticality_passport:
   sber.ecom.mm.criticality_passport.demo:
     object_criticality_estimation: Business critical
 """
 
-# Основание SSoT-MR — ссылка на dochub-MR (в самопроверке — фикстура).
+# Ссылка на SSoT-MR: домен разрешён criteria.external_refs (git.ecom.tech).
 SSOT_SELFTEST_MR_URL = (
-    "https://git.ecom.tech/ecom/dev/is/ecomtech/dochub/aaac/-/merge_requests/1"
+    "https://git.ecom.tech/ecom/infrastructure/products-and-services/ssot/"
+    "ecomtech/data-storage/-/merge_requests/7"
+)
+SSOT_SELFTEST_APPROVE_NEW = (
+    "https://rocketchat.samokat.ru/channel/Criticality_assessment?msg=new"
+)
+SSOT_SELFTEST_APPROVE_OLD = (
+    "https://rocketchat.samokat.ru/channel/Criticality_assessment?msg=old"
 )
 
 
-def _ssot_schema_fixture():
-    """Фикстура схемы SSoT: тот же контракт severity, что в data-storage."""
-    return {
-        "$id": "system-schema",
-        "title": "Основная информация",
-        "type": "object",
-        "properties": {
-            "title": {"type": "string"},
-            "severity": {
-                "title": "Критичность",
-                "type": "object",
-                "properties": {
-                    "type": {
-                        "type": "string",
-                        "enum": [
-                            "mission-critical",
-                            "business-critical",
-                            "business-operational",
-                        ],
-                        "default": "business-operational",
-                    },
-                    "method": {
-                        "type": "string",
-                        "enum": ["expert", "target"],
-                    },
-                },
-                "allOf": [
-                    {
-                        "if": {"properties": {"type": {"const": "business-critical"}}},
-                        "then": {
-                            "properties": {
-                                "addon": {
-                                    "type": ["string", "null"],
-                                    "enum": [None, "contact", "incident", "period"],
-                                    "default": None,
-                                }
-                            }
-                        },
-                    },
-                    {
-                        "if": {"properties": {"method": {"const": "target"}}},
-                        "then": {
-                            "properties": {
-                                "confirmation": {
-                                    "type": "string",
-                                    "pattern": r"^https:\/\/rocketchat\.samokat\.ru\/\S*$",
-                                }
-                            }
-                        },
-                    },
-                ],
-            },
-            "lifecycle": {"type": "string"},
-        },
-        "required": [],
-    }
-
-
 def _ssot_selftest_fixtures(base: Path):
-    """Клон-фикстура SSoT (схема + две ИС) и проект-фикстура (реестр + паспорт)."""
+    """Проект-фикстура: catalog.yaml + INFORMATION.yaml со снимками SSoT.
+
+    Клон SSoT не создаётся: этап работает по снимку карточки
+    (`INFORMATION.yaml → ssot_snapshot`), который пишет `ssot-import`.
+    """
     base = Path(base)
-    clone = base / SSOT_DEFAULT_DIR
-    schema_path = clone.joinpath(*SSOT_SCHEMA_REL)
-    schema_path.parent.mkdir(parents=True, exist_ok=True)
-    _atomic_write(
-        schema_path,
-        json.dumps(_ssot_schema_fixture(), ensure_ascii=False, indent=2) + "\n",
-    )
-    for code, text in (
-        ("demo.mm", SSOT_SELFTEST_BASE_YAML),
-        ("demo2.mm", SSOT_SELFTEST_NOOP_YAML),
-    ):
-        folder = clone / SSOT_ENTITIES_DIR / code
-        folder.mkdir(parents=True, exist_ok=True)
-        _atomic_write(folder / SSOT_BASE_FILE, text)
     project = base / "project"
-    (project / "is" / "demo.mm").mkdir(parents=True, exist_ok=True)
-    _atomic_write(
-        project / "is" / "demo.mm" / "criticality-passport.yaml",
-        SSOT_SELFTEST_PASSPORT,
-    )
-    _atomic_write(
-        project / "catalog.yaml",
-        "systems:\n"
-        "  - code: demo.mm\n"
-        "    name: Демо ИС\n"
-        "    contour: mm\n"
-        "    path: is/demo.mm\n"
-        "    criticality: Business critical\n"
-        "    criticality_ssot: Business critical\n"
-        "    jira_task: E001-1\n"
-        "    approve_link: https://rocketchat.samokat.ru/channel/Criticality_assessment?msg=new\n"
-        "  - code: demo2.mm\n"
-        "    name: Демо ИС без изменений\n"
-        "    contour: mm\n"
-        "    path: is/demo2.mm\n"
-        "    criticality: Business critical\n"
-        "    criticality_ssot: Business critical\n"
-        "    jira_task: E001-1\n"
-        "    approve_link: https://rocketchat.samokat.ru/channel/Criticality_assessment?msg=ok\n"
-        "  - code: absent.mm\n"
-        "    name: Демо ИС без карточки в SSoT\n"
-        "    contour: mm\n"
-        "    path: is/absent.mm\n"
-        "    criticality: Business critical\n"
-        "    criticality_ssot: Business critical\n"
-        "    jira_task: E001-1\n"
-        "    approve_link: https://rocketchat.samokat.ru/channel/Criticality_assessment?msg=new\n",
-    )
-    return clone, project
+    (project / "is").mkdir(parents=True, exist_ok=True)
+    systems = [
+        ("demo.mm", "Демо ИС", SSOT_SELFTEST_APPROVE_NEW),
+        ("demo2.mm", "Демо ИС без изменений", SSOT_SELFTEST_APPROVE_NEW),
+        ("demo3.mm", "Демо ИС без approve_link", None),
+        ("demo4.mm", "Демо ИС: отстало подтверждение", SSOT_SELFTEST_APPROVE_NEW),
+        ("absent.mm", "Демо ИС без снимка", SSOT_SELFTEST_APPROVE_NEW),
+    ]
+    catalog_lines = ["systems:\n"]
+    for code, name, approve_link in systems:
+        catalog_lines.extend(
+            [
+                f"  - code: {code}\n",
+                f"    name: {dump_scalar(name)}\n",
+                "    contour: mm\n",
+                f"    path: is/{code}\n",
+                "    criticality: Business critical\n",
+                "    criticality_ssot: Business critical\n",
+                "    jira_task: E001-1\n",
+                "    approve_link: "
+                + (approve_link if approve_link else "null")
+                + "\n",
+            ]
+        )
+    _atomic_write(project / "catalog.yaml", "".join(catalog_lines))
+
+    snapshots = {
+        # Требуется полное обогащение: type/method/confirmation.
+        "demo.mm": {"type": "business-operational", "method": "expert"},
+        # Снимок уже равен цели.
+        "demo2.mm": {
+            "type": "business-critical",
+            "addon": "contact",
+            "method": "target",
+            "confirmation": SSOT_SELFTEST_APPROVE_NEW,
+        },
+        # Нет approve_link: меняется только type → MR не планируется.
+        "demo3.mm": {"type": "business-operational", "method": "expert"},
+        # Отстало только подтверждение: type/method уже целевые.
+        "demo4.mm": {
+            "type": "business-critical",
+            "method": "target",
+            "confirmation": SSOT_SELFTEST_APPROVE_OLD,
+        },
+    }
+    for code, severity in snapshots.items():
+        folder = project / "is" / code
+        folder.mkdir(parents=True, exist_ok=True)
+        info = {
+            "schema_version": 1,
+            "is": code,
+            "identity": {"code": code, "name": code, "contour": "mm"},
+            "facts": {},
+            SSOT_SNAPSHOT_SECTION: {
+                "base": {"title": code, "severity": severity},
+                "source": "mcp",
+                "commit": "deadbeef",
+            },
+        }
+        _atomic_write(folder / INFORMATION_FILE, dump_yaml(info))
+        _atomic_write(folder / "criticality-passport.yaml", SSOT_SELFTEST_PASSPORT)
+    # absent.mm: запись в реестре есть, INFORMATION.yaml — нет.
+    return project
+
+
+def _ssot_selftest_args(**overrides):
+    values = {
+        "is_": "demo.mm",
+        "force": True,
+        "no_next": True,
+        "quiet": True,
+        "root": None,
+        "path": None,
+    }
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
+def _ssot_selftest_run(func, **overrides):
+    buffer = io.StringIO()
+    args = _ssot_selftest_args(**overrides)
+    with contextlib.redirect_stdout(buffer):
+        rc = func(args)
+    return rc, buffer.getvalue()
 
 
 def _selftest_ssot(criteria, expect, expect_raises_yaml, skip):
-    """S1–S12: маппинг в enum SSoT, точечная правка severity, no-op, MR, apply."""
+    """S1–S14: план по снимку, запись MR-фактов, верификация, гейты."""
     base = Path(tempfile.mkdtemp(prefix="criticality-ssot-"))
     try:
-        clone, project = _ssot_selftest_fixtures(base)
-        schema = _ssot_schema(clone)
+        project = _ssot_selftest_fixtures(base)
 
         # --- S1: маппинг уровней в enum SSoT (из критериев, не из кода) ----
         for level, want in (
@@ -10573,786 +10845,378 @@ def _selftest_ssot(criteria, expect, expect_raises_yaml, skip):
             "не отображается в enum SSoT",
         )
 
-        # --- S2: точечная правка блока severity ---------------------------
-        text = (clone / _ssot_rel_path("demo.mm")).read_text(encoding="utf-8")
-        values = {
-            "type": "business-critical",
-            "method": "target",
-            "confirmation": (
-                "https://rocketchat.samokat.ru/channel/"
-                "Criticality_assessment?msg=new"
-            ),
-        }
-        new_text, before_block, after_block = _severity_update(text, values)
+        def plan_for(code, **overrides):
+            rc, out = _ssot_selftest_run(
+                cmd_ssot_plan, is_=code, root=str(project), **overrides
+            )
+            path = _ssot_plan_path(project, code)
+            plan = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+            return rc, out, plan
 
-        def outside_block(raw):
-            lines = raw.splitlines(True)
-            start, end = _severity_block_bounds(lines)
-            return "".join(lines[:start]) + "".join(lines[end:])
-
+        # --- S2: план changed — точные шаги MCP ---------------------------
+        rc_plan, out_plan, plan = plan_for("demo.mm")
+        expect("S2: ssot-plan — код 0", rc_plan, 0)
+        expect("S2: статус changed", plan.get("status"), "changed")
         expect(
-            "S2: вне блока severity файл не изменён",
-            outside_block(new_text),
-            outside_block(text),
+            "S2: целевые поля",
+            (
+                plan.get("target", {}).get("type"),
+                plan.get("target", {}).get("method"),
+                plan.get("target", {}).get("confirmation"),
+            ),
+            ("business-critical", "target", SSOT_SELFTEST_APPROVE_NEW),
         )
         expect(
-            "S2: комментарий в блоке severity сохранён",
-            "# текущий тип" in new_text,
+            "S2: only — изменяемые поля",
+            plan.get("only"),
+            ["severity.type", "severity.method", "severity.confirmation"],
+        )
+        tools = [step["tool"] for step in plan.get("steps") or []]
+        expect(
+            "S2: последовательность MCP",
+            tools,
+            [
+                "ssot_entity_open",
+                "ssot_form_fields",
+                "ssot_ui_select",
+                "ssot_ui_select",
+                "ssot_ui_fill",
+                "ssot_form_save",
+            ],
+        )
+        expect(
+            "S2: entity_open — группа и сущность",
+            plan["steps"][0]["args"],
+            {"group": "information-systems", "entity": "demo.mm"},
+        )
+        expect(
+            "S2: form_save не ждёт canApply",
+            plan["steps"][-1]["args"],
+            {"waitCanApply": False},
+        )
+        expect(
+            "S2: verify — указатель и ожидаемое значение",
+            (
+                plan["verify"]["form"],
+                plan["verify"]["pointer"],
+                plan["verify"]["expected"],
+            ),
+            ("base", "/severity/type", "business-critical"),
+        )
+        expect(
+            "S2: план напечатан шагами",
+            "ssot_entity_open" in out_plan and "ssot_form_save" in out_plan,
             True,
         )
         expect(
-            "S2: изменена ровно одна строка блока",
-            len(before_block.splitlines()) + 1,
-            len(after_block.splitlines()),
-        )
-        after = _severity_keys(new_text)
-        expect(
-            "S2: severity после правки",
-            (after.get("type"), after.get("method")),
-            ("business-critical", "target"),
-        )
-        expect(
-            "S2: addon не добавлен",
-            "addon" in after,
-            False,
-        )
-        expect(
-            "S2: остальные поля файла разбираются так же",
-            _severity_other_fields(text, new_text)[0],
-            _severity_other_fields(text, new_text)[1],
-        )
-
-        # --- S3: no-op при совпадении блока -------------------------------
-        noop_text = (clone / _ssot_rel_path("demo2.mm")).read_text(encoding="utf-8")
-        noop_values = {
-            "type": "business-critical",
-            "method": "target",
-            "confirmation": (
-                "https://rocketchat.samokat.ru/channel/"
-                "Criticality_assessment?msg=ok"
-            ),
-        }
-        _same, same_before, same_after = _severity_update(noop_text, noop_values)
-        expect("S3: совпадение блока — before == after", same_before == same_after, True)
-        expect(
-            "S3: no-op сохраняет файл байт в байт",
-            _severity_update(noop_text, noop_values)[0],
-            noop_text,
-        )
-
-        # --- S4: confirmation вне regex — ошибка ---------------------------
-        problems = _ssot_severity_problems(
-            {
-                "type": "business-critical",
-                "method": "target",
-                "confirmation": "https://example.com/thread/1",
-            },
-            schema,
-            criteria,
-        )
-        expect(
-            "S4: confirmation вне regex — ошибка",
-            any("не соответствует" in item for item in problems),
+            "S2: next называет ssot-record",
+            "ssot-record" in str(plan.get("next")),
             True,
         )
 
-        # --- S5: addon при business-operational ----------------------------
-        problems = _ssot_severity_problems(
-            {
-                "type": "business-operational",
-                "method": "target",
-                "addon": "contact",
-                "confirmation": (
-                    "https://rocketchat.samokat.ru/channel/"
-                    "Criticality_assessment?msg=ok"
-                ),
-            },
-            schema,
-            criteria,
-        )
+        # --- S3: снимок равен цели — no_change без шагов -------------------
+        rc_same, out_same, same_plan = plan_for("demo2.mm")
+        expect("S3: no_change — код 0", rc_same, 0)
+        expect("S3: статус no_change", same_plan.get("status"), "no_change")
+        expect("S3: шагов нет", same_plan.get("steps"), [])
         expect(
-            "S5: addon при business-operational — ошибка",
-            any("только при type: business-critical" in item for item in problems),
-            True,
-        )
-        expect(
-            "S5: addon не добавляется в новые значения",
-            "addon" in _ssot_values(
-                "business-operational", {"type": "business-critical", "addon": "contact"},
-                "https://rocketchat.samokat.ru/channel/Criticality_assessment?msg=ok",
-            ),
-            False,
-        )
-        expect(
-            "S5: addon существующей ИС сохраняется",
-            _severity_keys(
-                _severity_update(
-                    noop_text,
-                    {
-                        "type": "business-critical",
-                        "method": "target",
-                        "confirmation": (
-                            "https://rocketchat.samokat.ru/channel/"
-                            "Criticality_assessment?msg=ok"
-                        ),
-                    },
-                )[0]
-            ).get("addon"),
+            "S3: addon сохраняется из снимка",
+            same_plan.get("target", {}).get("addon"),
             "contact",
         )
+        expect("S3: сообщение про MR", "MR не требуется" in out_same, True)
 
-        # --- S9: --push без --apply → код аргументов 2 ---------------------
-        def ssot_args(**overrides):
-            values = {
-                "is_": "demo.mm",
-                "ssot": str(clone),
-                "task": "E001-1",
-                "branch": None,
-                "passport_mr_url": SSOT_SELFTEST_MR_URL,
-                "update_mr": False,
-                "apply": False,
-                "push": False,
-                "dry_run": False,
-                "no_next": True,
-                "quiet": True,
-                "root": str(project),
-                "path": None,
-                # Фикстура проекта — только паспорт: INFORMATION.yaml и
-                # CRITICALITY.md в ней нет, поэтому гейт валидации обходится
-                # осознанно (--force). Сам гейт проверяют G1–G4.
-                "force": True,
-            }
-            values.update(overrides)
-            return argparse.Namespace(**values)
-
-        def run_ssot(**overrides):
-            buffer = io.StringIO()
-            with contextlib.redirect_stdout(buffer):
-                rc = cmd_ssot(ssot_args(**overrides))
-            return rc, buffer.getvalue()
-
-        expect("S9: --push без --apply — код 2", run_ssot(push=True)[0], 2)
+        # --- S4: нет approve_link — method/confirmation не меняются --------
+        rc_no_link, out_no_link, no_link = plan_for("demo3.mm")
+        expect("S4: без approve_link — код 1", rc_no_link, 1)
+        expect("S4: статус blocked", no_link.get("status"), "blocked")
         expect(
-            "S9: --push без --apply — сообщение",
-            "--push допустим только вместе с --apply" in run_ssot(push=True)[1],
+            "S4: в target нет method/confirmation",
+            (
+                "method" in (no_link.get("target") or {}),
+                "confirmation" in (no_link.get("target") or {}),
+            ),
+            (False, False),
+        )
+        expect("S4: шагов нет", no_link.get("steps"), [])
+        expect(
+            "S4: причина называет approve_link",
+            "approve_link" in out_no_link,
             True,
         )
 
-        # --- S6: ИС нет в SSoT → ошибка, файл не создан --------------------
-        rc_missing, out_missing = run_ssot(is_="absent.mm")
-        expect("S6: ИС нет в SSoT — код 1", rc_missing, 1)
+        # --- S5: отстало только подтверждение — нет severity.type/method ---
+        rc_conf, _out_conf, conf_plan = plan_for("demo4.mm")
+        expect("S5: план changed — код 0", rc_conf, 0)
+        expect("S5: only — только confirmation", conf_plan.get("only"), [
+            "severity.confirmation"
+        ])
+        conf_tools = [step["tool"] for step in conf_plan.get("steps") or []]
         expect(
-            "S6: сообщение «не найдена в SSoT»",
-            "не найдена в SSoT" in out_missing,
+            "S5: в шагах нет ui_select (method не меняется)",
+            conf_tools,
+            ["ssot_entity_open", "ssot_form_fields", "ssot_ui_fill", "ssot_form_save"],
+        )
+        expect(
+            "S5: ui_fill несёт approve_link",
+            conf_plan["steps"][2]["args"],
+            {"target": "severity.confirmation", "value": SSOT_SELFTEST_APPROVE_NEW},
+        )
+
+        # --- S6: устаревшие флаги записи в клон — явная ошибка (код 2) -----
+        rc_dep, out_dep = _ssot_selftest_run(
+            cmd_ssot_plan, is_="demo.mm", root=str(project), apply=True, push=True
+        )
+        expect("S6: --apply/--push — код 2", rc_dep, 2)
+        expect(
+            "S6: сообщение называет MCP-цепочку",
+            "SSoT теперь только через MCP" in out_dep
+            and "ssot-record" in out_dep,
             True,
         )
         expect(
-            "S6: файл не создан",
-            (clone / _ssot_rel_path("absent.mm")).exists(),
+            "S6: устаревшие флаги названы",
+            "--apply" in out_dep and "--push" in out_dep,
+            True,
+        )
+
+        # --- S7: нет снимка — отказ, план не пишется -----------------------
+        rc_absent, out_absent = _ssot_selftest_run(
+            cmd_ssot_plan, is_="absent.mm", root=str(project)
+        )
+        expect("S7: нет INFORMATION.yaml — код 1", rc_absent, 1)
+        expect(
+            "S7: сообщение про снимок",
+            "INFORMATION.yaml" in out_absent or "снимк" in out_absent,
+            True,
+        )
+        expect(
+            "S7: план для absent.mm не создан",
+            _ssot_plan_path(project, "absent.mm").exists(),
             False,
         )
 
-        # --- S11: dry-run ничего не пишет ---------------------------------
-        before_digest = _ssot_digest(clone)
-        rc_dry, out_dry = run_ssot()
-        expect("S11: dry-run — код 0", rc_dry, 0)
-        expect("S11: dry-run не изменил клон", _ssot_digest(clone), before_digest)
-        expect(
-            "S11: dry-run сообщает об отсутствии записи",
-            "ни один файл не записан" in out_dry,
-            True,
+        # --- S8: гейт без --force блокирует, с --force пишет журнал --------
+        log_path = project / "is" / "demo.mm" / GATE_LOG_FILE
+        # Предыдущие прогоны (S2 и др.) уже писали журнал: проверяем дельту.
+        if log_path.exists():
+            log_path.unlink()
+        rc_gate, out_gate = _ssot_selftest_run(
+            cmd_ssot_plan, is_="demo.mm", root=str(project), force=False
         )
-        expect(
-            "S11: dry-run печатает путь base.yaml",
-            _ssot_rel_path("demo.mm") in out_dry,
-            True,
+        expect("S8: гейт без --force — код 1", rc_gate, 1)
+        expect("S8: гейт заблокирован", "заблокирован" in out_gate, True)
+        expect("S8: журнал обхода не создан", log_path.exists(), False)
+        rc_force, out_force = _ssot_selftest_run(
+            cmd_ssot_plan, is_="demo.mm", root=str(project), force=True
         )
-        expect(
-            "S11: dry-run печатает описание MR",
-            "## Что меняется" in out_dry and "Closes E001-1" in out_dry,
-            True,
-        )
+        expect("S8: --force — код 0", rc_force, 0)
+        expect("S8: обход напечатан", "обойдён осознанно" in out_force, True)
+        expect("S8: журнал обхода создан", log_path.exists(), True)
 
-        # --- S7: рендер MR-ssot — блоки, без {{ и заглушек -----------------
-        entry = {"code": "demo.mm", "criticality_ssot": "Business critical"}
-        changes = _ssot_changes(
-            {"type": "business-operational", "method": "expert"},
-            {
-                "type": "business-critical",
-                "method": "target",
-                "confirmation": (
-                    "https://rocketchat.samokat.ru/channel/"
-                    "Criticality_assessment?msg=new"
-                ),
-            },
+        # --- S9: ssot-record — невалидный URL отклоняется ------------------
+        rc_bad, out_bad = _ssot_selftest_run(
+            cmd_ssot_record, is_="demo.mm", root=str(project),
+            mr_url="architecture/app/mm/erm/criticality_passport.yaml",
         )
-        context = _ssot_mr_context(
-            "demo.mm", entry, criteria, "business-critical", changes, "E001-1",
-            "feature/E001-1", "E001-1: feat(ssot): критичность demo.mm — "
-            "business-critical",
-            "https://rocketchat.samokat.ru/channel/Criticality_assessment?msg=new",
-            passport_mr_url=SSOT_SELFTEST_MR_URL,
-        )
-        mr_text = _ssot_mr_text(context)
-        for block in (
-            "## Что меняется",
-            "## Основание",
-            "## Проверка",
-            "## Что не меняется",
-        ):
-            expect(f"S7: блок {block!r}", block in mr_text, True)
-        expect("S7: заголовок MR", mr_text.startswith("# E001-1: критичность demo.mm"), True)
-        expect("S7: нет незаполненных {{ }}", "{{" in mr_text, False)
-        expect("S7: нет маркера-заглушки", MISSING_MARK in mr_text, False)
-        expect("S7: таблица изменённых полей", "`severity.type`" in mr_text, True)
-        expect("S7: Closes задача", "Closes E001-1" in mr_text, True)
+        expect("S9: не-URL — код 1", rc_bad, 1)
         expect(
-            "S7: в основании кликабельная ссылка на dochub-MR",
-            SSOT_SELFTEST_MR_URL in mr_text,
+            "S9: сообщение «ссылка на MR не распознана»",
+            "ссылка на MR не распознана" in out_bad,
             True,
         )
         expect(
-            "S7: ссылка на dochub-MR — в блоке «Основание»",
-            SSOT_SELFTEST_MR_URL
-            in mr_text.split("## Основание", 1)[1].split("## Проверка", 1)[0],
-            True,
+            "S9: артефакт не записан",
+            (project / SSOT_MR_DIR / "demo.mm-MR.url").exists(),
+            False,
         )
+        rc_foreign, out_foreign = _ssot_selftest_run(
+            cmd_ssot_record, is_="demo.mm", root=str(project),
+            mr_url="https://gitlab.example.invalid/group/project/-/merge_requests/1",
+        )
+        expect("S9: чужой домен — код 1", rc_foreign, 1)
+        expect("S9: причина про домен", "не разрешён" in out_foreign, True)
 
-        # --- S13: пустая ссылка на dochub-MR → MR не создаётся -------------
+        # --- S10: ssot-record — валидный URL пишет факты -------------------
+        save_payload = {
+            "mrUrl": SSOT_SELFTEST_MR_URL,
+            "version": "v42",
+            "canApply": False,
+            "state": "opened",
+            "approvals": {"required": 2, "left": 1, "missing": ["sre"]},
+            "pipeline": {"status": "running"},
+        }
+        save_path = base / "form-save.json"
+        _atomic_write(save_path, json.dumps(save_payload, ensure_ascii=False))
+        rc_rec, out_rec = _ssot_selftest_run(
+            cmd_ssot_record, is_="demo.mm", root=str(project),
+            mr_url=SSOT_SELFTEST_MR_URL, version="v42",
+            save_json=str(save_path), status_json=None,
+        )
+        expect("S10: ssot-record — код 0", rc_rec, 0)
+        url_path = project / SSOT_MR_DIR / "demo.mm-MR.url"
+        md_path = project / SSOT_MR_DIR / "demo.mm-MR.md"
         expect(
-            "S13: пустая ссылка на dochub-MR — проблема найдена",
-            _mr_url_problem(""),
-            "не заполнено поле 'mr.passport_mr_url'",
-        )
-        expect(
-            "S13: не-URL ссылка на MR — проблема найдена",
-            bool(_mr_url_problem("architecture/app/mm/erm/criticality_passport.yaml")),
-            True,
-        )
-        no_url_context = json.loads(json.dumps(context))
-        no_url_context["mr"]["passport_mr_url"] = ""
-        raised_url = None
-        try:
-            _ssot_mr_text(no_url_context)
-        except TemplateError as exc:
-            raised_url = str(exc)
-        except Exception as exc:  # noqa: BLE001 - диагностика самопроверки
-            raised_url = f"{type(exc).__name__}: {exc}"
-        expect(
-            "S13: рендер без ссылки на dochub-MR — ошибка",
-            bool(raised_url)
-            and "не заполнено поле 'mr.passport_mr_url'" in str(raised_url),
-            True,
-        )
-        rc_bad_url, out_bad_url = run_ssot(
-            passport_mr_url="architecture/app/mm/erm/criticality_passport.yaml"
-        )
-        expect("S13: не-URL ссылка — код 1", rc_bad_url, 1)
-        expect(
-            "S13: не-URL ссылка — сообщение",
-            "ссылка на MR не распознана" in out_bad_url,
-            True,
-        )
-
-        # --- S14: описание для push-options — одна строка, все заголовки ----
-        push_description = _mr_push_option(mr_text)
-        expect("S14: push-options без перевода строки", "\n" in push_description, False)
-        expect("S14: push-options непустое", bool(push_description.strip()), True)
-        expect(
-            "S14: push-options содержит все заголовки шаблона",
-            [
-                block
-                for block in (
-                    "## Что меняется",
-                    "## Основание",
-                    "## Проверка",
-                    "## Что не меняется",
-                )
-                if block not in push_description
-            ],
-            [],
-        )
-        expect(
-            "S14: push-options содержит ссылку на dochub-MR",
-            SSOT_SELFTEST_MR_URL in push_description,
-            True,
-        )
-
-        # --- S15: сверка описания MR после пуша (транспорт замокан) --------
-        # Клон-заглушка: `.git/config` с GitLab-remote, git-команд не требуется.
-        gitlab_clone = base / "gitlab-clone"
-        (gitlab_clone / ".git").mkdir(parents=True, exist_ok=True)
-        _atomic_write(
-            gitlab_clone / ".git" / "config",
-            '[remote "origin"]\n'
-            "\turl = https://gitlab.example.invalid/group/project.git\n"
-            "\tfetch = +refs/heads/*:refs/remotes/origin/*\n",
-        )
-        expect(
-            "S15: remote разобран как GitLab",
-            _gitlab_api(gitlab_clone)[:2],
-            (
-                "https://gitlab.example.invalid/api/v4",
-                "group%2Fproject",
-            ),
-        )
-        calls = []
-
-        def fake_gitlab_request(method, url, token, payload=None, timeout=None):
-            calls.append((method, url, payload))
-            if method == "GET":
-                return True, [{
-                    "iid": 7,
-                    "web_url": "https://gitlab.example.invalid/group/project"
-                               "/-/merge_requests/7",
-                    "description": "однострочная заглушка",
-                }]
-            if method == "PUT":
-                return True, {
-                    "iid": 7,
-                    "web_url": "https://gitlab.example.invalid/group/project"
-                               "/-/merge_requests/7",
-                    "description": (payload or {}).get("description", ""),
-                }
-            return False, "unexpected"
-
-        original_request = globals()["_gitlab_request"]
-        globals()["_gitlab_request"] = fake_gitlab_request
-        try:
-            sync = _mr_description_sync(
-                gitlab_clone, "feature/E001-1", mr_text, label="SSoT",
-                token="selftest-token",
-            )
-            expect("S15: описание переписано через PUT", sync[0], "updated")
-            expect("S15: PUT вызван один раз",
-                   [call[0] for call in calls], ["GET", "PUT"])
-            expect(
-                "S15: PUT несёт полный рендер шаблона",
-                calls[-1][2].get("description") == mr_text,
-                True,
-            )
-            expect(
-                "S15: URL MR возвращён",
-                sync[1],
-                "https://gitlab.example.invalid/group/project/-/merge_requests/7",
-            )
-            calls.clear()
-            sync_same = _mr_description_sync(
-                gitlab_clone, "feature/E001-1", "однострочная заглушка",
-                label="SSoT", token="selftest-token",
-            )
-            expect("S15: совпало — без PUT", sync_same[0], "synced")
-            expect("S15: совпало — один GET", [c[0] for c in calls], ["GET"])
-            calls.clear()
-            sync_no_token = _mr_description_sync(
-                gitlab_clone, "feature/E001-1", mr_text, label="SSoT", token=""
-            )
-            expect("S15: без токена — skipped", sync_no_token[0], "skipped")
-            expect("S15: без токена — API не вызывался", calls, [])
-        finally:
-            globals()["_gitlab_request"] = original_request
-
-        # --- S16: артефакт ссылки на dochub-MR -----------------------------
-        url_written = _mr_url_artifact_write(
-            gitlab_clone, "demo.mm", SSOT_SELFTEST_MR_URL, DOCHUB_MR_DIR
-        )
-        expect("S16: артефакт ссылки записан", bool(url_written), True)
-        expect(
-            "S16: ссылка прочитана из артефакта",
-            _mr_url_artifact_read(gitlab_clone, "demo.mm", DOCHUB_MR_DIR),
+            "S10: .ssot/<код>-MR.url записан",
+            url_path.read_text(encoding="utf-8").strip(),
             SSOT_SELFTEST_MR_URL,
         )
+        md_text = md_path.read_text(encoding="utf-8")
         expect(
-            "S16: нет артефакта — пустая ссылка",
-            _mr_url_artifact_read(gitlab_clone, "absent.mm", DOCHUB_MR_DIR),
-            "",
-        )
-
-        # --- S8: пустая переменная MR → ошибка, MR не создаётся ------------
-        empty_context = json.loads(json.dumps(context))
-        empty_context["mr"]["approve_link"] = ""
-        raised = None
-        try:
-            _ssot_mr_text(empty_context)
-        except TemplateError as exc:
-            raised = str(exc)
-        except Exception as exc:  # noqa: BLE001 - диагностика самопроверки
-            raised = f"{type(exc).__name__}: {exc}"
-        expect("S8: пустая переменная MR — ошибка", bool(raised), True)
-        expect(
-            "S8: сообщение называет поле и шаблон",
-            bool(raised) and "не заполнено поле 'mr.approve_link'" in str(raised)
-            and SSOT_MR_TEMPLATE in str(raised),
-            True,
-        )
-        expect(
-            "S8: в MR нет пустых строк-заглушек",
-            [
-                line
-                for line in mr_text.splitlines()
-                if line.strip() in {"-", "—", "|", "| |", "- [ ]"}
-            ],
-            [],
-        )
-
-        # --- S12: состояние «SSoT обогащён» --------------------------------
-        expect(
-            "S12: demo2.mm — SSoT уже обогащён",
-            _ssot_enriched(
-                base, "demo2.mm",
-                {"code": "demo2.mm", "criticality_ssot": "Business critical"},
-                criteria,
+            "S10: описание MR из фактов MCP",
+            (
+                SSOT_SELFTEST_MR_URL in md_text,
+                "v42" in md_text,
+                "opened" in md_text,
+                "sre" in md_text,
+                "{{" in md_text,
             ),
+            (True, True, True, True, False),
+        )
+        info = load_yaml(project / "is" / "demo.mm" / INFORMATION_FILE)
+        expect(
+            "S10: INFORMATION.yaml — статус и факты MR",
+            (
+                info.get(SSOT_STATUS_FIELD),
+                info.get("ssot_mr_url"),
+                info.get("ssot_version"),
+                info.get("ssot_can_apply"),
+                bool(info.get("ssot_recorded_at")),
+            ),
+            (SSOT_STATUS_MR_CREATED, SSOT_SELFTEST_MR_URL, "v42", False, True),
+        )
+        expect(
+            "S10: остальной файл сохранён (identity)",
+            info.get("identity", {}).get("code"),
+            "demo.mm",
+        )
+        rc_again, out_again = _ssot_selftest_run(
+            cmd_ssot_record, is_="demo.mm", root=str(project),
+            mr_url=SSOT_SELFTEST_MR_URL, version="v42",
+            save_json=None, status_json=None,
+        )
+        expect("S10: повтор — код 0", rc_again, 0)
+        expect("S10: повтор идемпотентен", "без изменений" in out_again, True)
+
+        # --- S11: запись без плана / при no_change — отказ ----------------
+        rc_noplan, out_noplan = _ssot_selftest_run(
+            cmd_ssot_record, is_="demo3.mm", root=str(project),
+            mr_url=SSOT_SELFTEST_MR_URL, version=None,
+            save_json=None, status_json=None,
+        )
+        expect("S11: без плана — код 1", rc_noplan, 1)
+        expect(
+            "S11: сообщение «нечего записывать»",
+            "нечего записывать" in out_noplan,
+            True,
+        )
+        rc_nochange, out_nochange = _ssot_selftest_run(
+            cmd_ssot_record, is_="demo2.mm", root=str(project),
+            mr_url=SSOT_SELFTEST_MR_URL, version=None,
+            save_json=None, status_json=None,
+        )
+        expect("S11: no_change — код 1", rc_nochange, 1)
+        expect(
+            "S11: no_change — причина",
+            "no_change" in out_nochange,
+            True,
+        )
+
+        # --- S12: ssot-verify matched:false — блокирующий сигнал -----------
+        gate_before = _ssot_mr_gate(
+            project, "demo.mm",
+            catalog_by_code(load_catalog(project)[1]).get("demo.mm"),
+            load_yaml(project / "is" / "demo.mm" / INFORMATION_FILE),
+            "handoff",
+        )
+        expect("S12: до проверки гейт блокирует", gate_before, False)
+        rc_unv, out_unv = _ssot_selftest_run(
+            cmd_ssot_verify, is_="demo.mm", root=str(project),
+            verify_json=None, matched=False, ref="master", commit="c0ffee",
+            actual="business-operational",
+        )
+        expect("S12: ssot-verify — код 0", rc_unv, 0)
+        expect("S12: WARN про matched:false", "matched: false" in out_unv, True)
+        info_unv = load_yaml(project / "is" / "demo.mm" / INFORMATION_FILE)
+        expect(
+            "S12: verified записан в снимок",
+            (
+                info_unv["ssot_snapshot"]["verified"]["matched"],
+                info_unv["ssot_snapshot"]["verified"]["actual"],
+                info_unv[SSOT_STATUS_FIELD],
+            ),
+            (False, "business-operational", SSOT_STATUS_MR_UNVERIFIED),
+        )
+        expect(
+            "S12: .ssot/<код>-verify.json записан",
+            (project / SSOT_MR_DIR / "demo.mm-verify.json").exists(),
             True,
         )
         expect(
-            "S12: demo.mm — SSoT не обогащён",
-            _ssot_enriched(
-                base, "demo.mm",
-                {"code": "demo.mm", "criticality_ssot": "Business critical"},
-                criteria,
+            "S12: matched:false блокирует handoff",
+            _ssot_mr_gate(
+                project, "demo.mm",
+                catalog_by_code(load_catalog(project)[1]).get("demo.mm"),
+                info_unv, "handoff",
             ),
             False,
         )
 
-        # --- S10: --apply на клоне-фикстуре --------------------------------
-        def run_git(*args):
-            return _run_git(
-                list(args), base, allow=DOCHUB_SELFTEST_SUBCOMMANDS,
-                boundary=base, purpose="selftest",
-            )
-
-        remote = base / "remote.git"
-        ok, output = run_git("git", "init", "--bare", "-q", str(remote))
-        ok = ok and run_git(
-            "git", "init", "-q", "-b", SSOT_TARGET_BRANCH, str(clone)
-        )[0]
-        ok = ok and run_git(
-            "git", "-C", str(clone), "config", "user.email", "selftest@example.invalid"
-        )[0]
-        ok = ok and run_git(
-            "git", "-C", str(clone), "config", "user.name", "selftest"
-        )[0]
-        ok = ok and run_git("git", "-C", str(clone), "add", "-A")[0]
-        ok = ok and run_git(
-            "git", "-C", str(clone), "commit", "-qm", "initial setup"
-        )[0]
-        ok = ok and run_git(
-            "git", "-C", str(clone), "remote", "add", "origin", str(remote)
-        )[0]
-        ok = ok and run_git(
-            "git", "-C", str(clone), "push", "-q", "-u", "origin",
-            SSOT_TARGET_BRANCH,
-        )[0]
-        expect("S10: git-фикстура создана", ok, True)
-        if not ok:
-            expect(f"S10: git недоступен ({output}) — проверки пропущены", True, True)
-            return
-
-        branch = "feature/E001-1"
-        # D-A: путь клона относительный (`ssot`), cwd — каталог фикстуры. До
-        # фикса git получал `-C ssot` внутри процесса с `cwd=ssot` и падал с
-        # `fatal: cannot change to 'ssot'`; после — путь приводится к абсолютному.
-        cwd_before = Path.cwd()
-        os.chdir(base)
-        try:
-            rc_apply, out_apply = run_ssot(apply=True, ssot=SSOT_DEFAULT_DIR)
-        finally:
-            os.chdir(cwd_before)
-        expect("S10: --apply с относительным --ssot — код 0", rc_apply, 0)
-        expect(
-            "S10: относительный --ssot напечатан абсолютным",
-            f"клон: {clone}" in out_apply,
-            True,
+        # --- S13: matched:true открывает гейт ------------------------------
+        rc_ver, out_ver = _ssot_selftest_run(
+            cmd_ssot_verify, is_="demo.mm", root=str(project),
+            verify_json=None, matched=True, ref="master", commit="c0ffee",
+            actual="business-critical",
         )
-        ok_head, head = run_git(
-            "git", "-C", str(clone), "rev-parse", "--abbrev-ref", "HEAD"
+        expect("S13: ssot-verify matched — код 0", rc_ver, 0)
+        expect("S13: WARN нет", "WARN" in out_ver, False)
+        info_ver = load_yaml(project / "is" / "demo.mm" / INFORMATION_FILE)
+        expect(
+            "S13: статус mr_verified",
+            info_ver[SSOT_STATUS_FIELD],
+            SSOT_STATUS_MR_VERIFIED,
         )
         expect(
-            "S10: клон возвращён на master", (ok_head, head),
-            (True, SSOT_TARGET_BRANCH),
-        )
-        ok_branch, branch_sha = run_git(
-            "git", "-C", str(clone), "rev-parse", "--verify",
-            f"refs/heads/{branch}",
-        )
-        expect("S10: ветка создана", (ok_branch, bool(branch_sha)), (True, True))
-        ok_parent, parent = run_git(
-            "git", "-C", str(clone), "rev-parse", f"{branch}~1"
-        )
-        ok_origin, origin = run_git(
-            "git", "-C", str(clone), "rev-parse",
-            f"origin/{SSOT_TARGET_BRANCH}",
-        )
-        expect(
-            "S10: ветка от origin/master",
-            (ok_parent, ok_origin, parent == origin),
-            (True, True, True),
-        )
-        ok_names, names = run_git(
-            "git", "-C", str(clone), "show", "--name-only", "--format=", branch
-        )
-        committed = [line for line in (names or "").splitlines() if line.strip()]
-        expect(
-            "S10: коммит из одного файла",
-            committed,
-            [_ssot_rel_path("demo.mm")],
-        )
-        ok_stat, stat = run_git("git", "-C", str(clone), "show", "--stat", branch)
-        expect(
-            "S10: git show --stat — 1 file changed",
-            "1 file changed" in (stat or ""),
+            "S13: matched:true открывает гейт",
+            _ssot_mr_gate(
+                project, "demo.mm",
+                catalog_by_code(load_catalog(project)[1]).get("demo.mm"),
+                info_ver, "handoff",
+            ),
             True,
         )
         expect(
-            "S10: сообщение коммита",
-            "E001-1: feat(ssot): критичность demo.mm — business-critical" in out_apply,
-            True,
-        )
-        expect(
-            "S10: описание MR записано в клон",
-            (clone / SSOT_MR_DIR / "demo.mm-MR.md").is_file(),
-            True,
+            "S13: остальной снимок сохранён",
+            info_ver["ssot_snapshot"]["base"]["severity"]["type"],
+            "business-operational",
         )
 
-        # --- S3b: повторный --apply на обогащённой ИС — no-op --------------
-        ok_branches, branches_before = run_git(
-            "git", "-C", str(clone), "branch", "--format=%(refname:short)"
-        )
-        rc_noop, out_noop = run_ssot(is_="demo2.mm", apply=True)
-        ok_branches, branches_after = run_git(
-            "git", "-C", str(clone), "branch", "--format=%(refname:short)"
-        )
-        expect("S3b: no-op --apply — код 0", rc_noop, 0)
-        expect("S3b: no-op — сообщение", "изменений нет" in out_noop, True)
+        # --- S14: состояние «SSoT обогащён» по снимку ---------------------
+        by_code = catalog_by_code(load_catalog(project)[1])
         expect(
-            "S3b: no-op не создал ветку",
-            (ok_branches, branches_before == branches_after),
-            (True, True),
-        )
-
-        # --- S17: нет клона SSoT → понятная ошибка с абсолютным путём ------
-        rc_absent, out_absent = run_ssot(ssot="no-such-clone")
-        expect("S17: нет клона — код 1", rc_absent, 1)
-        expect(
-            "S17: сообщение называет абсолютный путь и флаг",
-            f"клон SSoT не найден: {Path('no-such-clone').resolve()} "
-            "(укажите --ssot <путь>)" in out_absent,
-            True,
-        )
-        ssot_url, _ssot_branch, _ssot_note = _criteria_repo(criteria, "ssot")
-        expect("S17: URL SSoT задан в критериях", bool(ssot_url), True)
-        expect(
-            "S17: сообщение содержит URL и команду клонирования",
-            f"git clone {ssot_url} {Path('no-such-clone').resolve()} --depth 1"
-            in out_absent,
-            True,
-        )
-
-        # --- S18: --update-mr — только описание, ветка не создаётся --------
-        # demo.mm уже обогащён веткой feature/E001-1; правим описание MR
-        # существующей ветки: base.yaml и ветки не трогаются.
-        ok_head, head_before = run_git(
-            "git", "-C", str(clone), "rev-parse", "--abbrev-ref", "HEAD"
-        )
-        digest_before = _ssot_digest(clone)
-        rc_mr_dry, out_mr_dry = run_ssot(update_mr=True)
-        expect("S18: --update-mr dry-run — код 0", rc_mr_dry, 0)
-        expect(
-            "S18: --update-mr dry-run не пишет описание",
-            "dry-run: .ssot/demo.mm-MR.md не записан" in out_mr_dry,
+            "S14: demo2.mm — снимок уже целевой",
+            _ssot_enriched(project, "demo2.mm", by_code.get("demo2.mm"), criteria),
             True,
         )
         expect(
-            "S18: --update-mr dry-run не изменил клон",
-            _ssot_digest(clone),
-            digest_before,
-        )
-        rc_mr, out_mr = run_ssot(update_mr=True, apply=True)
-        expect("S18: --update-mr --apply — код 0", rc_mr, 0)
-        expect(
-            "S18: описание MR записано",
-            (clone / SSOT_MR_DIR / "demo.mm-MR.md").is_file(),
-            True,
-        )
-        ok_head, head_after = run_git(
-            "git", "-C", str(clone), "rev-parse", "--abbrev-ref", "HEAD"
-        )
-        expect(
-            "S18: ветка и HEAD не изменились",
-            (head_after, head_after == head_before),
-            (head_before, True),
-        )
-        expect(
-            "S18: base.yaml не переписан",
-            _ssot_digest(clone) == digest_before,
-            True,
-        )
-
-        # --- S19: --push — в push-options полное описание, не заглушка ------
-        push_branch = "feature/E001-1-push"
-        captured = []
-        sync_calls = []
-
-        def fake_run_git(command, cwd, allow=None, boundary=None, purpose="services"):
-            captured.append(list(command))
-            text = " ".join(command)
-            if "rev-parse --abbrev-ref" in text:
-                return True, SSOT_TARGET_BRANCH
-            if "diff --cached --name-only" in text or "show --name-only" in text:
-                return True, _ssot_rel_path("demo.mm")
-            return True, ""
-
-        def fake_sync(clone_arg, branch_arg, mr_text, **kwargs):
-            sync_calls.append((branch_arg, mr_text))
-            return "updated", SSOT_SELFTEST_MR_URL, "описание переписано"
-
-        original_run_git = globals()["_run_git"]
-        original_sync = globals()["_mr_description_sync"]
-        globals()["_run_git"] = fake_run_git
-        globals()["_mr_description_sync"] = fake_sync
-        try:
-            rc_push, out_push = run_ssot(apply=True, push=True, branch=push_branch)
-        finally:
-            globals()["_run_git"] = original_run_git
-            globals()["_mr_description_sync"] = original_sync
-        expect("S19: --push — код 0", rc_push, 0)
-        pushes = [cmd for cmd in captured if "push" in cmd]
-        expect("S19: push выполнен один раз", len(pushes), 1)
-        push_command = pushes[0] if pushes else []
-        options = [
-            part.split("=", 1)[1]
-            for part in push_command
-            if part.startswith("merge_request.description=")
-        ]
-        expect("S19: описание в push-options задано", len(options), 1)
-        description = options[0] if options else ""
-        expect("S19: описание непустое", bool(description.strip()), True)
-        expect("S19: описание без перевода строки", "\n" in description, False)
-        expect(
-            "S19: описание содержит все блоки MR-ssot",
-            [
-                block
-                for block in (
-                    "## Что меняется",
-                    "## Основание",
-                    "## Проверка",
-                    "## Что не меняется",
-                )
-                if block not in description
-            ],
-            [],
-        )
-        expect(
-            "S19: в описании есть ссылка на dochub-MR",
-            SSOT_SELFTEST_MR_URL in description,
-            True,
-        )
-        expect(
-            "S19: заглушка «Полное описание — .ssot/…» больше не используется",
-            "Полное описание —" in description,
+            "S14: demo.mm — снимок не целевой",
+            _ssot_enriched(project, "demo.mm", by_code.get("demo.mm"), criteria),
             False,
         )
         expect(
-            "S19: source-ветка удаляется после мержа",
-            "merge_request.remove_source_branch" in push_command,
-            True,
+            "S14: absent.mm — снимка нет (None)",
+            _ssot_enriched(project, "absent.mm", by_code.get("absent.mm"), criteria),
+            None,
         )
         expect(
-            "S19: сверка описания вызвана после пуша",
-            (len(sync_calls), sync_calls[0][0] if sync_calls else None),
-            (1, push_branch),
-        )
-        expect(
-            "S19: в сверку ушёл тот же рендер, что и в push-options",
-            bool(sync_calls) and _mr_push_option(sync_calls[0][1]) == description,
+            "S14: уровень demo2.mm совпадает",
+            _ssot_level_matches(project, "demo2.mm", by_code.get("demo2.mm"), criteria),
             True,
         )
-
-        # --- S20: «зелёный путь» гейта — `ssot` без `--force` --------------
-        # Фикстура S1–S19 минимальна (только паспорт), поэтому гоняет гейт с
-        # `--force`. Здесь берётся копия реального проекта с пересчитанным
-        # фингерпринтом: паспорт проходит validate, blocking-входы закрыты,
-        # значит гейт обязан пропустить без обхода.
-        green_project = _project_fixture_with_fresh_fingerprint(base, criteria)
-        if green_project is None:
-            skip("S20: ssot без --force (нет данных проекта)")
-        else:
-            try:
-                catalog_g, systems_g = load_catalog(green_project)
-            except YamlError:
-                catalog_g, systems_g = {}, []
-            green_target = None
-            for entry in systems_g:
-                code_g = str(entry.get("code") or "")
-                if not code_g:
-                    continue
-                # Только подтверждённая ИС: черновик проходит validate мягко,
-                # но гейт ssot обязан его блокировать (blocking-входы открыты).
-                if str(entry.get("status") or "").strip().lower() != "confirmed":
-                    continue
-                path_g = passport_path(green_project, entry)
-                if not path_g.exists():
-                    continue
-                if _passport_validate_errors(
-                    green_project, path_g, code_g, entry, criteria, catalog_g
-                ):
-                    continue
-                green_target = (code_g, entry)
-                break
-            if green_target is None:
-                skip("S20: ssot без --force (нет паспорта, проходящего validate)")
-            else:
-                code_g, entry_g = green_target
-                green_clone = base / "green-ssot"
-                schema_src = clone.joinpath(*SSOT_SCHEMA_REL)
-                schema_dst = green_clone.joinpath(*SSOT_SCHEMA_REL)
-                schema_dst.parent.mkdir(parents=True, exist_ok=True)
-                _atomic_write(
-                    schema_dst, schema_src.read_text(encoding="utf-8")
-                )
-                name_g, contour_g = split_is_code(code_g)
-                card_path = green_clone / _ssot_rel_path(code_g)
-                card_path.parent.mkdir(parents=True, exist_ok=True)
-                _atomic_write(
-                    card_path,
-                    f"title: {entry_g.get('name') or code_g}\n"
-                    "severity:\n"
-                    "  type: business-operational\n"
-                    "  method: expert\n",
-                )
-                green_rc, green_out = run_ssot(
-                    is_=code_g,
-                    ssot=str(green_clone),
-                    root=str(green_project),
-                    force=False,
-                )
-                # Проверяется именно гейт: блокировки и записи обхода быть не
-                # должно, а работа после гейта начата (посчитан diff severity).
-                # Код возврата дальше гейта зависит от полноты реестра
-                # (`approve_link` для MR-шаблона) и к гейту не относится.
-                expect(
-                    "S20: ssot без --force проходит гейт (нет блокировки/обхода)",
-                    (
-                        "заблокирован" in green_out,
-                        "гейт валидации обойдён" in green_out,
-                        "изменённых полей" in green_out,
-                        green_rc in (0, 1),
-                    ),
-                    (False, False, True, True),
-                )
-                expect(
-                    "S20: без обхода лог .gate-overrides.log не создаётся",
-                    (
-                        green_project / "is" / code_g / GATE_LOG_FILE
-                    ).exists(),
-                    False,
-                )
     except Exception as exc:  # noqa: BLE001 - диагностика самопроверки
-        expect(f"S1–S19: исключение {type(exc).__name__}: {exc}", False, True)
+        expect(f"S1–S14: исключение {type(exc).__name__}: {exc}", False, True)
     finally:
         shutil.rmtree(base, ignore_errors=True)
-
 
 def _make_recipe(text, name):
     """Строки рецепта make-цели `name` (продолжения через табуляцию).
@@ -11392,6 +11256,191 @@ def _project_makefile_text():
     if not path.is_file():
         return None
     return path.read_text(encoding="utf-8")
+
+
+def _selftest_bootstrap(criteria, expect, skip):
+    """B1–B6: дедлок INFORMATION.yaml, провенанс снимка, не-git репозиторий.
+
+    Свежий проект: `prepare` без снимка SSoT файл не создаёт, а `ssot-import`
+    раньше отказывался писать в несуществующий файл — не работал ни один путь.
+    Здесь проверяется, что `ssot-import` сам собирает каркас, `prepare` не теряет
+    метаданные снимка, а веб-страница вместо git-URL — SKIP, не ошибка.
+    """
+    base = Path(tempfile.mkdtemp(prefix="criticality-bootstrap-"))
+
+    def run(func, args):
+        """Тихий вызов: команды печатают много, проверке нужен код и вывод."""
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            rc = func(args)
+        return rc, buffer.getvalue()
+
+    try:
+        code = "boot.mm"
+        root = base
+        _atomic_write(
+            root / CATALOG_FILE,
+            "version: 1\nproduct: E001\nproduct_name: Test\n"
+            "systems:\n"
+            f"  - code: {code}\n    name: boot\n    contour: mm\n"
+            f"    path: is/{code}\n    asset: ММ\n    team: t006\n",
+        )
+        _atomic_write(root / IS_CONFIG, f"is:\n  {code}:\nssot:\n  url: \"\"\n")
+        (root / "is" / code).mkdir(parents=True, exist_ok=True)
+        payload_path = root / "ssot_get.json"
+        payload = {
+            "group": "information-systems",
+            "id": code,
+            "commit": "deadbeef",
+            "version": 3,
+            "sections": {
+                "base": {
+                    "title": "Boot",
+                    "teamName": "t006",
+                    "severity": {"type": "business-critical"},
+                },
+                "components": {
+                    "components": [
+                        {
+                            "name": "svc",
+                            "gitRepository": "https://git.ecom.tech/e/com/svc.git",
+                        },
+                        {
+                            "name": "redis",
+                            "gitRepository": (
+                                "https://github.com/bitnami/containers"
+                                "/tree/main/bitnami/redis"
+                            ),
+                        },
+                    ]
+                },
+            },
+        }
+        _atomic_write(payload_path, json.dumps(payload, ensure_ascii=False))
+        info_path = root / "is" / code / INFORMATION_FILE
+        expect("B1: INFORMATION.yaml до импорта нет", info_path.exists(), False)
+
+        rc_import, out_import = run(
+            cmd_ssot_import,
+            argparse.Namespace(
+                is_=code, root=str(root), path=None, no_next=True, quiet=True,
+                entity_json=str(payload_path), team_json=None,
+            ),
+        )
+        expect("B1: ssot-import без файла — код 0", rc_import, 0)
+        expect("B1: ssot-import создал INFORMATION.yaml", info_path.exists(), True)
+        expect(
+            "B1: создание каркаса названо в выводе",
+            "Создан каркас" in out_import,
+            True,
+        )
+        info = load_yaml(info_path)
+        snap = info.get(SSOT_SNAPSHOT_SECTION) or {}
+        expect("B2: снимок source: mcp", snap.get("source"), "mcp")
+        expect("B2: commit снимка записан", snap.get("commit"), "deadbeef")
+        expect("B2: version снимка записан", snap.get("version"), 3)
+        expect("B2: imported_at записан", bool(snap.get("imported_at")), True)
+        imported_at = snap.get("imported_at")
+
+        # B3: prepare пересобирает содержимое секций, но провенанс сохраняет.
+        rc_prep, out_prep = run(
+            cmd_prepare,
+            argparse.Namespace(
+                is_=code, root=str(root), path=None, no_next=True, quiet=True,
+                apply=True, no_clone=True, date=None, force_overwrite=False,
+                allow_empty_sections=False, no_backup=True,
+                backup_keep=BACKUP_KEEP_DEFAULT,
+            ),
+        )
+        expect("B3: prepare --apply --no-clone — код 0", rc_prep, 0)
+        info_after = load_yaml(info_path)
+        snap_after = info_after.get(SSOT_SNAPSHOT_SECTION) or {}
+        expect(
+            "B3: prepare сохранил source/commit/version снимка",
+            (
+                snap_after.get("source"),
+                snap_after.get("commit"),
+                snap_after.get("version"),
+            ),
+            ("mcp", "deadbeef", 3),
+        )
+        expect(
+            "B3: prepare не переписал imported_at",
+            snap_after.get("imported_at"),
+            imported_at,
+        )
+        expect(
+            "B3: секции снимка на месте (6 не обязательно: 2 в ответе)",
+            sorted(key for key in snap_after if key in SSOT_FILES),
+            ["base", "components"],
+        )
+
+        # B4: не-git репозиторий — SKIP с WARN, прогон не прерывается.
+        redis_plan = component_plan(
+            root, code,
+            {
+                "name": "redis",
+                "git_repository": (
+                    "https://github.com/bitnami/containers/tree/main/bitnami/redis"
+                ),
+            },
+        )
+        expect("B4: веб-страница → action web_ui", redis_plan["action"], "web_ui")
+        expect(
+            "B4: не-git репозиторий — статус skipped (не error)",
+            apply_component_plan(root, redis_plan, True, False)[0],
+            "skipped",
+        )
+        expect(
+            "B4: prepare не считает не-git ошибкой клонирования",
+            ("Пропущено (не git-репозиторий): 1" in out_prep,
+             "Ошибки клонирования" in out_prep),
+            (True, False),
+        )
+
+        # B5: services — сервис в §2 «Пропущенные», код 0.
+        rc_services, out_services = run(
+            cmd_services,
+            argparse.Namespace(
+                is_=code, root=str(root), path=None, no_next=True, quiet=True,
+                apply=True, no_clone=True, date=None,
+            ),
+        )
+        expect("B5: services — код 0", rc_services, 0)
+        expect(
+            "B5: WARN «не git-репозиторий» назван",
+            "не git-репозиторий" in out_services,
+            True,
+        )
+        findings_text = (root / "is" / code / SERVICE_FINDINGS).read_text(
+            encoding="utf-8"
+        )
+        expect(
+            "B5: не-git сервис в §2 (Пропущенные), а не в ошибках",
+            (
+                "не git-репозиторий" in findings_text,
+                # svc-a без клона — 1 ошибка; redis в ошибки не попал (было бы 2).
+                "ошибок клонирования 2" in out_services,
+            ),
+            (True, False),
+        )
+
+        # B6: next_step свежего проекта ведёт к ssot-import, а не prepare-apply.
+        info_path.unlink()
+        state = collect_state(root, criteria)
+        step = next_step(state)
+        expect(
+            "B6: без INFORMATION.yaml next_step советует ssot-import",
+            (step or {}).get("command"),
+            "criticality.py ssot-import --is <код> --entity-json -",
+        )
+        expect(
+            "B6: подсказка называет MCP ssot_get",
+            "ssot_get" in str((step or {}).get("reason")),
+            True,
+        )
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
 
 
 def _selftest_fix_regressions(criteria, expect, skip):
@@ -11476,7 +11525,7 @@ def _selftest_fix_regressions(criteria, expect, skip):
             shutil.rmtree(docs_root, ignore_errors=True)
 
         # --- F5: плейсхолдер команды вместо кода --------------------------
-        _, team_problem = _load_team_contacts(Path(tempfile.gettempdir()), "T<TODO>")
+        team_problem = _team_code_problem("T<TODO>")
         expect(
             "F5: team = T<TODO> — «команда не задана» и подсказка prepare --apply",
             (
@@ -11806,11 +11855,8 @@ def _selftest_actions(criteria, expect, expect_raises_yaml, skip):
         # когда `severity.type` совпадал, а `severity.confirmation` отставал от
         # `catalog.yaml → approve_link` (перегенерация паспорта → новый тред).
         ssot_root = base / "ssot_project"
-        ssot_card = (
-            ssot_root / SSOT_DEFAULT_DIR / SSOT_ENTITIES_DIR / "demo.mm"
-            / SSOT_BASE_FILE
-        )
-        ssot_card.parent.mkdir(parents=True)
+        ssot_folder = ssot_root / "is" / "demo.mm"
+        ssot_folder.mkdir(parents=True)
         approve = (
             "https://rocketchat.samokat.ru/channel/"
             "Criticality_assessment?msg=confirmed"
@@ -11823,18 +11869,32 @@ def _selftest_actions(criteria, expect, expect_raises_yaml, skip):
         }
 
         def ssot_card_text(severity_type):
-            return (
-                "title: Демо ИС\n"
-                "severity:\n"
-                f"  type: {severity_type}\n"
-                "  addon: contact\n"
-                "  method: target\n"
-                "  confirmation: https://rocketchat.samokat.ru/channel/"
-                "Criticality_assessment?msg=old\n"
-                "lifecycle: production\n"
-            )
+            """Записать снимок SSoT в INFORMATION.yaml (клон не используется)."""
+            snapshot = {
+                "base": {
+                    "title": "Демо ИС",
+                    "severity": {
+                        "type": severity_type,
+                        "addon": "contact",
+                        "method": "target",
+                        "confirmation": (
+                            "https://rocketchat.samokat.ru/channel/"
+                            "Criticality_assessment?msg=old"
+                        ),
+                    },
+                },
+                "source": "mcp",
+            }
+            info = {
+                "schema_version": 1,
+                "is": "demo.mm",
+                "identity": {"code": "demo.mm"},
+                "facts": {},
+                SSOT_SNAPSHOT_SECTION: snapshot,
+            }
+            _atomic_write(ssot_folder / INFORMATION_FILE, dump_yaml(info))
 
-        ssot_card.write_text(ssot_card_text("business-critical"), encoding="utf-8")
+        ssot_card_text("business-critical")
         same_level = ctx_for(ssot_entry, root=ssot_root)["actions"]
         expect(
             "A11: уровень SSoT тот же (confirmation отстаёт) — «не требуется»",
@@ -11867,7 +11927,7 @@ def _selftest_actions(criteria, expect, expect_raises_yaml, skip):
             (False, True),
         )
 
-        ssot_card.write_text(ssot_card_text("business-operational"), encoding="utf-8")
+        ssot_card_text("business-operational")
         mismatch = ctx_for(ssot_entry, root=ssot_root)["actions"]
         expect(
             "A12: уровень SSoT другой и MR нет — честный ⛔ (None)",
@@ -11875,9 +11935,9 @@ def _selftest_actions(criteria, expect, expect_raises_yaml, skip):
             (None, None),
         )
 
-        ssot_card.write_text(ssot_card_text("business-operational"), encoding="utf-8")
+        ssot_card_text("business-operational")
         ssot_mr_url = "https://git.example/ecom/ssot/-/merge_requests/12"
-        ssot_artifact = ssot_root / SSOT_DEFAULT_DIR / SSOT_MR_DIR
+        ssot_artifact = ssot_root / SSOT_MR_DIR
         ssot_artifact.mkdir(parents=True)
         (ssot_artifact / "demo.mm-MR.url").write_text(
             ssot_mr_url + "\n", encoding="utf-8"
@@ -11986,12 +12046,14 @@ def _selftest_handoff_apply(criteria, expect, expect_raises_yaml, skip):
     saved_env = {
         name: os.environ.get(name)
         for name in HANDOFF_TOKEN_ENVS + HANDOFF_USER_ENVS + HANDOFF_URL_ENVS
+        + HANDOFF_THREAD_ENVS
     }
     posts = []
     found = {"id": "", "text": ""}
 
-    def fake_post(base_url, token, user_id, text, channel=None):
-        posts.append((base_url, len(text), channel))
+    def fake_post(base_url, token, user_id, text, channel=None, thread_id=None,
+                  room_id=None):
+        posts.append((base_url, len(text), channel, thread_id, room_id))
         return True, "MSG1", 200, ""
 
     def fake_get(base_url, token, user_id, path, channel=None):
@@ -12196,6 +12258,7 @@ def _selftest_handoff(criteria, expect, skip):
     saved_env = {
         name: os.environ.get(name)
         for name in HANDOFF_TOKEN_ENVS + HANDOFF_USER_ENVS + HANDOFF_URL_ENVS
+        + HANDOFF_THREAD_ENVS
     }
     saved_post = globals().get("_handoff_api_post")
     saved_get = globals().get("_handoff_api_get")
@@ -12381,8 +12444,11 @@ def _selftest_handoff(criteria, expect, skip):
             """Запросы сообщений (по roomId) — без резолва имени канала."""
             return [path for _b, path in search_calls if "roomId=" in path]
 
-        def fake_post(base_url, token, user_id, text, channel=None):
-            calls.append((base_url, token, user_id, len(text), channel))
+        def fake_post(base_url, token, user_id, text, channel=None, thread_id=None,
+                      room_id=None):
+            calls.append(
+                (base_url, token, user_id, len(text), channel, thread_id, room_id)
+            )
             return True, "selftest-msg-id", 200, ""
 
         # Мок REST-поиска: имя канала резолвится в roomId (channels.info), затем
@@ -12554,7 +12620,10 @@ def _selftest_handoff(criteria, expect, skip):
 
         # H12: порядок алиасов REST фиксирован — первый непустой выигрывает.
         def _clear_handoff_env():
-            for name in HANDOFF_TOKEN_ENVS + HANDOFF_USER_ENVS + HANDOFF_URL_ENVS:
+            for name in (
+                HANDOFF_TOKEN_ENVS + HANDOFF_USER_ENVS + HANDOFF_URL_ENVS
+                + HANDOFF_THREAD_ENVS
+            ):
                 os.environ.pop(name, None)
 
         try:
@@ -12881,6 +12950,490 @@ def _selftest_handoff(criteria, expect, skip):
             expect("H20: текст фикстуры без ⛔", missing_again, [])
         finally:
             globals()["resolve_project_root"] = saved_resolve
+
+        # H21–H24: ответ в существующий тред (--thread / HANDOFF_THREAD).
+        # tmid — id сообщения-родителя: REST шлёт roomId+tmid, а
+        # thread_link/approve_link указывают на СОЗДАННЫЙ ответ, не на родителя.
+        globals()["_handoff_api_post"] = fake_post
+        globals()["_handoff_api_get"] = fake_get
+
+        def reset_unpublished():
+            _set_catalog_fields(
+                project, code,
+                {
+                    HANDOFF_STATUS_FIELD: None,
+                    THREAD_LINK_FIELD: None,
+                    APPROVE_LINK_FIELD: None,
+                    HANDOFF_DEADLINE_FIELD: None,
+                    FALLBACK_REASON_FIELD: None,
+                    TRANSPORT_USED_FIELD: None,
+                    HANDOFF_ERROR_FIELD: None,
+                },
+            )
+
+        thread_tmid = "qBecTnTLYSRinr8AB"
+        reset_unpublished()
+        calls.clear()
+        search_calls.clear()
+        rc_thr, out_thr = run(
+            cmd_handoff, send="auto", transport="api", dry_run=False,
+            thread=thread_tmid,
+        )
+        state = entry_now()
+        expect("H21: --thread — код 0", rc_thr, 0)
+        expect(
+            "H21: POST получил roomId + tmid (ответ в тред)",
+            (calls[-1][5], calls[-1][6]) if calls else None,
+            (thread_tmid, "selftest-room"),
+        )
+        expect(
+            "H21: thread_link указывает на созданный ответ, не на родителя",
+            str(state.get(THREAD_LINK_FIELD) or "").endswith("?msg=selftest-msg-id"),
+            True,
+        )
+        expect(
+            "H21: approve_link = ссылка на ответ",
+            str(state.get(APPROVE_LINK_FIELD) or "").endswith("?msg=selftest-msg-id"),
+            True,
+        )
+        expect("H21: в выводе назван тред", thread_tmid in out_thr, True)
+
+        # H22: топ-сообщение с тем же текстом не считается «своим ответом» —
+        # иначе ответ в тред не отправился бы (ключ дедупликации учитывает tmid).
+        reset_unpublished()
+        calls.clear()
+        top_message = {
+            "_id": "top-msg-id", "msg": text_now, "u": {"_id": "selftest-user"},
+        }
+        globals()["_handoff_api_get"] = make_fake_get(messages=[top_message])
+        rc_top, _out_top = run(
+            cmd_handoff, send="auto", transport="api", dry_run=False,
+            thread=thread_tmid,
+        )
+        expect("H22: топ-сообщение не блокирует ответ в тред", len(calls), 1)
+        expect(
+            "H22: ответ ушёл с tmid", calls[-1][5] if calls else None, thread_tmid
+        )
+        expect(
+            "H22: thread_link — новый ответ, а не найденный топ",
+            str(entry_now().get(THREAD_LINK_FIELD) or "").endswith("?msg=selftest-msg-id"),
+            True,
+        )
+
+        # H23: свой ответ с тем же tmid уже есть → повтор не отправляется.
+        reset_unpublished()
+        calls.clear()
+        reply_message = {
+            "_id": "reply-msg-id", "msg": text_now,
+            "u": {"_id": "selftest-user"}, "tmid": thread_tmid,
+        }
+        globals()["_handoff_api_get"] = make_fake_get(messages=[reply_message])
+        rc_reply, _out_reply = run(
+            cmd_handoff, send="auto", transport="api", dry_run=False,
+            thread=thread_tmid,
+        )
+        expect("H23: найден свой ответ — POST не выполнялся", len(calls), 0)
+        expect(
+            "H23: thread_link — найденный ответ",
+            str(entry_now().get(THREAD_LINK_FIELD) or "").endswith("?msg=reply-msg-id"),
+            True,
+        )
+
+        # H24: roomId не резолвится → WARN и фолбэк channel+tmid.
+        reset_unpublished()
+        calls.clear()
+        globals()["_handoff_api_get"] = make_fake_get(resolve=False)
+        rc_notroom, out_notroom = run(
+            cmd_handoff, send="auto", transport="api", dry_run=False,
+            thread=thread_tmid, allow_duplicate_risk=True,
+        )
+        expect("H24: без roomId ответ в тред отправлен (channel+tmid)", rc_notroom, 0)
+        expect(
+            "H24: WARN о недоступном roomId",
+            "WARN" in out_notroom and "channel+tmid" in out_notroom,
+            True,
+        )
+        expect(
+            "H24: POST без roomId, но с tmid",
+            (calls[-1][5], calls[-1][6]) if calls else None,
+            (thread_tmid, None),
+        )
+        expect("H24: в выводе назван тред", thread_tmid in out_notroom, True)
+
+        # H25–H28: --report — публикация РЕЗУЛЬТАТОВ без гейтов MR/⛔/SSoT.
+        # Убираем артефакты MR и подтверждение SSoT: запрос согласования в таком
+        # состоянии блокируется (H26), а отчёт обязан собираться и печататься.
+        reset_unpublished()
+        _set_catalog_fields(project, code, {HANDOFF_MODE_FIELD: None})
+        for pattern in (DOCHUB_MR_URL_DIR, DOCHUB_MR_DIR, SSOT_MR_DIR):
+            for artifact in (project / pattern).glob("*.url"):
+                artifact.unlink()
+        info_file = project / folder_rel / INFORMATION_FILE
+        info_doc = load_yaml(info_file)
+        snap_doc = info_doc.get(SSOT_SNAPSHOT_SECTION) or {}
+        snap_doc.pop("verified", None)
+        info_doc[SSOT_SNAPSHOT_SECTION] = snap_doc
+        _atomic_write(info_file, dump_yaml(info_doc))
+
+        report_info = _load_info_file(project / folder_rel) or {}
+        report_text = _report_text_for_is(
+            project, code, entry_now(), report_info, criteria, _catalog_fx
+        )
+        expect(
+            "H25: отчёт собран без MR и без ⛔",
+            bool(report_text) and "⛔" not in report_text,
+            True,
+        )
+        expect(
+            "H25: разделы отчёта на месте",
+            all(
+                marker in report_text
+                for marker in (
+                    "**Итог:**", "**Участники**", "**Входные значения**",
+                    "**Расчёт**", "**Ссылки**", "**Что дальше**",
+                )
+            ),
+            True,
+        )
+        expect(
+            "H25: MR названы не созданными",
+            (
+                "MR в dochub: не создавался" in report_text,
+                "MR в SSoT: не создавался" in report_text,
+            ),
+            (True, True),
+        )
+        expect(
+            "H25: в отчёте есть E/интервал/score экспресс-расчёта",
+            (
+                "• E = " in report_text,
+                "• Интервал: #" in report_text,
+                "• Score: " in report_text,
+            ),
+            (True, True, True),
+        )
+
+        # H26: --dry-run печатает отчёт целиком и не требует --send; тот же
+        # проект в режиме согласования блокируется незаполненным MR.
+        rc_rep_dry, out_rep_dry = run(
+            cmd_handoff, send=None, transport="api", dry_run=True, report=True,
+        )
+        expect("H26: --report --dry-run без --send — код 0", rc_rep_dry, 0)
+        expect(
+            "H26: текст отчёта напечатан целиком",
+            (
+                "**Оценка критичности ИС" in out_rep_dry,
+                "**Что дальше**" in out_rep_dry,
+            ),
+            (True, True),
+        )
+        rc_appr_dry, out_appr_dry = run(
+            cmd_handoff, send="auto", transport="api", dry_run=True,
+        )
+        expect(
+            "H26: запрос согласования без MR заблокирован",
+            (rc_appr_dry, "Ссылка на MR" in out_appr_dry),
+            (1, True),
+        )
+
+        # H27: отправка отчёта через REST: режим и статус записаны, ссылки
+        # указывают на созданное сообщение, POST ушёл в тред (tmid).
+        calls.clear()
+        search_calls.clear()
+        globals()["_handoff_api_post"] = fake_post
+        globals()["_handoff_api_get"] = make_fake_get(messages=[])
+        rc_rep, out_rep = run(
+            cmd_handoff, send="auto", transport="api", dry_run=False,
+            report=True, thread=thread_tmid,
+        )
+        state = entry_now()
+        expect("H27: --report отправлен — код 0", rc_rep, 0)
+        expect(
+            "H27: handoff_mode: report",
+            state.get(HANDOFF_MODE_FIELD),
+            HANDOFF_MODE_REPORT,
+        )
+        expect(
+            "H27: handoff_status: published",
+            state.get(HANDOFF_STATUS_FIELD),
+            HANDOFF_STATUS_PUBLISHED,
+        )
+        expect(
+            "H27: thread_link/approve_link — созданное сообщение",
+            (
+                str(state.get(THREAD_LINK_FIELD) or "").endswith(
+                    "?msg=selftest-msg-id"
+                ),
+                str(state.get(APPROVE_LINK_FIELD) or "").endswith(
+                    "?msg=selftest-msg-id"
+                ),
+            ),
+            (True, True),
+        )
+        expect(
+            "H27: POST ушёл ответом в тред",
+            calls[-1][5] if calls else None,
+            thread_tmid,
+        )
+        expect(
+            "H27: в выводе сказано, что гейты MR не применялись",
+            "Гейты MR не применялись" in out_rep,
+            True,
+        )
+
+        # H28: дедупликация различает режимы: опубликованный отчёт не мешает
+        # запросу согласования, а повторный отчёт блокируется идемпотентностью.
+        rc_rep_again, out_rep_again = run(
+            cmd_handoff, send="auto", transport="api", dry_run=False,
+            report=True, thread=thread_tmid,
+        )
+        expect(
+            "H28: повторный отчёт — идемпотентность",
+            (rc_rep_again, "уже опубликовано" in out_rep_again),
+            (1, True),
+        )
+        _rc_appr, out_appr_after = run(
+            cmd_handoff, send="auto", transport="api", dry_run=True,
+        )
+        expect(
+            "H28: опубликованный отчёт не блокирует согласование",
+            "уже опубликовано" in out_appr_after,
+            False,
+        )
+        # H29–H35: тред отчёта — родитель (top-level) + ответы с детализацией.
+        # Родитель краток (итог, участники, основные ссылки), детализация — в
+        # ответах: канал не читает простыню, а тред остаётся одним сообщением.
+        _set_catalog_fields(project, code, {HANDOFF_MODE_FIELD: None})
+        thread_info = _load_info_file(project / folder_rel) or {}
+        dochub_mr_override = "https://git.example/mr/dochub-1"
+        ssot_mr_override = "https://git.example/mr/ssot-1"
+        texts = _report_thread_texts(
+            project, code, entry_now(), thread_info, criteria, _catalog_fx,
+            dochub_mr_url=dochub_mr_override, ssot_mr_url=ssot_mr_override,
+        )
+        expect(
+            "H29: тред собран — родитель и 3 ответа",
+            bool(texts) and len(texts[1]),
+            3,
+        )
+        parent_text, reply_texts = texts if texts else ("", [])
+        expect(
+            "H29: родитель — итог, участники, ссылки, приглашение к детализации",
+            all(
+                marker in parent_text
+                for marker in (
+                    "**Итог:**", "**Участники**", "**Ссылки**",
+                    "Детализация — в ответах ниже.",
+                )
+            ),
+            True,
+        )
+        expect(
+            "H29: родитель содержит MR-ссылки из флагов",
+            (
+                dochub_mr_override in parent_text,
+                ssot_mr_override in parent_text,
+            ),
+            (True, True),
+        )
+        expect(
+            "H29: ответ 1 — входы с провенансом",
+            (
+                "**Входные значения и источники**" in reply_texts[0],
+                "`peak_hour_load`" in reply_texts[0],
+            ),
+            (True, True),
+        )
+        expect(
+            "H29: ответ 2 — расчёт",
+            (
+                "**Расчёт**" in reply_texts[1],
+                "• E = " in reply_texts[1],
+            ),
+            (True, True),
+        )
+        expect(
+            "H29: ответ 3 — артефакты без дубля карточки SSoT",
+            (
+                "**Артефакты и страницы**" in reply_texts[2],
+                "• SSoT:" not in reply_texts[2],
+                "CRITICALITY.md" in reply_texts[2],
+            ),
+            (True, True, True),
+        )
+
+        # H30: --thread-new --dry-run печатает родителя и все ответы, не отправляя.
+        calls.clear()
+        rc_new_dry, out_new_dry = run(
+            cmd_handoff, send=None, transport="api", dry_run=True,
+            report=True, thread_new=True,
+        )
+        expect("H30: --thread-new --dry-run — код 0", rc_new_dry, 0)
+        expect(
+            "H30: dry-run печатает родителя и ответы",
+            (
+                "--- родитель (top-level) ---" in out_new_dry,
+                "--- ответ 3 (tmid = id родителя) ---" in out_new_dry,
+            ),
+            (True, True),
+        )
+        expect("H30: dry-run ничего не отправлял", len(calls), 0)
+
+        # H31: отправка треда — родитель top-level, ответы с tmid родителя;
+        # thread_link/approve_link = РОДИТЕЛЬ, handoff_thread: true.
+        seq = []
+
+        def fake_post_thread(base_url, token, user_id, text, channel=None,
+                             thread_id=None, room_id=None):
+            seq.append((len(text), thread_id, room_id))
+            if thread_id is None:
+                return True, "parent-msg-id", 200, ""
+            return True, f"reply-msg-{len(seq)}", 200, ""
+
+        globals()["_handoff_api_post"] = fake_post_thread
+        globals()["_handoff_api_get"] = make_fake_get(messages=[])
+        rc_new, out_new = run(
+            cmd_handoff, send="auto", transport="api", dry_run=False,
+            report=True, thread_new=True,
+        )
+        state = entry_now()
+        expect("H31: тред опубликован — код 0", rc_new, 0)
+        expect("H31: POST — родитель + 3 ответа", len(seq), 4)
+        expect("H31: первый POST — top-level (без tmid)", seq[0][1], None)
+        expect(
+            "H31: ответы ушли в tmid родителя",
+            [item[1] for item in seq[1:]],
+            ["parent-msg-id", "parent-msg-id", "parent-msg-id"],
+        )
+        expect(
+            "H31: ответы ушли с roomId канала",
+            [item[2] for item in seq[1:]],
+            ["selftest-room", "selftest-room", "selftest-room"],
+        )
+        expect(
+            "H31: thread_link/approve_link — РОДИТЕЛЬ",
+            (
+                str(state.get(THREAD_LINK_FIELD) or "").endswith(
+                    "?msg=parent-msg-id"
+                ),
+                str(state.get(APPROVE_LINK_FIELD) or "").endswith(
+                    "?msg=parent-msg-id"
+                ),
+            ),
+            (True, True),
+        )
+        expect(
+            "H31: handoff_mode: report и handoff_thread: true",
+            (state.get(HANDOFF_MODE_FIELD), state.get(HANDOFF_THREAD_FIELD)),
+            (HANDOFF_MODE_REPORT, True),
+        )
+        expect(
+            "H31: в выводе назван тред",
+            "Тред отчёта опубликован" in out_new,
+            True,
+        )
+
+        # H32: повторный --thread-new не создаёт второй родитель.
+        seq.clear()
+        rc_new_again, out_new_again = run(
+            cmd_handoff, send="auto", transport="api", dry_run=False,
+            report=True, thread_new=True,
+        )
+        expect(
+            "H32: повторный --thread-new — идемпотентность",
+            (
+                rc_new_again,
+                "уже опубликовано" in out_new_again,
+                len(seq),
+            ),
+            (1, True, 0),
+        )
+
+        # H33: --update-parent правит родителя (chat.update), не создавая новый
+        # тред: SSoT-MR появляется позже и подставляется в уже отправленное.
+        updates = []
+
+        def fake_update(base_url, token, user_id, room_id, message_id, text):
+            updates.append((room_id, message_id, text))
+            return True, ""
+
+        saved_update = globals().get("_handoff_api_update")
+        globals()["_handoff_api_update"] = fake_update
+        seq.clear()
+        rc_upd, out_upd = run(
+            cmd_handoff, send="auto", transport="api", dry_run=False,
+            report=True, update_parent=True,
+            ssot_mr_url="https://git.example/mr/ssot-2",
+        )
+        expect("H33: --update-parent — код 0", rc_upd, 0)
+        expect("H33: chat.update вызван один раз", len(updates), 1)
+        expect(
+            "H33: chat.update правит родителя в roomId",
+            (updates[0][0], updates[0][1]) if updates else None,
+            ("selftest-room", "parent-msg-id"),
+        )
+        expect(
+            "H33: новая SSoT-ссылка попала в родителя",
+            "ssot-2" in updates[0][2] if updates else False,
+            True,
+        )
+        expect("H33: новый POST не создавался", len(seq), 0)
+        expect(
+            "H33: thread_link не изменился",
+            str(entry_now().get(THREAD_LINK_FIELD) or "").endswith(
+                "?msg=parent-msg-id"
+            ),
+            True,
+        )
+
+        # H34: --update-parent без опубликованного треда — отказ с подсказкой.
+        _set_catalog_fields(
+            project, code,
+            {THREAD_LINK_FIELD: None, APPROVE_LINK_FIELD: None},
+        )
+        rc_upd_none, out_upd_none = run(
+            cmd_handoff, send="auto", transport="api", dry_run=False,
+            report=True, update_parent=True,
+        )
+        expect(
+            "H34: --update-parent без треда — отказ с подсказкой",
+            (
+                rc_upd_none,
+                "требует опубликованного треда" in out_upd_none,
+            ),
+            (1, True),
+        )
+        globals()["_handoff_api_update"] = saved_update
+
+        # H35: несовместимые комбинации флагов отвергаются до сети.
+        rc_bad, out_bad = run(
+            cmd_handoff, send="auto", transport="api", dry_run=True,
+            thread_new=True,
+        )
+        expect(
+            "H35: --thread-new без --report — код 2",
+            (rc_bad, "--report" in out_bad),
+            (2, True),
+        )
+        rc_both, out_both = run(
+            cmd_handoff, send="auto", transport="api", dry_run=True,
+            report=True, thread_new=True, update_parent=True,
+        )
+        expect(
+            "H35: --thread-new + --update-parent — код 2",
+            (rc_both, "взаимоисключающи" in out_both),
+            (2, True),
+        )
+        rc_thr, out_thr = run(
+            cmd_handoff, send="auto", transport="api", dry_run=True,
+            report=True, thread_new=True, thread=thread_tmid,
+        )
+        expect(
+            "H35: --thread-new + --thread — код 2",
+            (rc_thr, "несовместим" in out_thr),
+            (2, True),
+        )
+
     finally:
         globals()["_handoff_api_post"] = saved_post
         globals()["_handoff_api_get"] = saved_get
@@ -13129,6 +13682,16 @@ def _handoff_selftest_fixture(base):
             "object_sla": {"value": 120, "status": "confirmed", "source": source},
         },
         "facts": {},
+        # Снимок SSoT: этап SSoT пройден, MR записан и проверен — иначе гейт
+        # handoff заблокирует отправку (ssot_snapshot.verified.matched).
+        SSOT_SNAPSHOT_SECTION: {
+            "base": {
+                "title": "Синтетическая ИС самопроверки",
+                "severity": {"type": "business-critical", "method": "target"},
+            },
+            "source": "mcp",
+            "verified": {"matched": True, "ref": "master"},
+        },
     }
     _atomic_write(folder / INFORMATION_FILE, dump_yaml(info))
     passport = {
@@ -13203,6 +13766,30 @@ def _run_selftest(criteria):
         skips += 1
         skip_reasons.append(label)
         return None
+
+    def seed_ssot(root_dir, code, sections, commit="deadbeef"):
+        """Снимок карточки ИС в INFORMATION.yaml — то, что пишет ssot-import."""
+        root_dir = Path(root_dir)
+        rel, _legacy = is_layout(root_dir, code)
+        path = root_dir / rel / INFORMATION_FILE
+        text = (
+            path.read_text(encoding="utf-8")
+            if path.exists()
+            else f"schema_version: 1\nis: {code}\n"
+        )
+        snapshot = dict(sections)
+        snapshot.setdefault("source", "mcp")
+        snapshot.setdefault("commit", commit)
+        snapshot.setdefault("imported_at", "2026-11-24T00:00:00Z")
+        _atomic_write(
+            path,
+            _splice_top_level_section(
+                text,
+                SSOT_SNAPSHOT_SECTION,
+                f"{SSOT_SNAPSHOT_SECTION}:\n" + _dump_block(snapshot, 2),
+            ),
+        )
+        return path
 
     def expect_raises_incomplete(label, func, expected_missing):
         nonlocal checks
@@ -14256,14 +14843,14 @@ def _run_selftest(criteria):
         "make init",
     )
     expect(
-        "next_step: нет ssot/ — команда клонирования (prepare-apply)",
+        "next_step: нет снимка SSoT — ssot-import из MCP",
         (next_step(next_state(has_ssot=False)) or {}).get("command"),
-        "make prepare-apply",
+        "criticality.py ssot-import --is <код> --entity-json -",
     )
     expect(
-        "next_step: нет INFORMATION.yaml",
+        "next_step: нет INFORMATION.yaml — советует ssot-import",
         (next_step(next_state(has_information=False)) or {}).get("command"),
-        "make prepare-apply",
+        "criticality.py ssot-import --is <код> --entity-json -",
     )
     expect(
         "next_step: BLOCKED без RESEARCH-PLAN.md",
@@ -14387,36 +14974,36 @@ def _run_selftest(criteria):
         )
     ) or {}
     expect(
-        "next_step: опубликован в dochub, SSoT не обогащён → ssot",
+        "next_step: опубликован в dochub, SSoT не обогащён → ssot-plan",
         ssot_step.get("command"),
-        "make ssot IS=x.mm TASK=<key>",
+        "criticality.py ssot-plan --is x.mm",
     )
     expect(
-        "next_step: причина ssot называет ssot-apply",
-        "ssot-apply" in str(ssot_step.get("reason")),
+        "next_step: причина ssot называет MCP-цепочку",
+        "ssot-plan" in str(ssot_step.get("reason"))
+        and "ssot_form_save" in str(ssot_step.get("reason")),
         True,
     )
     expect(
-        "next_step: причина ssot называет неподготовленное описание MR",
-        ".ssot/<код>-MR.md" in str(ssot_step.get("reason")),
+        "next_step: причина ssot называет неподготовленный план",
+        ".ssot/<код>-apply-plan.json" in str(ssot_step.get("reason")),
         True,
     )
     expect(
-        "next_step: ssot без ссылки на dochub-MR — причина называет "
-        ".publish/<код>-MR.url",
+        "next_step: план SSoT не требует ссылку на dochub-MR",
         ".publish/<код>-MR.url"
         in str(
             (
                 next_step(
                     next_state(
                         passport_validated=True, passport_published=True,
-                        ssot_enriched=False, passport_mr_url="",
+                        ssot_enriched=False,
                     )
                 )
                 or {}
             ).get("reason")
         ),
-        True,
+        False,
     )
     handoff_step = next_step(
         next_state(
@@ -14436,8 +15023,8 @@ def _run_selftest(criteria):
         True,
     )
     expect(
-        "next_step: handoff не советует make ssot повторно",
-        "make ssot" in str(handoff_step.get("command")),
+        "next_step: handoff не советует ssot-plan повторно",
+        "ssot-plan" in str(handoff_step.get("command")),
         False,
     )
     expect(
@@ -14490,19 +15077,19 @@ def _run_selftest(criteria):
         )
     ) or {}
     expect(
-        "next_step: клона SSoT нет — handoff НЕ советуется (этап SSoT не пройден)",
+        "next_step: снимка SSoT нет — handoff НЕ советуется (этап не пройден)",
         no_ssot_handoff.get("command"),
-        "make prepare-apply IS=x.mm",
+        "criticality.py ssot-import --is x.mm --entity-json -",
     )
     expect(
-        "next_step: клона SSoT нет — причина называет клон, --ssot и незакрытый SSoT",
-        "клон SSoT не найден" in str(no_ssot_handoff.get("reason"))
-        and "--ssot" in str(no_ssot_handoff.get("reason"))
+        "next_step: снимка SSoT нет — причина называет ssot_get и этап SSoT",
+        "ssot_get" in str(no_ssot_handoff.get("reason"))
+        and "ssot-import" in str(no_ssot_handoff.get("reason"))
         and "этап SSoT не выполнен" in str(no_ssot_handoff.get("reason")),
         True,
     )
     expect(
-        "next_step: нет клона SSoT — не блокирует publish",
+        "next_step: нет снимка SSoT — не блокирует publish",
         (
             next_step(
                 next_state(
@@ -15953,6 +16540,15 @@ def _run_selftest(criteria):
             {"name": "svc-a", "description": "A"},
             {"name": "svc-b", "description": "B"},
         ]
+        # Снимок карточки ИС (ssot-import): без components.yaml — секция
+        # отсутствует в источнике, prepare сохраняет прежнюю версию.
+        prepare_snapshot = {
+            "base": {"title": "Selftest", "team": "T100"},
+            "resources": {"sites": ["dc1"]},
+            "duty": {"onCallSchedule": [{"team": "T100"}]},
+            "links": {"links": {"wiki": "https://example.invalid"}},
+            "roles": {"roles": [{"name": "owner"}]},
+        }
         fixture_info = {
             "schema_version": 1,
             "is": "test.mm",
@@ -16005,31 +16601,24 @@ def _run_selftest(criteria):
 
         sha_before = prepare_sha1()
 
-        # 19.1 нет ssot/ → отказ, ненулевой код, файл цел, бэкапа нет.
+        # 19.1 нет снимка SSoT → отказ, ненулевой код, файл цел, бэкапа нет.
         rc_no_ssot, out_no_ssot = run_prepare()
-        expect("prepare: нет ssot/ — ненулевой код", rc_no_ssot != 0, True)
+        expect("prepare: нет снимка SSoT — ненулевой код", rc_no_ssot != 0, True)
         expect(
-            "prepare: нет ssot/ — сообщение",
-            "нет клона SSoT (ssot/) — данные ИС не обновлены" in out_no_ssot,
+            "prepare: нет снимка SSoT — сообщение",
+            "нет данных SSoT — ИС test.mm не импортирована" in out_no_ssot
+            and "ssot-import" in out_no_ssot,
             True,
         )
         expect(
-            "prepare: нет ssot/ — INFORMATION.yaml не тронут",
+            "prepare: нет снимка SSoT — INFORMATION.yaml не тронут",
             prepare_sha1(),
             sha_before,
         )
-        expect("prepare: нет ssot/ — бэкап не создан", len(prepare_backups()), 0)
+        expect("prepare: нет снимка SSoT — бэкап не создан", len(prepare_backups()), 0)
 
-        # SSoT без components.yaml: секция отсутствует в источнике.
-        ssot_is = prepare_root / SSOT_IS_ROOT / "test.mm"
-        ssot_is.mkdir(parents=True, exist_ok=True)
-        _atomic_write(ssot_is / "base.yaml", "title: Selftest\nteam: T100\n")
-        _atomic_write(ssot_is / "resources.yaml", "sites:\n  - dc1\n")
-        _atomic_write(ssot_is / "duty.yaml", "onCallSchedule:\n  - team: T100\n")
-        _atomic_write(
-            ssot_is / "links.yaml", "links:\n  wiki: https://example.invalid\n"
-        )
-        _atomic_write(ssot_is / "roles.yaml", "roles:\n  - name: owner\n")
+        # Снимок без components: секция отсутствует в источнике.
+        seed_ssot(prepare_root, "test.mm", prepare_snapshot)
 
         # 19.2 секция отсутствует в SSoT → сохранена прежняя версия + WARN.
         rc_preserved, out_preserved = run_prepare()
@@ -16067,6 +16656,7 @@ def _run_selftest(criteria):
 
         # 19.5 dry-run сообщает, какие секции были бы сохранены.
         _atomic_write(prepare_info, dump_yaml(fixture_info))
+        seed_ssot(prepare_root, "test.mm", prepare_snapshot)
         rc_dry_prepare, out_dry_prepare = run_prepare(apply=False)
         expect("prepare: dry-run — код 0", rc_dry_prepare, 0)
         expect(
@@ -16171,7 +16761,7 @@ def _run_selftest(criteria):
         (
             "нет INFORMATION.yaml",
             state_with(has_information=False),
-            "make prepare-apply",
+            "criticality.py ssot-import --is <код> --entity-json -",
             {"has_information": True},
         ),
         (
@@ -16263,7 +16853,7 @@ def _run_selftest(criteria):
                 has_passport=True, passport_validated=True,
                 passport_published=True, ssot_enriched=False,
             ),
-            "make ssot IS=test.mm TASK=<key>",
+            "criticality.py ssot-plan --is test.mm",
             {"ssot_enriched": True},
         ),
         (
@@ -16308,19 +16898,19 @@ def _run_selftest(criteria):
         state_with(has_ssot=False, has_passport=True, passport_validated=True)
     )
     expect(
-        "next_step: нет ssot — команда make prepare-apply (клон)",
+        "next_step: нет ssot — команда ssot-import",
         no_ssot_step["command"],
-        "make prepare-apply IS=test.mm",
+        "criticality.py ssot-import --is test.mm --entity-json -",
     )
     expect(
-        "next_step: нет ssot — причина про SSoT",
-        "клон SSoT не найден" in no_ssot_step["reason"],
+        "next_step: нет ssot — причина про снимок SSoT",
+        "снимка карточки нет" in no_ssot_step["reason"],
         True,
     )
     expect(
-        "next_step: нет ssot — причина называет prepare-apply и --ssot",
-        "prepare-apply" in no_ssot_step["reason"]
-        and "--ssot" in no_ssot_step["reason"],
+        "next_step: нет ssot — причина называет ssot_get и ssot-import",
+        "ssot_get" in no_ssot_step["reason"]
+        and "ssot-import" in no_ssot_step["reason"],
         True,
     )
     expect(
@@ -17163,7 +17753,7 @@ def _run_selftest(criteria):
                     "merged",
                 )
                 expect(
-                    "next_step: смерженный паспорт — публикацию не советуем",
+                    "next_step: смерженный паспорт — ssot-plan, не публикация",
                     (
                         next_step(
                             next_state(
@@ -17174,7 +17764,7 @@ def _run_selftest(criteria):
                         )
                         or {}
                     ).get("command"),
-                    "make ssot IS=x.mm TASK=<key>",
+                    "criticality.py ssot-plan --is x.mm",
                 )
             # ветка MR без артефакта: паспорт убран из master, ветка запушена
             branch_name = "feature/E001-1"
@@ -17348,9 +17938,24 @@ def _run_selftest(criteria):
             False,
         )
         expect(
-            "pipeline: нет INFORMATION.yaml — make prepare-apply",
+            "pipeline: нет INFORMATION.yaml — советует ssot-import (не prepare)",
             pipeline_next(),
-            "make prepare-apply",
+            "criticality.py ssot-import --is <код> --entity-json -",
+        )
+        # Снимок карточки ИС — его пишет ssot-import; prepare читает только его.
+        # Каталог ssot/ выше остаётся маркером клона для этапа записи ssot
+        # (next_step → has_ssot), данные из него prepare не берёт.
+        seed_ssot(
+            pipeline_root,
+            "test.mm",
+            {
+                "base": {"title": "Selftest", "team": "T100"},
+                "components": {"components": [{"name": "svc-a"}]},
+                "resources": {"sites": ["dc1"]},
+                "duty": {"onCallSchedule": [{"team": "T100"}]},
+                "links": {"links": {"wiki": "https://example.invalid"}},
+                "roles": {"roles": [{"name": "owner"}]},
+            },
         )
         run_quiet(cmd_prepare, prepare_args(root=str(pipeline_root)))
         expect(
@@ -17952,6 +18557,7 @@ def _run_selftest(criteria):
         prepare_comment_ssot = comment_root / SSOT_IS_ROOT / "test.mm"
         prepare_comment_ssot.mkdir(parents=True, exist_ok=True)
         _atomic_write(prepare_comment_ssot / "base.yaml", "title: Selftest\n")
+        seed_ssot(comment_root, "test.mm", {"base": {"title": "Selftest"}})
         _atomic_write(
             comment_root / IS_CONFIG, "is:\n  test.mm:\nssot:\n  url: \"\"\n"
         )
@@ -18868,6 +19474,19 @@ def _run_selftest(criteria):
             "  - name: api-gateway\n"
             "    lifecycle: production\n",
         )
+        seed_ssot(
+            collect_root,
+            "test.mm",
+            {
+                "base": {"title": "Selftest"},
+                "components": {
+                    "components": [
+                        {"name": "legacy-gateway", "lifecycle": "Closed"},
+                        {"name": "api-gateway", "lifecycle": "production"},
+                    ]
+                },
+            },
+        )
         collect_buffer = io.StringIO()
         with contextlib.redirect_stdout(collect_buffer):
             collect_rc = cmd_collect(
@@ -19144,7 +19763,8 @@ def _run_selftest(criteria):
         expect("N6: ИС нет в SSoT — код 1", guard_rc, 1)
         expect(
             "N6: ИС нет в SSoT — сообщение",
-            "ИС typo.mm не найдена в SSoT (INFORMATION.yaml не создан)" in guard_out,
+            "нет данных SSoT — ИС typo.mm не импортирована" in guard_out
+            and "ssot-import" in guard_out,
             True,
         )
         expect(
@@ -19163,7 +19783,7 @@ def _run_selftest(criteria):
             (True, True),
         )
 
-        # N3 CLI: недопустимая схема → код 1, файл не создан, git не вызван.
+        # N3 CLI: недопустимая схема → код 1, файл не перезаписан, git не вызван.
         _atomic_write(
             prepare_guard_root / SSOT_IS_ROOT / "typo.mm" / "base.yaml",
             "title: Typo\n",
@@ -19172,6 +19792,23 @@ def _run_selftest(criteria):
             prepare_guard_root / SSOT_IS_ROOT / "typo.mm" / "components.yaml",
             "components:\n  - name: legacy\n    gitRepository: file:///srv/git/legacy.git\n",
         )
+        seed_ssot(
+            prepare_guard_root,
+            "typo.mm",
+            {
+                "base": {"title": "Typo"},
+                "components": {
+                    "components": [
+                        {
+                            "name": "legacy",
+                            "gitRepository": "file:///srv/git/legacy.git",
+                        }
+                    ]
+                },
+            },
+        )
+        guard_info = guard_folder / INFORMATION_FILE
+        schema_before = guard_info.read_text(encoding="utf-8")
         schema_buffer = io.StringIO()
         with contextlib.redirect_stdout(schema_buffer):
             schema_rc = cmd_prepare(guard_args())
@@ -19183,9 +19820,9 @@ def _run_selftest(criteria):
             True,
         )
         expect(
-            "N3: prepare не создал INFORMATION.yaml при недопустимой схеме",
-            (guard_folder / INFORMATION_FILE).exists(),
-            False,
+            "N3: prepare не перезаписал INFORMATION.yaml при недопустимой схеме",
+            guard_info.read_text(encoding="utf-8"),
+            schema_before,
         )
     except Exception as exc:  # noqa: BLE001 - диагностика самопроверки
         failures.append(f"N6/N3: исключение {type(exc).__name__}: {exc}")
@@ -19276,6 +19913,13 @@ def _run_selftest(criteria):
         _selftest_ssot(criteria, expect, expect_raises_yaml, skip)
     except Exception as exc:  # noqa: BLE001 - диагностика самопроверки
         failures.append(f"S1–S12: исключение {type(exc).__name__}: {exc}")
+
+    # 36.10a B1–B6: свежий проект — ssot-import создаёт INFORMATION.yaml,
+    #       prepare сохраняет провенанс снимка, не-git репозиторий — SKIP.
+    try:
+        _selftest_bootstrap(criteria, expect, skip)
+    except Exception as exc:  # noqa: BLE001 - диагностика самопроверки
+        failures.append(f"B1–B6: исключение {type(exc).__name__}: {exc}")
 
     # 36.11 G1–G6: гейт внешних изменений (publish/ssot) и гейт публикации.
     try:
@@ -20398,19 +21042,22 @@ def _run_selftest(criteria):
             "is:\n"
             "  opercrm.smkt: null\n",
         )
+        team_payload = {
+            "code": "t006",
+            "groups": [
+                {"name": "cto", "members": ["vzharkov"]},
+                {"name": "ta", "members": ["DKozlov", "dkozlov"]},
+                {"name": "tl", "members": ["ipilyaev"]},
+                {"name": "sa", "members": ["tkolpakov"]},
+            ],
+            "memberCount": 4,
+            "groupCount": 4,
+            "commit": "deadbeef",
+            "mirror": "ssot",
+        }
+        team_json_path = contacts_root / "team-t006.json"
         _atomic_write(
-            contacts_root / SSOT_TEAMS_ROOT / "t006" / "team.yaml",
-            "groups:\n"
-            "  - name: cto\n"
-            "    members: [vzharkov]\n"
-            "  - name: ta\n"
-            "    members:\n"
-            "      - DKozlov\n"
-            "      - dkozlov\n"
-            "  - name: tl\n"
-            "    members: [ipilyaev]\n"
-            "  - name: sa\n"
-            "    members: [tkolpakov]\n",
+            team_json_path, json.dumps(team_payload, ensure_ascii=False) + "\n"
         )
         _atomic_write(
             contacts_root / contacts_info_rel / INFORMATION_FILE,
@@ -20434,16 +21081,20 @@ def _run_selftest(criteria):
             "      source: manual\n"
             "      status: confirmed\n",
         )
-        _atomic_write(
-            contacts_root / SSOT_IS_ROOT / "opercrm.smkt" / "base.yaml",
-            "title: Операционный CRM CМКТ\n"
-            "team: T006\n"
-            "severity:\n"
-            "  type: business-critical\n",
+        seed_ssot(
+            contacts_root,
+            "opercrm.smkt",
+            {
+                "base": {
+                    "title": "Операционный CRM CМКТ",
+                    "team": "T006",
+                    "severity": {"type": "business-critical"},
+                }
+            },
         )
 
-        contacts, contacts_problem = _load_team_contacts(contacts_root, "t006")
-        expect("contacts: team.yaml прочитан", contacts_problem, None)
+        contacts, contacts_problem = _team_contacts_from_payload(team_payload, "t006")
+        expect("contacts: ответ ssot_team разобран", contacts_problem, None)
         expect(
             "contacts: группы разобраны (регистр, дубли, порядок)",
             (contacts or {}).get("groups"),
@@ -20460,27 +21111,26 @@ def _run_selftest(criteria):
             {"type": "ssot", "ref": "entities/teams/t006/team.yaml"},
         )
 
-        missing_contacts, missing_problem = _load_team_contacts(contacts_root, "t999")
-        expect("contacts: нет team.yaml — contacts None", missing_contacts, None)
+        missing_contacts, missing_problem = _team_contacts_from_payload(
+            team_payload, "t999"
+        )
+        expect("contacts: чужая команда в ответе — contacts None", missing_contacts, None)
         expect(
-            "contacts: нет team.yaml — ошибка без исключения",
-            "не найдена в SSoT" in (missing_problem or {}).get("message", ""),
+            "contacts: чужая команда в ответе — ошибка без исключения",
+            "а запрошена" in (missing_problem or {}).get("message", ""),
             True,
         )
 
-        no_ssot_root = Path(tempfile.mkdtemp(prefix="criticality-nossot-"))
-        try:
-            _, no_ssot_problem = _load_team_contacts(no_ssot_root, "t006")
-            expect(
-                "contacts: нет ssot/ — ошибка с подсказкой make prepare",
-                (
-                    "нет клона SSoT" in (no_ssot_problem or {}).get("message", ""),
-                    "make prepare" in (no_ssot_problem or {}).get("hint", ""),
-                ),
-                (True, True),
-            )
-        finally:
-            shutil.rmtree(no_ssot_root, ignore_errors=True)
+        broken_contacts, broken_problem = _team_contacts_from_payload(
+            {"code": "t006", "groups": "ta: [dkozlov]"}, "t006"
+        )
+        expect("contacts: groups не список — contacts None", broken_contacts, None)
+        expect(
+            "contacts: groups не список — ошибка называет ключ",
+            "ключ 'groups' должен быть списком"
+            in (broken_problem or {}).get("message", ""),
+            True,
+        )
 
         contacts_info = load_yaml(contacts_root / contacts_info_rel / INFORMATION_FILE)
         contacts_info["contacts"] = contacts
@@ -20611,7 +21261,10 @@ def _run_selftest(criteria):
         before_text = info_path.read_text(encoding="utf-8")
         rc_contacts_apply, out_contacts_apply = quiet_run(
             cmd_contacts,
-            argparse.Namespace(is_="opercrm.smkt", apply=True, json=False, **contacts_common),
+            argparse.Namespace(
+                is_="opercrm.smkt", apply=True, json=False,
+                team_json=str(team_json_path), **contacts_common,
+            ),
         )
         after_text = info_path.read_text(encoding="utf-8")
         after_info = load_yaml(info_path)
@@ -20641,7 +21294,10 @@ def _run_selftest(criteria):
         )
         rc_contacts_again, _out_contacts_again = quiet_run(
             cmd_contacts,
-            argparse.Namespace(is_="opercrm.smkt", apply=True, json=False, **contacts_common),
+            argparse.Namespace(
+                is_="opercrm.smkt", apply=True, json=False,
+                team_json=str(team_json_path), **contacts_common,
+            ),
         )
         expect("contacts: повторный --apply — код 0", rc_contacts_again, 0)
         expect(
@@ -20652,7 +21308,10 @@ def _run_selftest(criteria):
 
         rc_contacts_json, out_contacts_json = quiet_run(
             cmd_contacts,
-            argparse.Namespace(is_="opercrm.smkt", apply=False, json=True, **contacts_common),
+            argparse.Namespace(
+                is_="opercrm.smkt", apply=False, json=True,
+                team_json=str(team_json_path), **contacts_common,
+            ),
         )
         try:
             contacts_payload = json.loads(out_contacts_json)
@@ -20686,7 +21345,7 @@ def _run_selftest(criteria):
         prepared_text = info_path.read_text(encoding="utf-8")
         expect("contacts: prepare — код 0", rc_prepare_contacts, 0)
         expect(
-            "contacts: prepare заполнил contacts из team.yaml",
+            "contacts: prepare сохранил contacts (ростер не затирается)",
             load_yaml(info_path).get("contacts", {}).get("groups", {}).get("ta"),
             ["dkozlov"],
         )
@@ -20742,17 +21401,26 @@ def _run_selftest(criteria):
                 "    extra_criteria: []\n",
             )
             _atomic_write(bad_root / IS_CONFIG, f"is:\n  {bad_code}: null\n")
+            bad_team_payload = {
+                "code": "t666",
+                "groups": [
+                    {
+                        "name": "ta",
+                        "members": [
+                            "x] @here",
+                            "a\n* TL - @all",
+                            "../../etc/passwd",
+                            "Good.Login",
+                        ],
+                    },
+                    {"name": "tl", "members": ["all"]},
+                ],
+                "commit": "deadbeef",
+            }
+            bad_team_json = bad_root / "team-t666.json"
             _atomic_write(
-                bad_root / SSOT_TEAMS_ROOT / "t666" / "team.yaml",
-                "groups:\n"
-                "  - name: ta\n"
-                "    members:\n"
-                '      - "x] @here"\n'
-                '      - "a\\n* TL - @all"\n'
-                '      - "../../etc/passwd"\n'
-                "      - Good.Login\n"
-                "  - name: tl\n"
-                "    members: [all]\n",
+                bad_team_json,
+                json.dumps(bad_team_payload, ensure_ascii=False) + "\n",
             )
             bad_before = (
                 "is: bad.smkt\n"
@@ -20771,16 +21439,22 @@ def _run_selftest(criteria):
                 "      status: confirmed\n"
             )
             _atomic_write(bad_root / bad_info_rel / INFORMATION_FILE, bad_before)
-            _atomic_write(
-                bad_root / SSOT_IS_ROOT / bad_code / "base.yaml",
-                "title: Bad\n"
-                "team: T666\n"
-                "severity:\n"
-                "  type: business-critical\n",
+            seed_ssot(
+                bad_root,
+                bad_code,
+                {
+                    "base": {
+                        "title": "Bad",
+                        "team": "T666",
+                        "severity": {"type": "business-critical"},
+                    }
+                },
             )
 
-            bad_contacts, bad_problem = _load_team_contacts(bad_root, "t666")
-            expect("contacts: allowlist — team.yaml прочитан", bad_problem, None)
+            bad_contacts, bad_problem = _team_contacts_from_payload(
+                bad_team_payload, "t666"
+            )
+            expect("contacts: allowlist — ответ ssot_team разобран", bad_problem, None)
             expect(
                 "contacts: allowlist — валидный логин остался, мусор отброшен",
                 (bad_contacts or {}).get("groups"),
@@ -20802,7 +21476,10 @@ def _run_selftest(criteria):
             }
             rc_bad, out_bad = quiet_run(
                 cmd_contacts,
-                argparse.Namespace(is_=bad_code, apply=True, json=False, **bad_common),
+                argparse.Namespace(
+                    is_=bad_code, apply=True, json=False,
+                    team_json=str(bad_team_json), **bad_common,
+                ),
             )
             bad_text = (bad_root / bad_info_rel / INFORMATION_FILE).read_text(
                 encoding="utf-8"
@@ -20810,7 +21487,7 @@ def _run_selftest(criteria):
             expect("contacts: allowlist — --apply код 0", rc_bad, 0)
             expect(
                 "contacts: allowlist — WARN о пропущенных логинах",
-                "в team.yaml пропущены некорректные логины: x] @here, "
+                "в ростере команды пропущены некорректные логины: x] @here, "
                 "a\\n* tl - @all, ../../etc/passwd" in out_bad,
                 True,
             )
@@ -20914,20 +21591,20 @@ def _run_selftest(criteria):
             "value: 100", "value: 200"
         )
         _atomic_write(info_path, guard_before)
-        # Ростер в SSoT меняется — иначе prepare увидел бы идентичный текст
+        # Снимок SSoT меняется — иначе prepare увидел бы идентичный текст
         # (state=unchanged) и до записи дело бы не дошло.
-        _atomic_write(
-            contacts_root / SSOT_TEAMS_ROOT / "t006" / "team.yaml",
-            "groups:\n"
-            "  - name: cto\n"
-            "    members: [vzharkov]\n"
-            "  - name: ta\n"
-            "    members: [dkozlov, second.ta]\n"
-            "  - name: tl\n"
-            "    members: [ipilyaev]\n"
-            "  - name: sa\n"
-            "    members: [tkolpakov]\n",
+        seed_ssot(
+            contacts_root,
+            "opercrm.smkt",
+            {
+                "base": {
+                    "title": "Операционный CRM CМКТ (обновлено)",
+                    "team": "T006",
+                    "severity": {"type": "business-critical"},
+                }
+            },
         )
+        guard_before = info_path.read_text(encoding="utf-8")
         original_block = globals()["_contacts_yaml_block"]
         globals()["_contacts_yaml_block"] = (
             lambda contacts, with_comment=True: (
@@ -20973,24 +21650,25 @@ def _run_selftest(criteria):
             _section_block(guard_before, "facts"),
         )
 
-        # --- некорректный код команды (путь вне SSoT) -----------------------
+        # --- некорректный код команды (провенанс вне SSoT) -------------------
         for bad_team in ("../x", "/abs", "a/b", "..", ""):
-            team_path, team_problem = _team_contacts_path(contacts_root, bad_team)
+            team_problem = _team_code_problem(bad_team)
             expect(
-                f"contacts: код команды {bad_team!r} — путь не строится",
-                team_path,
-                None,
+                f"contacts: код команды {bad_team!r} — проблема названа",
+                bool(team_problem),
+                True,
             )
-            if bad_team:
-                expect(
-                    f"contacts: код команды {bad_team!r} — проблема названа",
-                    "некорректный код команды" in (team_problem or {}).get("message", ""),
-                    True,
-                )
         expect(
-            "contacts: код команды t006 — путь внутри SSoT",
-            _team_contacts_path(contacts_root, "T006")[0],
-            contacts_root / SSOT_TEAMS_ROOT / "t006" / "team.yaml",
+            "contacts: код команды ../x — путь не строится",
+            "некорректный код команды" in (_team_code_problem("../x") or {}).get(
+                "message", ""
+            ),
+            True,
+        )
+        expect(
+            "contacts: код команды t006 — провенанс внутри SSoT",
+            (_team_code_problem("T006"), _team_ref("T006")),
+            (None, "entities/teams/t006/team.yaml"),
         )
     except Exception as exc:  # noqa: BLE001 - диагностика самопроверки
         failures.append(f"contacts: исключение {type(exc).__name__}: {exc}")
@@ -21281,27 +21959,48 @@ def _run_selftest(criteria):
                     (True, True, True, True),
                 )
 
-                # 12. SSoT links.yaml: приоритет `type: page`, иначе ссылка на страницу.
-                _atomic_write(
-                    link_root / links_ref,
-                    "links:\n"
-                    "  - title: Паспорт поддержки\n"
-                    "    type: passport\n"
-                    f"    url: {base_url}{is_page_id}\n"
-                    "  - title: page\n"
-                    "    type: page\n"
-                    f"    url: {base_url}{arch_page_id}\n",
+                # 12. Снимок SSoT (ssot_snapshot.links): приоритет `type: page`,
+                #     иначе ссылка на страницу.
+                seed_ssot(
+                    link_root,
+                    "test.mm",
+                    {
+                        "base": {"title": "Selftest"},
+                        "links": {
+                            "links": [
+                                {
+                                    "title": "Паспорт поддержки",
+                                    "type": "passport",
+                                    "url": f"{base_url}{is_page_id}",
+                                },
+                                {
+                                    "title": "page",
+                                    "type": "page",
+                                    "url": f"{base_url}{arch_page_id}",
+                                },
+                            ]
+                        },
+                    },
                 )
                 expect(
                     "SSoT links: первая запись type: page",
                     ssot_page_link(link_root, "test.mm"),
                     (str(arch_page_id), links_ref),
                 )
-                _atomic_write(
-                    link_root / links_ref,
-                    "links:\n"
-                    "  - title: без типа\n"
-                    f"    url: {base_url}{is_page_id}\n",
+                seed_ssot(
+                    link_root,
+                    "test.mm",
+                    {
+                        "base": {"title": "Selftest"},
+                        "links": {
+                            "links": [
+                                {
+                                    "title": "без типа",
+                                    "url": f"{base_url}{is_page_id}",
+                                }
+                            ]
+                        },
+                    },
                 )
                 expect(
                     "SSoT links: без type: page — первая ссылка на страницу",
@@ -21309,7 +22008,7 @@ def _run_selftest(criteria):
                     (str(is_page_id), links_ref),
                 )
                 expect(
-                    "SSoT links: нет файла — (None, None)",
+                    "SSoT links: нет снимка — (None, None)",
                     ssot_page_link(link_root, "нет.mm"),
                     (None, None),
                 )
@@ -22250,6 +22949,101 @@ def _run_selftest(criteria):
                     (fx_ok_rc, "расхождений 0" in fx_ok_out.getvalue()),
                     (0, True),
                 )
+
+                # Мёртвая страница (404/410) не валит проверку: WARN, остальные
+                # обрабатываются, собранные фиксы пишутся в кеш.
+                _catalog_page_titles_write(
+                    fx_titles_root,
+                    {"12345": {"title": "Старый заголовок", "version": 1,
+                               "verified_at": "2026-11-01"}},
+                )
+
+                def _fx_gone(pid, criteria=None, expand="version"):
+                    if str(pid) == "12346":
+                        raise ConfluenceError(
+                            f"HTTP 404 на https://space.example/rest/api/content/{pid}"
+                        )
+                    return {
+                        "id": str(pid),
+                        "title": "Фактический заголовок",
+                        "version": {"number": 7},
+                    }
+
+                globals()["confluence_page"] = _fx_gone
+                fx_gone_out = io.StringIO()
+                with contextlib.redirect_stdout(fx_gone_out):
+                    fx_gone_rc = cmd_verify_titles(
+                        argparse.Namespace(
+                            root=str(fx_titles_root), is_=None, fix=True
+                        )
+                    )
+                fx_gone_text = fx_gone_out.getvalue()
+                fx_catalog_after = (fx_titles_root / "catalog.yaml").read_text("utf-8")
+                expect(
+                    "VT404: 404 — WARN и продолжение проверки",
+                    (
+                        fx_gone_rc,
+                        "WARN  page 12346: страница недоступна (HTTP 404)" in fx_gone_text,
+                        "недоступно (404/410) 1" in fx_gone_text,
+                    ),
+                    (0, True, True),
+                )
+                expect(
+                    "VT404: 404 — собранные фиксы записаны в кеш",
+                    (
+                        PAGE_TITLES_SECTION in fx_catalog_after,
+                        "titles_verified_at" in fx_catalog_after,
+                        "Фактический заголовок" in fx_catalog_after,
+                    ),
+                    (True, True, True),
+                )
+
+                # 5xx — ERROR (проверка не выполнена), но собранное сохраняется.
+                _catalog_page_titles_write(
+                    fx_titles_root,
+                    {"12345": {"title": "Старый заголовок", "version": 1,
+                               "verified_at": "2026-11-01"}},
+                )
+
+                def _fx_5xx(pid, criteria=None, expand="version"):
+                    if str(pid) == "12346":
+                        raise ConfluenceError(
+                            f"HTTP 503 на https://space.example/rest/api/content/{pid}"
+                        )
+                    return {
+                        "id": str(pid),
+                        "title": "Фактический заголовок",
+                        "version": {"number": 7},
+                    }
+
+                globals()["confluence_page"] = _fx_5xx
+                fx_5xx_out = io.StringIO()
+                with contextlib.redirect_stdout(fx_5xx_out):
+                    fx_5xx_rc = cmd_verify_titles(
+                        argparse.Namespace(
+                            root=str(fx_titles_root), is_=None, fix=True
+                        )
+                    )
+                fx_5xx_text = fx_5xx_out.getvalue()
+                fx_catalog_5xx = (fx_titles_root / "catalog.yaml").read_text("utf-8")
+                expect(
+                    "VT5xx: 5xx — ERROR «проверка не выполнена», код 1",
+                    (
+                        fx_5xx_rc,
+                        "проверка заголовков не выполнена" in fx_5xx_text,
+                        "собранные заголовки сохраняются" in fx_5xx_text,
+                    ),
+                    (1, True, True),
+                )
+                expect(
+                    "VT5xx: 5xx — собранные фиксы всё равно записаны",
+                    (
+                        PAGE_TITLES_SECTION in fx_catalog_5xx,
+                        "titles_verified_at" in fx_catalog_5xx,
+                        "Фактический заголовок" in fx_catalog_5xx,
+                    ),
+                    (True, True, True),
+                )
             finally:
                 globals()["confluence_page"] = fx_real_page
                 globals()["collect_rendered_pages"] = fx_real_collect
@@ -23010,6 +23804,56 @@ def _run_selftest(criteria):
             "  - name: demo-redis\n"
             "    git_repository: https://github.com/demo/redis\n",
         )
+        seed_ssot(
+            links_root,
+            code,
+            {
+                "base": {"title": "Demo"},
+                "components": {
+                    "components": [
+                        {
+                            "name": "demo-api",
+                            "gitRepository": "https://git.ecom.tech/demo/api",
+                        },
+                        {
+                            "name": "demo-docs",
+                            "gitRepository": "https://git.ecom.tech/demo/docs",
+                        },
+                    ]
+                },
+                "links": {
+                    "links": [
+                        {
+                            "title": "page",
+                            "url": "https://space.samokat.ru/pages/viewpage.action?pageId=1234567",
+                        },
+                        {
+                            "title": "display",
+                            "url": "https://space.samokat.ru/display/DEMO/Demo+Page",
+                        },
+                        {"title": "task", "url": "https://jira.samokat.ru/browse/DEMO-1"},
+                        {
+                            "title": "dashboard",
+                            "url": "https://grafana.samokat.io/d/dashuid/demo?orgId=1",
+                        },
+                        {
+                            "title": "folder",
+                            "url": "https://grafana.samokat.io/dashboards/f/folderuid/demo",
+                        },
+                        {
+                            "title": "short",
+                            "url": "https://grafana.samokat.io/goto/shortuid?orgId=1",
+                        },
+                        {
+                            "title": "block",
+                            "url": "https://grafana.samokat.io/d/dashuid/demo\n"
+                            "https://grafana.samokat.io/dashboards/f/folderuid/demo",
+                        },
+                        {"title": "broken", "url": "not a url"},
+                    ]
+                },
+            },
+        )
 
         cases = [
             (
@@ -23373,13 +24217,23 @@ def _run_selftest(criteria):
             (conf_before.get("id"), conf_before.get("status")),
             (confluence_node, "found"),
         )
-        links_text = (ssot / "links.yaml").read_text(encoding="utf-8")
-        _atomic_write(
-            ssot / "links.yaml",
-            "links:\n"
-            "  - title: new-first\n"
-            "    url: https://space.samokat.ru/pages/viewpage.action?pageId=9999999\n"
-            + links_text.split("links:\n", 1)[1],
+        links_snapshot = read_ssot_files(links_root, code)[0]
+        links_list = list((links_snapshot.get("links") or {}).get("links") or [])
+        links_list.insert(
+            0,
+            {
+                "title": "new-first",
+                "url": "https://space.samokat.ru/pages/viewpage.action?pageId=9999999",
+            },
+        )
+        seed_ssot(
+            links_root,
+            code,
+            {
+                "base": {"title": "Demo"},
+                "components": links_snapshot.get("components") or {},
+                "links": {"links": links_list},
+            },
         )
         rc_shift, out_shift = quiet_run(cmd_links, links_args(apply=True, force=True))
         map_after = load_yaml(folder / LINK_MAP_YAML)
@@ -23456,12 +24310,21 @@ def _run_selftest(criteria):
             (0, True, True),
         )
 
-        # 37.7: узел исчез из links.yaml — WARN, а не молчаливая потеря статуса.
-        _atomic_write(
-            ssot / "links.yaml",
-            "links:\n"
-            "  - title: new-first\n"
-            "    url: https://space.samokat.ru/pages/viewpage.action?pageId=9999999\n",
+        # 37.7: узел исчез из снимка SSoT — WARN, а не молчаливая потеря статуса.
+        seed_ssot(
+            links_root,
+            code,
+            {
+                "base": {"title": "Demo"},
+                "links": {
+                    "links": [
+                        {
+                            "title": "new-first",
+                            "url": "https://space.samokat.ru/pages/viewpage.action?pageId=9999999",
+                        }
+                    ]
+                },
+            },
         )
         rc_lost, out_lost = quiet_run(cmd_links, links_args(apply=True, force=True))
         expect(
@@ -23481,6 +24344,129 @@ def _run_selftest(criteria):
         failures.append(f"links/sources: исключение {type(exc).__name__}: {exc}")
     finally:
         shutil.rmtree(links_root, ignore_errors=True)
+
+    # 37a. links без клона SSoT: источник — снимок карточки
+    #      (INFORMATION.yaml → ssot_snapshot.links), файлы entities/... не нужны.
+    links_snap_root = Path(tempfile.mkdtemp(prefix="criticality-links-snapshot-"))
+    try:
+        snap_code = "snap.mm"
+        snap_folder = links_snap_root / "is" / snap_code
+        snap_folder.mkdir(parents=True, exist_ok=True)
+        _atomic_write(
+            links_snap_root / CATALOG_FILE,
+            "version: 1\n"
+            "systems:\n"
+            f"  - code: {snap_code}\n"
+            "    name: Snap\n"
+            f"    path: is/{snap_code}\n"
+            "    review_date: 2026-11-17\n",
+        )
+        seed_ssot(
+            links_snap_root,
+            snap_code,
+            {
+                "links": {
+                    "links": [
+                        {
+                            "title": "conf-ecom",
+                            "url": "https://confluence.ecom.tech/pages/viewpage.action"
+                            "?pageId=555000111",
+                        },
+                        {
+                            "title": "space",
+                            "url": "https://space.samokat.ru/display/ABC/Page",
+                        },
+                        {
+                            "title": "dash",
+                            "url": "https://grafana.samokat.io/d/u1/x",
+                        },
+                        {"title": "repo", "url": "https://git.ecom.tech/g/r"},
+                        {"title": "ext", "url": "https://example.invalid/doc"},
+                    ]
+                }
+            },
+        )
+        expect(
+            "links(snapshot): клона SSoT нет",
+            (links_snap_root / SSOT_IS_ROOT).exists(),
+            False,
+        )
+        expect(
+            "links(snapshot): confluence.ecom.tech — Confluence, не external",
+            (
+                _classify_link(
+                    "https://confluence.ecom.tech/pages/viewpage.action?pageId=555000111"
+                )["kind"],
+                _classify_link("https://confluence.ecom.tech/display/ABC/Page")["kind"],
+            ),
+            ("confluence", "confluence"),
+        )
+
+        def snap_links_args(**overrides):
+            values = {
+                "is_": snap_code,
+                "apply": False,
+                "force": False,
+                "limit": LINK_DEFAULT_LIMIT,
+                "date": "2026-11-17",
+                "root": str(links_snap_root),
+                "path": None,
+                "no_next": True,
+                "quiet": True,
+            }
+            values.update(overrides)
+            return argparse.Namespace(**values)
+
+        rc_snap, out_snap = quiet_run(cmd_links, snap_links_args(apply=True))
+        expect("links(snapshot): код 0 без entities/", rc_snap, 0)
+        expect(
+            "links(snapshot): источник назван — снимок INFORMATION.yaml",
+            f"INFORMATION.yaml → {SSOT_SNAPSHOT_SECTION}.links" in out_snap,
+            True,
+        )
+        snap_map = load_yaml(snap_folder / LINK_MAP_YAML)
+        snap_counts = snap_map.get("counts") or {}
+        expect(
+            "links(snapshot): карта построена из снимка",
+            (
+                snap_counts.get("nodes"),
+                snap_counts.get("by_kind", {}).get("confluence"),
+                snap_counts.get("by_kind", {}).get("grafana"),
+                snap_counts.get("by_kind", {}).get("gitlab"),
+                snap_counts.get("by_kind", {}).get("external"),
+            ),
+            (5, 2, 1, 1, 1),
+        )
+        expect(
+            "links(snapshot): файлы entities/ не созданы",
+            (links_snap_root / SSOT_IS_ROOT).exists(),
+            False,
+        )
+        # Fallback: без снимка файл links.yaml снова читается.
+        _atomic_write(
+            snap_folder / INFORMATION_FILE,
+            f"schema_version: 1\nis: {snap_code}\n",
+        )
+        snap_ssot = links_snap_root / SSOT_IS_ROOT / snap_code
+        snap_ssot.mkdir(parents=True, exist_ok=True)
+        _atomic_write(
+            snap_ssot / "links.yaml",
+            "links:\n"
+            "  - title: page\n"
+            "    url: https://space.samokat.ru/pages/viewpage.action?pageId=777\n",
+        )
+        rc_fb, out_fb = quiet_run(cmd_links, snap_links_args(apply=True, force=True))
+        expect(
+            "links(snapshot): без снимка — fallback на файл links.yaml",
+            (rc_fb, "fallback" in out_fb),
+            (0, True),
+        )
+    except Exception as exc:  # noqa: BLE001 - диагностика самопроверки
+        failures.append(
+            f"links(snapshot): исключение {type(exc).__name__}: {exc}"
+        )
+    finally:
+        shutil.rmtree(links_snap_root, ignore_errors=True)
 
     # 38. Фиксы ревью: §3 не врёт про неклонированный сервис, unit/status из
     #     findings применяются и валидируются, LINK-MAP.md согласован с .yaml,
@@ -23515,6 +24501,22 @@ def _run_selftest(criteria):
             "  - name: no-clone-svc\n"
             "    git_repository: https://github.com/demo/redis\n"
             "criteria_inputs: {}\n",
+        )
+        seed_ssot(
+            fix_root,
+            fix_code,
+            {
+                "base": {"title": "Fix", "teamName": "t006"},
+                "components": {"components": []},
+                "links": {
+                    "links": [
+                        {
+                            "title": "page",
+                            "url": "https://space.samokat.ru/pages/viewpage.action?pageId=1234567",
+                        }
+                    ]
+                },
+            },
         )
 
         fix_args = {
@@ -25555,7 +26557,7 @@ def cmd_init(args) -> int:
     print("  4. make prepare        # план подготовки данных (dry-run)")
     print("  5. make prepare-apply  # сформировать INFORMATION.yaml и клонировать компоненты")
     print(
-        f"  6. клоны {SSOT_DIR}/, {APPS_DIR}/, dochub/ и бэкапы уже в "
+        f"  6. клоны {APPS_DIR}/, dochub/ и бэкапы уже в "
         f"{GITIGNORE_FILE} — в коммит они не попадут"
     )
     _emit_next_steps(root, None, args)
@@ -25567,8 +26569,8 @@ def cmd_init(args) -> int:
 # ---------------------------------------------------------------------------
 
 SSOT_DIR = "ssot"
-SSOT_IS_ROOT = "ssot/entities/information-systems"
-SSOT_TEAMS_ROOT = "ssot/entities/teams"
+SSOT_IS_ROOT = "entities/information-systems"
+SSOT_TEAMS_ROOT = "entities/teams"
 APPS_DIR = "apps"
 # Доступность репозиториев (criteria.external_refs.repos) в prepare:
 # git ls-remote с таймаутом 10 с. Недоступность — WARN, не ERROR.
@@ -25579,6 +26581,17 @@ INFORMATION_TEMPLATE = "templates/INFORMATION.yaml"
 
 # Шесть файлов карточки ИС в SSoT (INFORMATION.md, раздел «Структура репозитория»).
 SSOT_FILES = ("base", "components", "duty", "links", "resources", "roles")
+
+# Секция INFORMATION.yaml со снимком карточки ИС: пишется `ssot-import` из
+# ответа MCP `ssot_get`, читается вместо клона SSoT. Ключи base, components,
+# duty, links, resources, roles — содержимое одноимённых файлов карточки;
+# source, commit, version, imported_at — метаданные снимка.
+SSOT_SNAPSHOT_SECTION = "ssot_snapshot"
+# Метаданные провенанса снимка SSoT: их пишет `ssot-import` (source: mcp,
+# commit, version, imported_at). `prepare` пересобирает содержимое секций и
+# обязан сохранить эти ключи — иначе снимок перестаёт быть «из MCP», и гейты
+# handoff/ssot-verify теряют основание.
+SSOT_SNAPSHOT_META_KEYS = ("source", "commit", "version", "imported_at")
 
 # Допустимые переопределения в is.yaml (INFORMATION.md, «Структура файла is.yaml»).
 IS_OVERRIDE_KEYS = ("product", "teamName", "excluded", "reason")
@@ -25599,8 +26612,8 @@ GITIGNORE_ENTRIES = (
     f"/{SSOT_DIR}/",
     f"/{APPS_DIR}/",
     "/dochub/",
-    # Ссылки на MR, которые пишут publish --push / ssot --push: локальный
-    # служебный кеш, в репозиторий не идёт.
+    # Ссылки на MR: publish --push (dochub-MR) и ssot-record (SSoT-MR, MR
+    # создаёт MCP-форма) — локальный служебный кеш, в репозиторий не идёт.
     "/.dochub/",
     "is/*/*.bak-*",
     "# criticality-gen: журнал осознанного обхода гейта — аудит, не версионируется",
@@ -25800,22 +26813,18 @@ def load_is_config(root: Path):
     }
 
 
-def ssot_page_link(root: Path, code: str):
-    """(page_id, ref) страницы ИС из SSoT `links.yaml` карточки ИС.
+def ssot_page_link(root: Path, code: str, snapshot=None):
+    """(page_id, ref) страницы ИС из снимка SSoT (`ssot_snapshot.links`).
 
     Приоритет: первая запись `type: page`; иначе первая ссылка на страницу
-    Confluence (`space.samokat.ru/pages/viewpage.action?pageId=…`). Нет файла
-    или ссылки — (None, None): значение не выдумывается.
+    Confluence (`space.samokat.ru/pages/viewpage.action?pageId=…`). Нет снимка
+    или ссылки — (None, None): значение не выдумывается. `snapshot` передаётся
+    вызывающим, если снимок уже прочитан (иначе читается из INFORMATION.yaml).
     """
     ref = f"{SSOT_IS_ROOT}/{code}/links.yaml"
-    path = root / ref
-    if not path.exists():
-        return None, None
-    try:
-        doc = load_yaml(path)
-    except (YamlError, OSError):
-        return None, None
-    links = _section_value(doc, "links")
+    if snapshot is None:
+        snapshot, _missing, _unreadable = read_ssot_files(root, code)
+    links = _section_value((snapshot or {}).get("links"), "links")
     if not isinstance(links, list):
         return None, None
     typed = []
@@ -25842,21 +26851,38 @@ def ssot_page_link(root: Path, code: str):
 
 
 def read_ssot_files(root: Path, code: str):
-    """(snapshot, missing_refs, unreadable) по шести файлам карточки ИС."""
+    """(snapshot, missing_refs, unreadable) из INFORMATION.yaml → ssot_snapshot.
+
+    Клон SSoT (`ssot/`) больше не читается: карточку ИС приносит MCP `ssot-mcp`
+    (`ssot_get`), а пишет её команда `ssot-import`. Структура прежняя — ключ на
+    файл карточки (base, components, duty, links, resources, roles), поэтому
+    вызывающий код (`show`, `score`, `start`, `validate`, `prepare`) не меняется.
+    Метаданные снимка (source, commit, version, imported_at) в словарь не
+    попадают. Нет файла/снимка — `({}, missing, [])`: «нет данных SSoT», не
+    исключение и не трейсбек.
+    """
     snapshot = {}
-    missing = []
-    unreadable = []
+    rel, _legacy = is_layout(root, code)
+    path = root / rel / INFORMATION_FILE
+    if not path.exists():
+        return {}, [f"{SSOT_IS_ROOT}/{code}/{name}.yaml" for name in SSOT_FILES], []
+    try:
+        info = load_yaml(path)
+    except (YamlError, OSError) as exc:
+        return {}, [], [{"ref": f"{rel}/{INFORMATION_FILE}", "error": str(exc)}]
+    raw = info.get(SSOT_SNAPSHOT_SECTION) if isinstance(info, dict) else None
+    if not isinstance(raw, dict):
+        return {}, [f"{SSOT_IS_ROOT}/{code}/{name}.yaml" for name in SSOT_FILES], []
     for name in SSOT_FILES:
-        ref = f"{SSOT_IS_ROOT}/{code}/{name}.yaml"
-        path = root / ref
-        if not path.exists():
-            missing.append(ref)
-            continue
-        try:
-            snapshot[name] = load_yaml(path)
-        except (YamlError, OSError) as exc:
-            unreadable.append({"ref": ref, "error": str(exc)})
-    return snapshot, missing, unreadable
+        value = raw.get(name)
+        if isinstance(value, (dict, list)):
+            snapshot[name] = value
+    missing = [
+        f"{SSOT_IS_ROOT}/{code}/{name}.yaml"
+        for name in SSOT_FILES
+        if name not in snapshot
+    ]
+    return snapshot, missing, []
 
 
 def _team_ref(team_code) -> str:
@@ -25864,38 +26890,15 @@ def _team_ref(team_code) -> str:
     return f"entities/teams/{str(team_code or '').strip().lower()}/team.yaml"
 
 
-def _team_contacts_path(root: Path, team_code):
-    """`(путь к team.yaml, problem)`: `problem` — некорректный код команды.
+def _team_code_problem(team_code):
+    """`problem` для некорректного кода команды, иначе None.
 
-    Код команды — слаг (`t006`), а не путь: `team: "../x"` дал бы
-    `ssot/entities/teams/../x/team.yaml` и чтение за пределами SSoT.
+    Код команды — слаг (`t006`), а не путь: он попадает в провенанс
+    (`entities/teams/<team>/team.yaml`) и в текст публикации.
     """
     code = str(team_code or "").strip().lower()
     if not code:
-        return None, None
-    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", code):
-        return None, {
-            "message": f"некорректный код команды '{code}'",
-            "hint": "ожидался слаг вида t006 (латиница в нижнем регистре, цифры, точка, дефис)",
-        }
-    return root / SSOT_TEAMS_ROOT / code / "team.yaml", None
-
-
-def _load_team_contacts(root: Path, team_code):
-    """Контакты команды из SSoT: `(contacts, problem)` — без исключений.
-
-    `contacts` = `{"team": "t006", "source": {"type": "ssot", "ref": ...},
-    "groups": {"ta": ["dkozlov"], ...}}`; `problem` = None либо
-    `{"message": ..., "hint": ...}` (нет `ssot/`, нет файла, YAML не разобран,
-    `groups` не список, некорректный код команды). Исключения не поднимаются
-    намеренно: `prepare` не должен падать из-за отсутствия команды, а `contacts`
-    печатает ERROR с подсказкой. Участники не выдумываются: пустая группа — `[]`.
-    Логины вне allowlist отбрасываются и перечисляются в `rejected` (ключ
-    появляется только когда такие есть) — в блок YAML они не попадают.
-    """
-    code = str(team_code or "").strip().lower()
-    if not code:
-        return None, {
+        return {
             "message": "команда не задана (catalog.yaml → systems[].team)",
             "hint": (
                 "заполните team в INFORMATION.yaml или выполните "
@@ -25904,9 +26907,9 @@ def _load_team_contacts(root: Path, team_code):
         }
     if _TEAM_PLACEHOLDER_RE.search(code):
         # `T<TODO>` — плейсхолдер scaffold, а не код команды. Раньше он уходил
-        # в _team_contacts_path и печатался как «некорректный код команды»:
+        # в проверку пути и печатался как «некорректный код команды»:
         # человек не понимал, что делать.
-        return None, {
+        return {
             "message": f"команда не задана: team = {str(team_code).strip()!r} — "
             "плейсхолдер, а не код команды",
             "hint": (
@@ -25914,35 +26917,48 @@ def _load_team_contacts(root: Path, team_code):
                 "make prepare --apply"
             ),
         }
-    path, path_problem = _team_contacts_path(root, code)
-    if path_problem is not None:
-        return None, path_problem
-    if not (root / SSOT_DIR).is_dir():
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", code):
+        return {
+            "message": f"некорректный код команды '{code}'",
+            "hint": "ожидался слаг вида t006 (латиница в нижнем регистре, цифры, точка, дефис)",
+        }
+    return None
+
+
+def _team_contacts_from_payload(payload, team_code):
+    """Контакты команды из ответа MCP `ssot_team`: `(contacts, problem)`.
+
+    `contacts` = `{"team": "t006", "source": {"type": "ssot", "ref": ...},
+    "groups": {"ta": ["dkozlov"], ...}}`; `problem` = None либо
+    `{"message": ..., "hint": ...}` (некорректный код команды, ответ не объект,
+    `groups` не список). Исключения не поднимаются намеренно: `prepare` не
+    должен падать из-за отсутствия команды, а `contacts` печатает ERROR с
+    подсказкой. Участники не выдумываются: пустая группа — `[]`. Логины вне
+    allowlist отбрасываются и перечисляются в `rejected` (ключ появляется
+    только когда такие есть) — в блок YAML они не попадают.
+    """
+    code = str(team_code or "").strip().lower()
+    problem = _team_code_problem(code)
+    if problem is not None:
+        return None, problem
+    if not isinstance(payload, dict):
         return None, {
-            "message": f"нет клона SSoT ({SSOT_DIR}/) — контакты команды не прочитать",
-            "hint": f"выполните make prepare (клонирует {SSOT_DIR}/)",
+            "message": "ответ ssot_team: ожидался JSON-объект",
+            "hint": "передайте в --team-json полный ответ MCP ssot_team(code=<team>)",
+        }
+    payload_code = str(payload.get("code") or "").strip().lower()
+    if payload_code and payload_code != code:
+        return None, {
+            "message": f"ответ ssot_team про команду {payload_code!r}, "
+            f"а запрошена {code!r}",
+            "hint": "передайте ответ для команды из catalog.yaml → systems[].team",
         }
     ref = _team_ref(code)
-    if path is None or not path.exists():
-        return None, {
-            "message": f"нет файла {ref} — команда {code.upper()} не найдена в SSoT",
-            "hint": (
-                "проверьте catalog.yaml → systems[].team (код команды) и наличие "
-                "карточки команды в SSoT"
-            ),
-        }
-    try:
-        doc = load_yaml(path)
-    except (YamlError, OSError) as exc:
-        return None, {
-            "message": f"{ref} не разобран: {exc}",
-            "hint": f"исправьте YAML в SSoT или обновите клон: git -C {SSOT_DIR} pull",
-        }
-    raw_groups = doc.get("groups") if isinstance(doc, dict) else None
+    raw_groups = payload.get("groups")
     if not isinstance(raw_groups, list):
         return None, {
             "message": f"{ref}: ключ 'groups' должен быть списком",
-            "hint": "ожидался список вида '- name: ta' + 'members: [login]'",
+            "hint": "ожидался ответ ssot_team вида groups: [{name, members}]",
         }
     groups = {}
     rejected = []
@@ -25965,6 +26981,49 @@ def _load_team_contacts(root: Path, team_code):
     if rejected:
         contacts["rejected"] = rejected
     return contacts, None
+
+
+def _utc_now_iso() -> str:
+    """Текущий момент в ISO-8601 UTC (секунды, суффикс Z) — для imported_at."""
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _read_json_arg(value, label):
+    """JSON из файла или stdin (`-`). Бросает OSError/ValueError.
+
+    Сеть не используется: читается ровно то, что передал агент.
+    """
+    if str(value) == "-":
+        text = sys.stdin.read()
+        source = f"{label} (stdin)"
+    else:
+        path = Path(str(value)).expanduser()
+        text = path.read_text(encoding="utf-8")
+        source = str(path)
+    try:
+        return json.loads(text)
+    except ValueError as exc:
+        raise ValueError(f"{source}: не разобран как JSON ({exc})") from exc
+
+
+def _ssot_import_hint(codes) -> str:
+    """Подсказка: как получить данные SSoT (MCP ssot_get → ssot-import)."""
+    codes = [str(code) for code in (codes or [])]
+    lines = ["Данные SSoT (клон ssot/ больше не читается и не клонируется):"]
+    shown = codes[:5]
+    for code in shown:
+        lines.append(
+            f'  {code}: MCP ssot_get(group="information-systems", '
+            f'entity="{code}") → criticality.py ssot-import --is {code} '
+            "--entity-json -"
+        )
+    if len(codes) > len(shown):
+        lines.append(f"  … и ещё {len(codes) - len(shown)} ИС — так же")
+    lines.append(
+        "  контакты команды: MCP ssot_team(code=<team>) → "
+        "criticality.py contacts --is <код> --team-json -"
+    )
+    return "\n".join(lines)
 
 
 def _contacts_yaml_block(contacts, with_comment=True) -> str:
@@ -26062,6 +27121,47 @@ def _contacts_roundtrip_problem(text, contacts, where) -> str:
         _contacts_groups(contacts)
     ):
         return "contacts не читаются обратно"
+    return None
+
+
+def _splice_top_level_section(text, section, block, after="roles") -> str:
+    """Заменить (или вставить) секцию верхнего уровня; остальной текст цел.
+
+    В отличие от `_splice_contacts_section` шапки-комментария у секции нет:
+    вырезается только сам блок до следующего ключа верхнего уровня.
+    """
+    lines = text.splitlines(True)
+    span = _top_level_span(lines, section)
+    body = block if block.endswith("\n") else block + "\n"
+    if span is None:
+        return _insert_top_level_section(
+            text, section, block, after=after, before=("criteria_inputs",)
+        )
+    lines[span[0]:span[1]] = [body]
+    return "".join(lines)
+
+
+def _ssot_snapshot_roundtrip_problem(text, before, snapshot, where) -> str:
+    """Проверить, что секция ssot_snapshot читается обратно ровно как `snapshot`.
+
+    Возвращает причину (строка) или None. Общая проверка для `ssot-import`:
+    битый блок сделал бы INFORMATION.yaml неразбираемым, а следующий `prepare`
+    получил бы existing = None и потерял ручные секции (criteria_inputs, facts).
+    Остальные секции верхнего уровня обязаны остаться прежними.
+    """
+    try:
+        parsed = parse_yaml(text, str(where))
+    except YamlError as exc:
+        return f"результат не разобран ({exc})"
+    if not isinstance(parsed, dict):
+        return "результат не словарь верхнего уровня"
+    if parsed.get(SSOT_SNAPSHOT_SECTION) != snapshot:
+        return "ssot_snapshot не читается обратно"
+    for key, value in (before or {}).items():
+        if key in (SSOT_SNAPSHOT_SECTION, CONTACTS_SECTION):
+            continue
+        if parsed.get(key) != value:
+            return f"секция {key} изменилась"
     return None
 
 
@@ -26719,9 +27819,10 @@ def apply_component_plan(root: Path, plan, apply: bool, no_clone: bool) -> tuple
     if action == "invalid":
         return "error", plan["problem"]
     if action == "web_ui":
-        # Веб-страница вместо URL клона: как ошибка clone (128) — фиксируется,
-        # прогон не прерывается.
-        return "error", plan["problem"]
+        # Веб-страница вместо URL клона — это НЕ git-репозиторий. Клон
+        # компонента необязателен, поэтому SKIP + WARN: прогон не блокируется,
+        # компонент попадает в список пропущенных, а не в ошибки клонирования.
+        return "skipped", plan["problem"]
     if action == "conflict":
         return "error", plan["problem"]
     if action == "skip":
@@ -27503,63 +28604,31 @@ def cmd_prepare(args) -> int:
             return 1
         codes = [args.is_]
 
-    # --- шаг 1: ssot/ ------------------------------------------------------
-    # Без SSoT автоматические секции INFORMATION.yaml (components, resources,
-    # duties, links, roles, identity) пусты. Писать файл в этом состоянии
-    # нельзя: prepare --apply молча затёр бы данные ИС. Клонирование — только
-    # в apply и без --no-clone.
-    ssot_dir = root / SSOT_DIR
+    # --- шаг 1: данные SSoT (снимок в INFORMATION.yaml) --------------------
+    # Клон ssot/ больше не читается и не клонируется: карточку ИС приносит MCP
+    # `ssot-mcp` (ssot_get), её пишет `ssot-import`. prepare только пересобирает
+    # автоматические секции из снимка INFORMATION.yaml → ssot_snapshot. Без
+    # снимка файл не пишется (иначе данные ИС стали бы пустыми).
     ssot_url = config["ssot_url"]
-    ssot_commands = []
-    ssot_available = ssot_dir.is_dir() and any(ssot_dir.iterdir())
-    if not ssot_available:
-        if apply and not no_clone:
-            if not ssot_url:
-                print(f"ERROR: нет {SSOT_DIR}/ и не задан ssot.url в {IS_CONFIG}")
-                return 1
-            ssot_commands.append(["git", "clone", "--", ssot_url, SSOT_DIR])
-        elif not no_clone:
-            print(f"ERROR: нет {SSOT_DIR}/ — SSoT-репозиторий не склонирован.")
-            if ssot_url:
-                print(f"  выполните: git clone {ssot_url} {SSOT_DIR}")
-            else:
-                print(f"  укажите ssot.url в {IS_CONFIG} и выполните: git clone <url> {SSOT_DIR}")
-        else:
-            print(f"ERROR: нет {SSOT_DIR}/ (--no-clone: клон не создаётся).")
-    elif apply and not no_clone:
-        _prepare_clone_for_pull(root, SSOT_DIR, "ssot")
-        ssot_commands.append(["git", "-C", SSOT_DIR, "pull", "--ff-only"])
-
-    for command in ssot_commands:
-        print(f"  $ {' '.join(command)}")
-        if apply:
-            ok, output = _run_git(command, root)
-            if not ok:
-                print(f"    WARN: {output}")
-            else:
-                print("    OK")
-    ssot_available = ssot_dir.is_dir() and any(ssot_dir.iterdir())
-    ssot_blocked = not ssot_available
-    if ssot_blocked:
-        print(
-            "ERROR: prepare: нет клона SSoT (ssot/) — данные ИС не обновлены; "
-            "выполните make prepare-apply после клонирования"
-        )
-    print()
+    snapshots = {code: read_ssot_files(root, code) for code in codes}
+    if any(not snapshots[code][0] for code in codes):
+        print(_ssot_import_hint(codes))
+        print()
 
     # --- architecture_page_id: ссылка на архитектуру ИС вместо АДР ----------
-    # Поле заполняется из SSoT (links.yaml карточки ИС) один раз: непустое
-    # значение — решение человека, prepare его не перезаписывает. Источник
-    # значения — первая запись `type: page` (иначе первая ссылка на страницу
-    # Confluence): архитектура ИС, а не АДР — это фиксирует adr_basis.
+    # Поле заполняется из снимка SSoT (ssot_snapshot.links карточки ИС) один
+    # раз: непустое значение — решение человека, prepare его не перезаписывает.
+    # Источник значения — первая запись `type: page` (иначе первая ссылка на
+    # страницу Confluence): архитектура ИС, а не АДР — это фиксирует adr_basis.
     architecture_fills = []
     for code in codes:
         entry = catalog_map.get(code) or {}
         if str(entry.get("architecture_page_id") or "").strip():
             continue
-        if ssot_blocked:
+        code_snapshot = snapshots[code][0]
+        if not code_snapshot:
             continue
-        page_id, page_ref = ssot_page_link(root, code)
+        page_id, page_ref = ssot_page_link(root, code, snapshot=code_snapshot)
         if not page_id:
             print(
                 f"WARN: {code}: architecture_page_id не найден в SSoT "
@@ -27578,6 +28647,7 @@ def cmd_prepare(args) -> int:
     # --- шаги 2-8: по каждой ИС -------------------------------------------
     rows = []
     clone_failures = []
+    skipped_non_git = []
     unreadable_notes = []
     prepare_errors = []
     invalid_repositories = []
@@ -27600,26 +28670,20 @@ def cmd_prepare(args) -> int:
         folder = root / layout_rel
         info_path = folder / INFORMATION_FILE
 
-        if ssot_available:
-            snapshot, missing, unreadable = read_ssot_files(root, code)
-        else:
-            snapshot, missing, unreadable = {}, [
-                f"{SSOT_IS_ROOT}/{code}/{file_name}.yaml" for file_name in SSOT_FILES
-            ], []
-
-        ssot_code_dir = root / SSOT_IS_ROOT / code
-        if ssot_available and not ssot_code_dir.is_dir():
-            # N6: код есть в is.yaml/catalog.yaml, но карточки ИС в SSoT нет.
+        snapshot, missing, unreadable = snapshots[code]
+        ssot_blocked = not snapshot
+        if ssot_blocked:
+            # N6: код есть в is.yaml/catalog.yaml, но карточка ИС не импортирована.
             # Пустой скелет (components: [], 0/6) маскировал бы опечатку в коде —
             # это ошибка, а не «ИС без данных».
             print(
-                f"  {code}: ERROR: ИС {code} не найдена в SSoT "
-                f"({INFORMATION_FILE} не создан)"
+                f"  {code}: ERROR: нет данных SSoT — ИС {code} не импортирована "
+                f"({INFORMATION_FILE} не обновлён)"
             )
             print(
-                f"  {code}: ожидалась папка {SSOT_IS_ROOT}/{code}/ — "
-                "проверьте код ИС в is.yaml и catalog.yaml "
-                "(опечатка в коде даёт пустой скелет)"
+                f'  {code}: вызовите MCP ssot_get(group="information-systems", '
+                f'entity="{code}") и передайте ответ в '
+                f"criticality.py ssot-import --is {code} --entity-json -"
             )
             missing_ssot_codes.append(code)
             rows.append(
@@ -27658,13 +28722,12 @@ def cmd_prepare(args) -> int:
         ):
             catalog_entry["team"] = team_code
             print(f"  {code}: catalog.yaml → team = {team_code} — записано")
-        contacts, contacts_problem = _load_team_contacts(root, team_code)
-        contacts_failed = contacts is None
-        if contacts_failed:
-            print(
-                f"  {code}: WARN: {contacts_problem['message']} — блок contacts "
-                f"оставлен пустым; {contacts_problem['hint']}"
-            )
+        # contacts — больше не читаются из клона SSoT: ростер приносит MCP
+        # `ssot_team`, пишет его `contacts --team-json` (или ssot-import
+        # --team-json). prepare прежний блок переносит без изменений.
+        contacts = None
+        contacts_problem = None
+        contacts_failed = True
 
         generated = build_information(
             code, layout_rel, override, snapshot, missing, unreadable,
@@ -27695,11 +28758,14 @@ def cmd_prepare(args) -> int:
             plan = component_plan(root, code, component)
             if plan["action"] == "web_ui":
                 # N3+: веб-страница репозитория (GitHub/GitLab `/tree/`, `/blob/`)
-                # вместо URL клона. Это WARN, а не отказ: раньше такой URL
-                # доходил до `git clone` и падал с кодом 128 — прогон
-                # продолжался, поэтому и здесь он не блокирующий.
-                print(f"  {code}/{component.get('name')}: WARN: {plan['problem']}")
-                clone_failures.append(
+                # вместо URL клона — не git-репозиторий. Это SKIP + WARN, а не
+                # ошибка: прогон не блокируется, компонент попадает в список
+                # пропущенных («не git-репозиторий»), а не в clone_failures.
+                print(
+                    f"  {code}/{component.get('name')}: WARN: не git-репозиторий — "
+                    f"{plan['problem']} (пропущен)"
+                )
+                skipped_non_git.append(
                     {
                         "is": code,
                         "component": component.get("name"),
@@ -27708,7 +28774,7 @@ def cmd_prepare(args) -> int:
                     }
                 )
                 component["cloned_to"] = plan["target"]
-                component["clone_status"] = "error"
+                component["clone_status"] = "not_cloned"
                 continue
             if plan["action"] == "invalid":
                 # N3: схема git_repository проверяется до любого git-вызова.
@@ -27785,6 +28851,26 @@ def cmd_prepare(args) -> int:
             continue
 
         document = merge_manual_sections(generated, existing)
+        # Провенанс снимка SSoT (`source: mcp`, `commit`, `version`,
+        # `imported_at`) пишет `ssot-import`; prepare пересобирает только
+        # содержимое секций карточки. Метаданные переносятся как есть, иначе
+        # после `prepare --apply` снимок выглядит как «не из MCP» и гейты
+        # (handoff, ssot-verify) теряют основание.
+        if isinstance(existing, dict):
+            previous_snapshot = existing.get(SSOT_SNAPSHOT_SECTION)
+            if isinstance(previous_snapshot, dict):
+                current_snapshot = document.get(SSOT_SNAPSHOT_SECTION)
+                if not isinstance(current_snapshot, dict):
+                    current_snapshot = {}
+                carried = {
+                    key: previous_snapshot[key]
+                    for key in SSOT_SNAPSHOT_META_KEYS
+                    if previous_snapshot.get(key) not in (None, "")
+                }
+                if carried:
+                    document[SSOT_SNAPSHOT_SECTION] = {
+                        **current_snapshot, **carried
+                    }
         absent_sections = [
             section
             for section in SSOT_SECTIONS
@@ -27804,15 +28890,12 @@ def cmd_prepare(args) -> int:
                     document[section] = existing[section]
                     preserved_sections.append((section, count))
         if contacts_failed and existing is not None:
-            # Команда в SSoT не прочитана — прежние контакты не затираются:
-            # иначе один прогон prepare без SSoT-команды обнулил бы упоминания.
+            # Ростер в prepare не читается — прежние контакты не затираются:
+            # иначе один прогон prepare обнулил бы упоминания, собранные
+            # `contacts --team-json`.
             previous_contacts = _info_contacts(existing)
             if previous_contacts:
                 document[CONTACTS_SECTION] = previous_contacts
-                print(
-                    f"  {code}: WARN: contacts сохранены из прежней версии "
-                    f"{INFORMATION_FILE} ({len(_contacts_groups(previous_contacts))} групп)"
-                )
                 # Блок пишется только из team/source/groups: остальные ключи
                 # прежней секции перенести некуда — о них предупреждаем.
                 extra_contact_keys = sorted(
@@ -27859,9 +28942,9 @@ def cmd_prepare(args) -> int:
             # обновлены, ошибка возвращается кодом 1 (N3).
             state_label = "ERROR (схема git_repository)"
         elif ssot_blocked:
-            # Нет SSoT — файл не пишется никогда: иначе автоматические секции
-            # становятся пустыми (A1). Пишем только диагностику.
-            state_label = "ERROR (нет SSoT)"
+            # Нет снимка SSoT — файл не пишется никогда: иначе автоматические
+            # секции становятся пустыми (A1). Пишем только диагностику.
+            state_label = "ERROR (нет данных SSoT)"
             ssot_skips.append(code)
         else:
             state_label = state if apply else f"{state} (dry-run)"
@@ -27936,6 +29019,13 @@ def cmd_prepare(args) -> int:
         print(f"WARN: нечитаемые SSoT-файлы — {len(unreadable_notes)}:")
         for note in unreadable_notes:
             print(f"  - {note}")
+    if skipped_non_git:
+        print(
+            "Пропущено (не git-репозиторий): "
+            f"{len(skipped_non_git)} — клон не выполнялся, прогон не прерван"
+        )
+        for item in skipped_non_git:
+            print(f"  - {item['is']}/{item['component']}: {item['error']}")
     if clone_failures:
         print(f"Ошибки клонирования: {len(clone_failures)} (прогон не прерван)")
         for failure in clone_failures:
@@ -27971,8 +29061,9 @@ def cmd_prepare(args) -> int:
             print(f"  - {note}")
     if ssot_skips:
         print(
-            "ERROR: prepare: нет клона SSoT (ssot/) — данные ИС не обновлены; "
-            "выполните make prepare-apply после клонирования"
+            "ERROR: prepare: нет данных SSoT — данные ИС не обновлены; "
+            "импортируйте снимок: criticality.py ssot-import --is <код> "
+            "--entity-json -"
         )
         print(
             f"  файлы не записаны ({len(ssot_skips)}): " + ", ".join(ssot_skips)
@@ -28008,14 +29099,242 @@ def cmd_prepare(args) -> int:
         print(
             f"ERROR: ИС нет в SSoT ({len(missing_ssot_codes)}): "
             + ", ".join(missing_ssot_codes)
-            + f" — {INFORMATION_FILE} не создан."
+            + f" — {INFORMATION_FILE} не обновлён."
         )
         print(
-            f"  Проверьте коды в {IS_CONFIG} и catalog.yaml, затем повторите: "
-            "make prepare-apply"
+            "  Импортируйте снимок карточки: criticality.py ssot-import --is <код> "
+            "--entity-json - (ответ MCP ssot_get); проверьте коды в "
+            f"{IS_CONFIG} и catalog.yaml."
         )
         return 1
     _emit_next_steps(root, None, args)
+    return 0
+
+
+def _entity_payload_problem(payload, code) -> str:
+    """Проверить форму ответа MCP `ssot_get`. None — форма верна."""
+    if not isinstance(payload, dict):
+        return "ожидался JSON-объект ответа ssot_get"
+    group = str(payload.get("group") or "").strip()
+    if group != "information-systems":
+        return (
+            f"group = {group or '<пусто>'!r}, ожидалось 'information-systems' "
+            f'(ssot_get(group="information-systems", entity="{code}"))'
+        )
+    payload_code = str(payload.get("id") or payload.get("entity") or "").strip()
+    if payload_code and payload_code.lower() != str(code).strip().lower():
+        return f"ответ про ИС {payload_code!r}, а запрошена {code!r}"
+    sections = payload.get("sections")
+    if sections is not None and not isinstance(sections, dict):
+        return "sections должен быть словарём (base, components, duty, links, resources, roles)"
+    return None
+
+
+def cmd_ssot_import(args) -> int:
+    """Импорт снимка карточки ИС из ответа MCP `ssot_get` в INFORMATION.yaml.
+
+    Сеть и клон SSoT не используются: команда разбирает переданный JSON и пишет
+    секции `ssot_snapshot` (и `contacts`, если передан `--team-json`). Остальной
+    файл остаётся побайтово прежним; перед записью — обратная проверка разбора.
+    Повторный импорт тех же данных — no-op (файл не переписывается).
+    """
+    root = repo_root_from_args(args)
+    code = args.is_
+    try:
+        _, systems = load_catalog(root)
+    except YamlError as exc:
+        print(f"ERROR: {exc}")
+        return 1
+    entry = catalog_by_code(systems).get(code) or {}
+    folder_rel, legacy = is_folder(root, code, entry)
+    info_path = root / folder_rel / INFORMATION_FILE
+    if legacy:
+        print(
+            f"  WARN: используется legacy-раскладка {folder_rel}/ "
+            "(каноническая: is/<код ИС>)"
+        )
+    try:
+        payload = _read_json_arg(args.entity_json, "entity-json")
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: --entity-json: {exc}")
+        return 1
+    problem = _entity_payload_problem(payload, code)
+    if problem is not None:
+        print(f"ERROR: --entity-json: {problem}")
+        return 1
+    sections = payload.get("sections")
+    sections = sections if isinstance(sections, dict) else {}
+    missing = payload.get("missing")
+    missing = [str(item) for item in missing] if isinstance(missing, list) else []
+    if not sections or "base.yaml" in missing:
+        print(f"ERROR: ИС {code} не найдена в SSoT")
+        if missing:
+            print(f"  ssot_get вернул missing: {', '.join(missing)}")
+        print(f"  {folder_rel}/{INFORMATION_FILE} не изменён.")
+        return 1
+
+    snapshot = {}
+    for name in SSOT_FILES:
+        value = sections.get(name)
+        if isinstance(value, (dict, list)):
+            snapshot[name] = value
+    if not snapshot:
+        print(f"ERROR: ИС {code} не найдена в SSoT — в ответе нет секций карточки")
+        print(f"  {folder_rel}/{INFORMATION_FILE} не изменён.")
+        return 1
+
+    created = False
+    if info_path.exists():
+        text = info_path.read_text(encoding="utf-8")
+        try:
+            existing = parse_yaml(text, str(info_path))
+        except YamlError as exc:
+            print(
+                f"ERROR: {folder_rel}/{INFORMATION_FILE} не разобран ({exc}) — "
+                "файл не изменён"
+            )
+            return 1
+        if not isinstance(existing, dict):
+            print(
+                f"ERROR: {folder_rel}/{INFORMATION_FILE}: ожидался словарь "
+                "верхнего уровня"
+            )
+            return 1
+    else:
+        # Дедлок свежего проекта: `prepare` без снимка SSoT файл не создаёт, а
+        # `ssot-import` отказывался писать снимок в несуществующий файл — не
+        # работал ни один путь. Каркас собираем здесь из ТОГО ЖЕ скелета, что и
+        # prepare (templates/INFORMATION.yaml), и сразу пишем в него снимок.
+        try:
+            skeleton = _load_template_skeleton()
+            bootstrap_criteria = load_criteria()
+        except (YamlError, ConfigError) as exc:
+            print(
+                f"ERROR: не удалось собрать каркас {folder_rel}/{INFORMATION_FILE}: "
+                f"{exc}"
+            )
+            return 1
+        existing = build_information(
+            code, folder_rel, {}, snapshot, [], [], entry, None, skeleton,
+            criteria=bootstrap_criteria,
+        )
+        text = INFORMATION_HEADER.format(code=code) + dump_yaml(existing)
+        info_path.parent.mkdir(parents=True, exist_ok=True)
+        created = True
+
+    previous = existing.get(SSOT_SNAPSHOT_SECTION)
+    previous = previous if isinstance(previous, dict) else {}
+    # Структура снимка прежняя: base (в нём severity.type/method/confirmation/
+    # addon), components, duty, links, resources, roles. Блок severity не
+    # теряется, даже если ответ MCP пришёл без него.
+    base = snapshot.get("base")
+    previous_base = previous.get("base")
+    if (
+        isinstance(base, dict)
+        and "severity" not in base
+        and isinstance(previous_base, dict)
+        and isinstance(previous_base.get("severity"), dict)
+    ):
+        base = dict(base)
+        base["severity"] = previous_base["severity"]
+        snapshot["base"] = base
+    snapshot["source"] = "mcp"
+    commit = str(payload.get("commit") or "").strip()
+    if commit:
+        snapshot["commit"] = commit
+    version = payload.get("version")
+    if version not in (None, ""):
+        snapshot["version"] = version
+    # Идемпотентность: те же данные (кроме метки времени) не переписывают файл.
+    # Совпавший снимок сохраняет прежний imported_at, поэтому текст не меняется.
+    previous_without_stamp = {
+        key: value for key, value in previous.items() if key != "imported_at"
+    }
+    if snapshot == previous_without_stamp and previous.get("imported_at"):
+        snapshot = {
+            key: snapshot[key] for key in previous if key in snapshot
+        }
+        snapshot["imported_at"] = previous["imported_at"]
+    else:
+        snapshot["imported_at"] = _utc_now_iso()
+
+    new_text = _splice_top_level_section(
+        text,
+        SSOT_SNAPSHOT_SECTION,
+        f"{SSOT_SNAPSHOT_SECTION}:\n" + _dump_block(snapshot, 2),
+    )
+    contacts = None
+    team_json = getattr(args, "team_json", None)
+    if team_json:
+        try:
+            team_payload = _read_json_arg(team_json, "team-json")
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: --team-json: {exc}")
+            return 1
+        identity = existing.get("identity")
+        identity = identity if isinstance(identity, dict) else {}
+        team_code = _normalize_team(
+            _pick_team_code(entry.get("team"), identity.get("team"))
+        )
+        contacts, contacts_problem = _team_contacts_from_payload(
+            team_payload, team_code
+        )
+        if contacts_problem is not None:
+            print(f"ERROR: --team-json: {contacts_problem['message']}")
+            print(f"  {contacts_problem['hint']}")
+            return 1
+        new_text = _splice_contacts_section(
+            new_text, _contacts_yaml_block(contacts)
+        )
+
+    problem = _ssot_snapshot_roundtrip_problem(
+        new_text, existing, snapshot, info_path
+    )
+    if problem is not None:
+        print(
+            "ERROR: секция ssot_snapshot не прошла обратную проверку — "
+            "файл не изменён"
+        )
+        print(f"  причина: {problem}")
+        return 1
+    if contacts is not None:
+        problem = _contacts_roundtrip_problem(new_text, contacts, info_path)
+        if problem is not None:
+            print(
+                "ERROR: блок contacts не прошёл обратную проверку — "
+                "файл не изменён"
+            )
+            print(f"  причина: {problem}")
+            return 1
+
+    if new_text == text:
+        print(
+            f"{folder_rel}/{INFORMATION_FILE}: без изменений — снимок SSoT "
+            "уже актуален"
+        )
+        return 0
+    _atomic_write(info_path, new_text)
+    loaded = [name for name in SSOT_FILES if name in snapshot]
+    if created:
+        print(
+            f"Создан каркас: {folder_rel}/{INFORMATION_FILE} "
+            "(templates/INFORMATION.yaml)"
+        )
+    print(f"Записано: {folder_rel}/{INFORMATION_FILE}")
+    print(f"  ssot_snapshot: {len(loaded)}/{len(SSOT_FILES)} секций ({', '.join(loaded)})")
+    if commit:
+        print(f"  commit: {commit}")
+    if contacts is not None:
+        rejected = contacts.get("rejected") or []
+        print(
+            f"  contacts: команда {contacts['team']}, "
+            f"групп {len(_contacts_groups(contacts))}"
+        )
+        if rejected:
+            print(
+                "  WARN: пропущены некорректные логины: "
+                + ", ".join(_login_display(item) for item in rejected)
+            )
     return 0
 
 
@@ -28038,12 +29357,14 @@ def _write_contacts_section(info_path: Path, contacts) -> tuple:
 
 
 def cmd_contacts(args) -> int:
-    """Контакты команды из SSoT: таблица, `--apply` (запись), `--json`.
+    """Контакты команды-владельца из ответа MCP `ssot_team`: таблица, `--apply`, `--json`.
 
-    Источник — `ssot/entities/teams/<team>/team.yaml` (ключ `groups`): `name`
-    группы — роль (`ta`, `tl`, `sa`, ...), `members[]` — логины. Соответствия
-    login -> ФИО в SSoT нет, поэтому упоминание RocketChat — `@<login>`.
-    Без `--apply` — dry-run: печатает блок, который был бы записан.
+    Ростер приносит агент: MCP `ssot_team(code=<team>)` → `--team-json <path|->`
+    (ключ `groups`: `name` группы — роль (`ta`, `tl`, `sa`, ...), `members[]` —
+    логины). Клон SSoT и сеть не читаются. Соответствия login -> ФИО в SSoT нет,
+    поэтому упоминание RocketChat — `@<login>`. Без `--apply` — dry-run: печатает
+    блок, который был бы записан. Без `--team-json` — инструкция и код 2
+    (нужны данные).
     """
     root = repo_root_from_args(args)
     json_mode = bool(getattr(args, "json", False))
@@ -28083,7 +29404,27 @@ def cmd_contacts(args) -> int:
     team_code = _normalize_team(
         _pick_team_code(entry.get("team"), identity_src.get("team"))
     )
-    contacts, problem = _load_team_contacts(root, team_code)
+    team_json = getattr(args, "team_json", None)
+    if not team_json:
+        print(
+            "Нужны данные SSoT: ростер команды берётся из ответа MCP ssot_team.",
+            file=stream,
+        )
+        print(
+            f"  1. вызовите MCP ssot_team(code={team_code or '<team>'})",
+            file=stream,
+        )
+        print(
+            f"  2. передайте ответ: criticality.py contacts --is {code} "
+            "--team-json -",
+            file=stream,
+        )
+        return 2
+    try:
+        payload = _read_json_arg(team_json, "team-json")
+    except (OSError, ValueError) as exc:
+        return _fail(f"ERROR: --team-json: {exc}")
+    contacts, problem = _team_contacts_from_payload(payload, team_code)
     if problem is not None:
         return _fail(f"ERROR: {problem['message']}", f"подсказка: {problem['hint']}")
 
@@ -28091,7 +29432,7 @@ def cmd_contacts(args) -> int:
     rejected = contacts.get("rejected") or []
     if rejected:
         print(
-            "WARN  в team.yaml пропущены некорректные логины: "
+            "WARN  в ростере команды пропущены некорректные логины: "
             + ", ".join(_login_display(item) for item in rejected),
             file=stream,
         )
@@ -30277,7 +31618,7 @@ RESEARCH_PAGE_FIELDS = (
 )
 
 
-SSOT_PRODUCTS_ROOT = "ssot/entities/products"
+SSOT_PRODUCTS_ROOT = "entities/products"
 
 # Термины tier 2 по входу: с ними код/имя ИС комбинируются в глубоком поиске
 # (references/search.md). Слова — из предметной области входа, не заглушки.
@@ -30293,7 +31634,7 @@ DEEP_SEARCH_TERMS = {
 
 
 def product_root_page(root, product):
-    """(page_id, ref) корневой страницы продукта: `ssot/entities/products/<код>/links.yaml`."""
+    """(page_id, ref) корневой страницы продукта: `entities/products/<код>/links.yaml`."""
     code = str(product or "").strip().lower()
     if not code:
         return None, None
@@ -30729,7 +32070,7 @@ def _deep_search_queries(criteria, code, name, entry, info, fields, scope, catal
             shallow.append(f"grafana: поиск дашборда по коду «{code}»")
         if gitlab_group:
             shallow.append(f"gitlab: группа {gitlab_group}")
-        shallow.append(f'ssot: grep -r "{code}" ssot/entities/')
+        shallow.append(f"ssot: ssot_get(information-systems/{code})")
 
         deep = []
         for term in terms[:3]:
@@ -30780,9 +32121,9 @@ def _deep_search_queries(criteria, code, name, entry, info, fields, scope, catal
             deep.append(
                 f'gitlab: группа {gitlab_group} + "{terms[0] if terms else identifier}"'
             )
-        deep.append(f'ssot: grep -r "{code}" ssot/entities/ и связи links.yaml')
+        deep.append(f"ssot: ssot_get(information-systems/{code}) и связи links.yaml")
         if product:
-            deep.append(f'ssot: ssot/entities/products/{product.lower()}/links.yaml — цепочка ссылок')
+            deep.append(f"ssot: ssot_get(products/{product.lower()}) — цепочка ссылок")
         blocks.append(
             {
                 "id": identifier,
@@ -31238,8 +32579,14 @@ def _classify_link(url) -> dict:
             "warning": "Jira-ссылка без /browse/<KEY>-<N>",
         }
 
-    # Confluence: space.samokat.ru (pageId= или /display/SPACE/Title).
-    if host == "space.samokat.ru":
+    # Confluence: space.samokat.ru и любые confluence-хосты
+    # (confluence.ecom.tech). Раньше распознавался только space.samokat.ru,
+    # поэтому confluence.ecom.tech уходил в external.
+    if host and (
+        host == "space.samokat.ru"
+        or host.startswith("confluence.")
+        or ".confluence." in host
+    ):
         page_match = _PAGE_ID_RE.search(text)
         if page_match:
             return {
@@ -31446,7 +32793,7 @@ def _link_nodes(root, code, entry, info, snapshot, criteria):
         for url in _split_link_urls(item.get("url")):
             classified = _classify_link(url)
             if classified.get("warning"):
-                print(f"WARN: links.yaml#{key}: {classified['warning']}: {url}")
+                print(f"WARN: ссылки карточки#{key}: {classified['warning']}: {url}")
             add(
                 classified["kind"],
                 classified["ref"],
@@ -31882,20 +33229,38 @@ def cmd_links(args) -> int:
         return 0
 
     links_rel = f"{SSOT_IS_ROOT}/{code}/links.yaml"
-    if not (root / links_rel).exists():
-        print(f"ERROR: нет links.yaml для {code} в SSoT ({links_rel})")
-        print(
-            f"  Сначала соберите карточку ИС: make prepare-apply IS={code} "
-            "(или проверьте, что файл links.yaml есть в SSoT)"
-        )
-        return 1
-
+    links_file = root / links_rel
     folder_rel, folder, _md_path, _yaml_path = _links_paths(root, code, entry)
     if not folder.is_dir():
         print(f"ERROR: нет папки ИС {folder_rel} — создайте каркас: make scaffold IS={code}")
         return 1
     info = _load_info_file(folder) or {}
     snapshot, missing, unreadable = read_ssot_files(root, code)
+    # Источник ссылок — снимок карточки (INFORMATION.yaml → ssot_snapshot.links):
+    # локальный клон SSoT удалён в 2.0.0, поэтому файл entities/... — только
+    # fallback для проектов без снимка. Раньше его отсутствие роняло команду,
+    # хотя данные ссылок уже были в снимке.
+    links_source = f"INFORMATION.yaml → {SSOT_SNAPSHOT_SECTION}.links"
+    if not _links_entries(snapshot.get("links")):
+        if links_file.exists():
+            try:
+                file_doc = load_yaml(links_file)
+            except YamlError as exc:
+                print(f"ERROR: {links_rel}: {exc}")
+                return 1
+            snapshot = dict(snapshot)
+            snapshot["links"] = file_doc
+            links_source = (
+                f"{links_rel} (fallback: в снимке INFORMATION.yaml ссылок нет)"
+            )
+        else:
+            print(f"ERROR: нет ссылок для {code}: ни в снимке карточки, ни в SSoT")
+            print(
+                '  импортируйте карточку: MCP ssot_get(group="information-systems", '
+                f'entity="{code}") → make ssot-import IS={code} ENTITY_JSON=- '
+                f"(файл {links_rel} — только fallback без снимка)"
+            )
+            return 1
     for ref in missing:
         print(f"WARN: нет файла SSoT {ref} — его ссылки в карту не попадут")
     for item in unreadable:
@@ -31904,7 +33269,7 @@ def cmd_links(args) -> int:
     mode = "APPLY" if apply else "DRY-RUN"
     print(f"Карта обхода ссылок ({mode}): {code}")
     print(f"  папка: {folder_rel}")
-    print(f"  источник: {links_rel}")
+    print(f"  источник: {links_source}")
     link_map, rendered = _render_link_map(
         root, criteria, code, entry, info, snapshot, date, limit
     )
@@ -33259,6 +34624,8 @@ def _service_skip_note(clone_error):
     здесь короткая ссылка на неё, без повторения текста.
     """
     text = str(clone_error or "").strip()
+    if "не git-репозиторий" in text:
+        return "не анализировался: не git-репозиторий (см. §2)"
     if "--no-clone" in text:
         return "не анализировался: клон отсутствует (--no-clone, см. §2)"
     if text.startswith("клон отсутствует"):
@@ -33509,6 +34876,29 @@ def cmd_services(args) -> int:
                     "анализируется как активный"
                 )
             plan = component_plan(root, code, component)
+            if plan["action"] == "web_ui":
+                # Не git-репозиторий (веб-страница GitHub/GitLab): SKIP + WARN.
+                # Прогон не блокируется, сервис попадает в §2 «Пропущенные
+                # сервисы», а не в ошибки клонирования.
+                skipped_services.append(
+                    {
+                        "name": name,
+                        "repository": str(plan["repo"] or "—"),
+                        "lifecycle": _component_lifecycle(component) or "—",
+                        "reason": f"не git-репозиторий: {plan['problem']}",
+                    }
+                )
+                print(
+                    f"  {code}/{name}: WARN: не git-репозиторий — "
+                    f"{plan['problem']} (пропущен, анализ не выполнялся)"
+                )
+                services.append(
+                    _service_analysis(
+                        root, code, component,
+                        f"не git-репозиторий: {plan['problem']}",
+                    )
+                )
+                continue
             line = _component_plan_line(f"{code}/{name}", plan, apply, no_clone)
             if line:
                 print(line)
@@ -33586,7 +34976,7 @@ def cmd_services(args) -> int:
             f"openspec/ {findings['openspec_found']}, SLO-конфигов "
             f"{findings['slo_configs_found']}, нормативов {len(findings['norms'])}, "
             f"потоков {len(findings['flows'])}, оснований {len(findings['basis'])}, "
-            f"пропущено (lifecycle): {findings['services_skipped']}, "
+            f"пропущено (lifecycle/не git): {findings['services_skipped']}, "
             f"не склонировано (--no-clone): {findings['services_not_cloned']}"
         )
         if apply:
@@ -33613,7 +35003,7 @@ def cmd_services(args) -> int:
         f"{totals['cloned']}, docs/ {totals['docs']}, openspec/ {totals['openspec']}, "
         f"SLO-конфигов {totals['slo']}, находок {totals['findings']}, "
         f"ошибок клонирования {totals['failures']}, "
-        f"пропущено (lifecycle) {totals['skipped_lifecycle']}, SKIPPED {totals['skipped']}, "
+        f"пропущено (lifecycle/не git) {totals['skipped_lifecycle']}, SKIPPED {totals['skipped']}, "
         f"без папки {totals['no_folder']}, без компонентов {totals['no_components']}."
     )
     if apply:
@@ -35579,7 +36969,7 @@ def _finalize_updates(
             "расхождение критичности: паспорт "
             f"{final_level!r} → SSoT {expected_ssot!r}, а в SSoT severity "
             f"{ssot_raw!r} → {ssot_level!r}. Не угадываю: приведите источники "
-            "в соответствие (make ssot) или укажите --criticality"
+            "в соответствие (make ssot-plan) или укажите --criticality"
         )
     warnings = []
     final_ssot = ssot_level or expected_ssot
@@ -35609,20 +36999,16 @@ def _finalize_updates(
         )
         reference = today()
     months = review_period(catalog or {}, entry or {}, criteria)
-    default_review = None
-    if months in (None, ""):
+    # Формула одна на весь инструмент: `review_date_from_generation`.
+    derived_review = review_date_from_generation(catalog, entry, criteria, reference)
+    if derived_review is None:
         warnings.append(
-            "период переоценки не задан в критериях "
-            "(staleness.review_period_months) — review_date оставлен пустым"
+            f"review_period_months={months!r} не применим к дате генерации — "
+            "review_date оставлен пустым"
         )
+        default_review = None
     else:
-        try:
-            default_review = add_months(reference, int(months)).isoformat()
-        except (TypeError, ValueError):
-            warnings.append(
-                f"review_period_months={months!r} не число — review_date "
-                "оставлен пустым"
-            )
+        default_review = derived_review.isoformat()
     assigned_value = _iso_date(assigned) if assigned else None
     if assigned_value is None:
         assigned_value = _iso_date(entry.get("assigned_date"))
@@ -36044,6 +37430,30 @@ def _handoff_first_env(names):
     return "", None
 
 
+def _handoff_thread(explicit=None):
+    """tmid треда-родителя: флаг `--thread` → env → None.
+
+    `tmid` — id сообщения, ОТВЕТОМ в которое публикуется паспорт
+    (`...?msg=<tmid>` в ссылке Rocket.Chat). Значение не печатается как секрет,
+    но валидируется: мусор в `tmid` даёт 400 от chat.postMessage, поэтому
+    неверный формат — ошибка до отправки.
+    """
+    raw = str(explicit or "").strip()
+    source = "--thread" if raw else ""
+    if not raw:
+        raw, env_name = _handoff_first_env(HANDOFF_THREAD_ENVS)
+        source = env_name or ""
+    if not raw:
+        return None, ""
+    if not HANDOFF_THREAD_TMID_RE.match(raw):
+        raise ValueError(
+            f"tmid {raw!r} не похож на id сообщения Rocket.Chat "
+            "(буквы/цифры/_/-, 3–64 символа): возьмите значение из ссылки "
+            "?msg=<tmid>"
+        )
+    return raw, source
+
+
 def _handoff_api_config(criteria):
     """(base, token, user_id, problems) для REST-фолбэка. Токен не печатается.
 
@@ -36065,6 +37475,15 @@ def _handoff_api_config(criteria):
             + " / ".join(HANDOFF_USER_ENVS)
             + " (id пользователя-бота, 17 символов; это НЕ логин — id виден в "
             "GET /api/v1/me → _id или в UI-профиле Rocket.Chat)"
+        )
+    elif "@" in user_id or " " in user_id:
+        # `ROCKETCHAT_USER` в контуре иногда содержит ЛОГИН (`user@domain`).
+        # Логин в X-User-Id даёт 401 и выглядит как «истёк токен» — называем
+        # причину до запроса, а не после.
+        problems.append(
+            f"X-User-Id похож на логин ({user_env}: {user_id[:3]}***@…): нужен "
+            "id (17 символов из GET /api/v1/me → _id), не логин. Проверьте "
+            "ROCKETCHAT_USER — там должен быть id, а не имя учётной записи"
         )
     return base, token, user_id, problems
 
@@ -36090,17 +37509,30 @@ def _handoff_api_error(status, detail="", channel=None):
     return f"{status}: Rocket.Chat отклонил запрос{suffix}"
 
 
-def _handoff_api_post(base, token, user_id, text, channel=None):
+def _handoff_api_post(base, token, user_id, text, channel=None, thread_id=None,
+                      room_id=None):
     """POST chat.postMessage. (ok, message_id|'', status, error|'').
+
+    Ответ в тред: `tmid` = id сообщения-родителя. Rocket.Chat принимает
+    `roomId` + `tmid` (канон) либо `channel` + `tmid` (фолбэк, если roomId не
+    резолвится). `message_id` — id СОЗДАННОГО ответа, а не родителя: ссылки
+    `thread_link`/`approve_link` указывают на наше сообщение.
 
     Один повтор только на 5xx и таймаут: 4xx (токен, права, канал) повтором
     не лечатся, а лишний POST мог бы создать дубль сообщения.
     """
     channel = channel or HANDOFF_CHANNEL
     url = f"{base}{HANDOFF_API_PATH}"
-    payload = json.dumps(
-        {"channel": channel, "text": text}, ensure_ascii=False
-    ).encode("utf-8")
+    payload_data = {"text": text}
+    if thread_id:
+        if room_id:
+            payload_data["roomId"] = str(room_id)
+        else:
+            payload_data["channel"] = channel
+        payload_data["tmid"] = str(thread_id)
+    else:
+        payload_data["channel"] = channel
+    payload = json.dumps(payload_data, ensure_ascii=False).encode("utf-8")
     headers = {
         "Content-Type": "application/json; charset=utf-8",
         "X-Auth-Token": token,
@@ -36221,12 +37653,18 @@ def _handoff_resolve_room(base, token, user_id, channel, criteria=None):
 
 def _handoff_find_message(
     base, token, user_id, channel, text, criteria=None, room_id=None, kind=None,
+    thread_id=None,
 ):
     """Найти своё сообщение в канале: (ok, message_id|'', error|'').
 
     MCP-исполнитель мог отправить сообщение, но не вернуть ссылку. Перед POST
     ищем его в канале: сравниваем первые `HANDOFF_SEARCH_PREFIX` символов
     текста и автора (`u._id` = наш X-User-Id). Найдено — повтор не нужен.
+
+    Ключ дедупликации учитывает тред: при `thread_id` совпадением считается
+    только сообщение с тем же `tmid`, а без `thread_id` — только топ-сообщение
+    (без `tmid`). Иначе существующее топ-сообщение с тем же текстом ложно
+    считалось бы «своим ответом в треде» и ответ не был бы отправлен.
 
     Поиск идёт по `roomId` (см. `_handoff_resolve_room`): `roomName` в
     `*.messages` не поддерживается. Не удалось резолвить roomId — возвращаем
@@ -36256,6 +37694,14 @@ def _handoff_find_message(
             continue
         author = str((item.get("u") or {}).get("_id") or "").strip()
         if user_id and author and author != user_id:
+            continue
+        item_thread = str(item.get("tmid") or "").strip()
+        if thread_id:
+            if item_thread != str(thread_id):
+                continue
+        elif item_thread:
+            # Топ-сообщение ищется только среди топ-сообщений: ответ в треде
+            # с тем же текстом — не доказательство, что топ уже отправлен.
             continue
         if _handoff_text_prefix(item.get("msg"), prefix) != wanted:
             continue
@@ -36290,7 +37736,7 @@ def _handoff_write_fields(root, code, updates):
 
 def _handoff_publish_success(
     root, code, entry, base, message_id, transport, mode, channel=None,
-    fallback_reason=None, note=None,
+    fallback_reason=None, note=None, thread=False, replies=0,
 ):
     link = _handoff_message_link(base, message_id, channel)
     updates = {
@@ -36304,6 +37750,7 @@ def _handoff_publish_success(
         HANDOFF_DEADLINE_FIELD: None,
         TRANSPORT_USED_FIELD: transport,
         FALLBACK_REASON_FIELD: fallback_reason,
+        HANDOFF_THREAD_FIELD: bool(thread),
     }
     if not _handoff_write_fields(root, code, updates):
         return 1
@@ -36320,10 +37767,256 @@ def _handoff_publish_success(
         print(f"  {note}")
     print(f"  статус: {HANDOFF_STATUS_PUBLISHED}")
     print(f"  ссылка на тред: {link}")
-    print(
-        f"Следующий шаг: make finalize IS={code} — approve_link уже записан "
-        "(= thread_link); отдельного подтверждения SRE не ждём, гейт — мерж MR"
+    if mode == HANDOFF_MODE_REPORT:
+        if thread:
+            print(
+                f"Тред отчёта опубликован: родитель + ответов {replies}; "
+                "thread_link и approve_link указывают на РОДИТЕЛЯ. "
+                "Гейты MR не применялись."
+            )
+        else:
+            print(
+                "Отчёт опубликован: thread_link и approve_link указывают на "
+                "сообщение отчёта. Гейты MR не применялись."
+            )
+        print(
+            f"Следующий шаг: подтверждение SRE/TL в треде; затем "
+            f"make finalize IS={code} (когда согласование закрыто)"
+        )
+    else:
+        print(
+            f"Следующий шаг: make finalize IS={code} — approve_link уже записан "
+            "(= thread_link); отдельного подтверждения SRE не ждём, гейт — мерж MR"
+        )
+    return 0
+
+
+def _handoff_message_id_from_link(link):
+    """id сообщения из ссылки `...?msg=<id>` (пусто — ссылка без msg)."""
+    try:
+        query = parse_qs(urlsplit(str(link or "")).query)
+    except ValueError:
+        return ""
+    return str((query.get("msg") or [""])[0]).strip()
+
+
+def _handoff_api_update(base, token, user_id, room_id, message_id, text):
+    """POST chat.update: правка отправленного сообщения. (ok, error|'').
+
+    Используется `--update-parent`: SSoT-MR появляется после публикации отчёта,
+    и родительское сообщение обновляется, а не дублируется новым тредом.
+    Повтор — только на 5xx/таймаут (4xx не лечатся повтором).
+    """
+    url = f"{base}{HANDOFF_API_UPDATE_PATH}"
+    payload = json.dumps(
+        {"roomId": str(room_id), "msgId": str(message_id), "text": text},
+        ensure_ascii=False,
+    ).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Auth-Token": token,
+        "X-User-Id": user_id,
+    }
+    last_error = ""
+    for attempt in (1, 2):
+        try:
+            request = urllib.request.Request(
+                url, data=payload, headers=headers, method="POST"
+            )
+            with urllib.request.urlopen(request, timeout=HANDOFF_HTTP_TIMEOUT) as resp:
+                raw = resp.read().decode("utf-8", "replace")
+            data = json.loads(raw) if raw.strip() else {}
+            if isinstance(data, dict) and data.get("success") is False:
+                return False, _handoff_api_error(
+                    200, data.get("error") or data.get("message") or raw, None
+                )
+            return True, ""
+        except urllib.error.HTTPError as exc:
+            try:
+                body = exc.read().decode("utf-8", "replace")
+            except OSError:
+                body = ""
+            last_error = _handoff_api_error(exc.code, body, None)
+            if exc.code >= 500 and attempt == 1:
+                time.sleep(1)
+                continue
+            return False, last_error
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last_error = _handoff_api_error(None, getattr(exc, "reason", exc), None)
+            if attempt == 1:
+                time.sleep(1)
+                continue
+            return False, last_error
+    return False, last_error or "неизвестная ошибка REST"
+
+
+def _handoff_report_thread_publish(
+    root, code, entry, criteria, parent, replies, channel=None,
+    allow_duplicate_risk=False, force_resend=False,
+):
+    """Новый тред отчёта: родитель (top-level) + ответы с tmid родителя.
+
+    0 — опубликовано (или тред уже был — дубль не создаётся). `thread_link` и
+    `approve_link` указывают на РОДИТЕЛЯ, `handoff_thread: true` отличает тред
+    от одиночного отчёта в идемпотентности.
+    """
+    channel = channel or _handoff_channel(criteria)
+    base, token, user_id, problems = _handoff_api_config(criteria)
+    if problems:
+        reason = "; ".join(problems)
+        print(f"ERROR: REST недоступен: {reason}")
+        _handoff_write_fields(
+            root, code,
+            {
+                HANDOFF_MODE_FIELD: HANDOFF_MODE_REPORT,
+                HANDOFF_STATUS_FIELD: HANDOFF_STATUS_FAILED,
+                HANDOFF_ERROR_FIELD: reason,
+                TRANSPORT_USED_FIELD: "manual",
+            },
+        )
+        return 1
+    print(f"  канал: {channel} (REST {base})")
+    if allow_duplicate_risk:
+        print(
+            "WARN: --allow-duplicate-risk — поиск родителя в канале пропущен; "
+            "возможен второй тред"
+        )
+    else:
+        ok, found, search_error = _handoff_find_message(
+            base, token, user_id, channel, parent, criteria
+        )
+        if not ok:
+            why = (
+                "поиск своего сообщения в канале недоступен "
+                f"({HANDOFF_FALLBACK_DEDUP_UNAVAILABLE}: {search_error}) — "
+                "нельзя исключить второй тред; аварийный обход: "
+                "--allow-duplicate-risk"
+            )
+            print(f"ERROR: {why}")
+            _handoff_write_fields(
+                root, code,
+                {
+                    HANDOFF_MODE_FIELD: HANDOFF_MODE_REPORT,
+                    HANDOFF_STATUS_FIELD: HANDOFF_STATUS_FAILED,
+                    HANDOFF_ERROR_FIELD: why,
+                    FALLBACK_REASON_FIELD: HANDOFF_FALLBACK_DEDUP_UNAVAILABLE,
+                    TRANSPORT_USED_FIELD: "manual",
+                },
+            )
+            return 1
+        if found and not force_resend:
+            print(
+                "  дедупликация: родитель отчёта уже в канале "
+                f"(id {found}) — второй тред не создаётся"
+            )
+            return _handoff_publish_success(
+                root, code, entry, base, found, "api", HANDOFF_MODE_REPORT,
+                channel=channel, thread=True, replies=0,
+                note="тред найден поиском — дубль предотвращён",
+            )
+        print("  дедупликация: родителя отчёта в канале нет — создаём тред")
+    ok_room, room_id, _kind, room_error = _handoff_resolve_room(
+        base, token, user_id, channel, criteria
     )
+    if not ok_room:
+        room_id = ""
+        print(
+            "WARN: roomId канала не резолвится "
+            f"({room_error}) — ответы уйдут по channel+tmid ({channel})"
+        )
+    ok_parent, parent_id, _status, error = _handoff_api_post(
+        base, token, user_id, parent, channel
+    )
+    if not ok_parent or not parent_id:
+        reason = error or "REST не вернул _id родительского сообщения"
+        print(f"ERROR: родитель отчёта не отправлен — {reason}")
+        _handoff_write_fields(
+            root, code,
+            {
+                HANDOFF_MODE_FIELD: HANDOFF_MODE_REPORT,
+                HANDOFF_STATUS_FIELD: HANDOFF_STATUS_FAILED,
+                HANDOFF_ERROR_FIELD: reason,
+                TRANSPORT_USED_FIELD: "manual",
+            },
+        )
+        return 1
+    print(f"  родитель: id {parent_id} (top-level)")
+    sent = 0
+    for index, text in enumerate(replies, 1):
+        ok_reply, reply_id, _rstatus, rerror = _handoff_api_post(
+            base, token, user_id, text, channel,
+            thread_id=parent_id, room_id=room_id or None,
+        )
+        if not ok_reply:
+            # Родитель уже создан: сохраняем его как thread_link (иначе ссылка
+            # потеряется), но статус — failed: тред неполный.
+            link = _handoff_message_link(base, parent_id, channel)
+            print(
+                f"ERROR: ответ {index} не отправлен — {rerror}; родитель "
+                f"остаётся опубликованным ({link})"
+            )
+            _handoff_write_fields(
+                root, code,
+                {
+                    HANDOFF_MODE_FIELD: HANDOFF_MODE_REPORT,
+                    HANDOFF_STATUS_FIELD: HANDOFF_STATUS_FAILED,
+                    THREAD_LINK_FIELD: link,
+                    APPROVE_LINK_FIELD: link,
+                    HANDOFF_THREAD_FIELD: True,
+                    HANDOFF_ERROR_FIELD: f"ответ {index}: {rerror}",
+                    TRANSPORT_USED_FIELD: "api",
+                },
+            )
+            return 1
+        sent += 1
+        print(f"  ответ {index}: id {reply_id or '—'}")
+    return _handoff_publish_success(
+        root, code, entry, base, parent_id, "api", HANDOFF_MODE_REPORT,
+        channel=channel, thread=True, replies=sent,
+    )
+
+
+def _handoff_update_parent(
+    root, code, entry, criteria, parent_text, channel=None,
+):
+    """`--update-parent`: правка родительского сообщения отчёта (chat.update)."""
+    _mode, status, link = _handoff_state(entry)
+    if not link or status != HANDOFF_STATUS_PUBLISHED:
+        print(
+            "ERROR: --update-parent требует опубликованного треда отчёта "
+            f"(thread_link={link or '—'}, {HANDOFF_STATUS_FIELD}={status or '—'})"
+        )
+        print("  сначала опубликуйте тред: handoff --report --thread-new --send auto")
+        return 1
+    message_id = _handoff_message_id_from_link(link)
+    if not message_id:
+        print(f"ERROR: в thread_link нет msg= — {link}")
+        return 1
+    channel = channel or _handoff_channel(criteria)
+    base, token, user_id, problems = _handoff_api_config(criteria)
+    if problems:
+        print(f"ERROR: REST недоступен: {'; '.join(problems)}")
+        return 1
+    ok_room, room_id, _kind, room_error = _handoff_resolve_room(
+        base, token, user_id, channel, criteria
+    )
+    if not ok_room:
+        print(f"ERROR: roomId канала не резолвится ({room_error}) — правка невозможна")
+        return 1
+    ok, error = _handoff_api_update(
+        base, token, user_id, room_id, message_id, parent_text
+    )
+    if not ok:
+        print(f"ERROR: chat.update не удался — {error}")
+        _handoff_write_fields(
+            root, code, {HANDOFF_ERROR_FIELD: f"update_parent: {error}"}
+        )
+        return 1
+    print(
+        f"  родитель обновлён: id {message_id} (chat.update), "
+        "thread_link/approve_link не изменились"
+    )
+    print(f"  ссылка: {link}")
     return 0
 
 
@@ -36340,7 +38033,7 @@ def _handoff_load_text(root, code, entry, criteria, catalog, folder):
 
 
 def _handoff_preflight(root, code, entry, criteria, catalog, folder, text,
-                       allow_incomplete=False):
+                       allow_incomplete=False, force=False):
     """Общие предусловия отправки: ⛔ в тексте, паспорт и `validate`.
 
     Один набор проверок для `handoff` и `handoff-apply`: предусловие не может
@@ -36379,16 +38072,27 @@ def _handoff_preflight(root, code, entry, criteria, catalog, folder, text,
             print(f"  - {problem}")
         print("Следующий шаг: make validate")
         return 1
+    # SSoT-MR: ссылка записана и изменения подтверждены ssot_verify_change.
+    # `ssot_status: no_change` — severity уже целевой, MR не требуется.
+    info = _load_info_file(folder) or {}
+    if not _ssot_mr_gate(root, code, entry, info, "handoff", force=force):
+        return 1
     return 0
 
 
 def _handoff_api_send(
     root, code, entry, criteria, text, mode, channel=None, fallback_reason=None,
+    thread_id=None, room_id=None,
 ):
     """Отправить через REST. 0 — опубликовано, 1 — отказ (статус failed)."""
     channel = channel or _handoff_channel(criteria)
     base, token, user_id, problems = _handoff_api_config(criteria)
     print(f"  канал: {channel} (REST {base})")
+    if thread_id:
+        print(
+            f"  тред: ответ в tmid {thread_id} "
+            + (f"(roomId {room_id})" if room_id else "(roomId не резолвился — channel+tmid)")
+        )
     if problems:
         reason = "; ".join(problems)
         print(f"ERROR: REST-фолбэк недоступен: {reason}")
@@ -36410,7 +38114,8 @@ def _handoff_api_send(
         )
         return 1
     ok, message_id, status, error = _handoff_api_post(
-        base, token, user_id, text, channel
+        base, token, user_id, text, channel,
+        thread_id=thread_id, room_id=room_id,
     )
     if ok:
         return _handoff_publish_success(
@@ -36439,6 +38144,7 @@ def _handoff_api_send(
 def _handoff_api_publish(
     root, code, entry, criteria, text, mode, channel=None,
     fallback_reason=None, allow_duplicate_risk=False, error_prefix="",
+    thread_id=None,
 ):
     """Единая отправка через REST: дедупликация поиском в канале → POST.
 
@@ -36447,9 +38153,27 @@ def _handoff_api_publish(
     сообщение (`_handoff_find_message` по roomId): найдено — берём его `_id` как
     `thread_link`, повтор не шлём. Поиск недоступен — fail-closed: без
     `--allow-duplicate-risk` не отправляем (дубль в треде хуже паузы).
+
+    `thread_id` (tmid) — ответ в существующий тред. roomId резолвится один раз
+    и передаётся и в поиск (ключ дедупликации учитывает tmid), и в POST. Не
+    резолвится — WARN и фолбэк на `channel`+`tmid`.
     """
     channel = channel or _handoff_channel(criteria)
     base, token, user_id, _problems = _handoff_api_config(criteria)
+    room_id = ""
+    if thread_id:
+        ok_room, room_id, _kind, room_error = _handoff_resolve_room(
+            base, token, user_id, channel, criteria
+        )
+        if not ok_room:
+            room_id = ""
+            print(
+                "WARN: roomId канала не резолвится "
+                f"({room_error}) — ответ в тред уйдёт по channel+tmid "
+                f"({channel}, tmid {thread_id})"
+            )
+        else:
+            print(f"  тред: tmid {thread_id} в roomId {room_id}")
     if allow_duplicate_risk:
         print(
             "WARN: --allow-duplicate-risk — поиск своего сообщения в канале "
@@ -36457,7 +38181,8 @@ def _handoff_api_publish(
         )
     else:
         ok, found, search_error = _handoff_find_message(
-            base, token, user_id, channel, text, criteria
+            base, token, user_id, channel, text, criteria,
+            room_id=room_id or None, thread_id=thread_id,
         )
         if not ok:
             why = (
@@ -36492,12 +38217,13 @@ def _handoff_api_publish(
     return _handoff_api_send(
         root, code, entry, criteria, text, mode,
         channel=channel, fallback_reason=fallback_reason,
+        thread_id=thread_id, room_id=room_id or None,
     )
 
 
 def _handoff_fallback(
     root, code, entry, criteria, catalog, mode, reason, text=None, channel=None,
-    allow_duplicate_risk=False, dry_run=False, force_resend=False,
+    allow_duplicate_risk=False, dry_run=False, force_resend=False, thread_id=None,
 ):
     """MCP нерабочий (reason) → REST с защитой от дубля. 0 — опубликовано.
 
@@ -36575,6 +38301,7 @@ def _handoff_fallback(
         channel=channel, fallback_reason=reason,
         allow_duplicate_risk=allow_duplicate_risk,
         error_prefix=f"MCP: {reason}; ",
+        thread_id=thread_id,
     )
 
 
@@ -36611,7 +38338,29 @@ def cmd_handoff(args) -> int:
     transport = str(getattr(args, "transport", "") or "").strip().lower() or "auto"
     force_resend = bool(getattr(args, "force_resend", False))
     resume = bool(getattr(args, "resume", False))
+    report = bool(getattr(args, "report", False))
+    thread_new = bool(getattr(args, "thread_new", False))
+    update_parent = bool(getattr(args, "update_parent", False))
+    dochub_mr_url = str(getattr(args, "dochub_mr_url", "") or "").strip() or None
+    ssot_mr_url = str(getattr(args, "ssot_mr_url", "") or "").strip() or None
+    if (thread_new or update_parent) and not report:
+        print("ERROR: --thread-new и --update-parent работают только с --report")
+        return 2
+    if thread_new and update_parent:
+        print("ERROR: --thread-new и --update-parent взаимоисключающи")
+        return 2
+    if (thread_new or update_parent) and getattr(args, "thread", None):
+        print(
+            "ERROR: --thread <tmid> несовместим с --thread-new/--update-parent: "
+            "родитель отчёта создаётся top-level, а правка идёт по thread_link"
+        )
+        return 2
     allow_duplicate_risk = bool(getattr(args, "allow_duplicate_risk", False))
+    try:
+        thread_id, thread_source = _handoff_thread(getattr(args, "thread", None))
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
+        return 2
     if send not in (None, HANDOFF_MODE_AUTO, HANDOFF_MODE_MANUAL):
         print(f"ERROR: --send={send!r} (допустимо auto | manual)")
         return 2
@@ -36619,6 +38368,7 @@ def cmd_handoff(args) -> int:
         print(f"ERROR: --transport={transport!r} (допустимо auto | mcp | api)")
         return 2
     try:
+        date = parse_date_arg(args.date, "--date") if getattr(args, "date", None) else None
         criteria = load_criteria()
         catalog, systems = load_catalog(root)
         mcp_timeout = _handoff_mcp_timeout(
@@ -36637,25 +38387,83 @@ def cmd_handoff(args) -> int:
     info = _load_info_file(folder) or {}
     body = passport_body(root, entry) or {}
     gate = evaluate_gate(info, criteria)
-    text = _publication_text_for_is(
-        root, code, entry, info, criteria, gate, body, catalog
-    )
-    if not text:
+    thread_texts = None
+    if report:
+        # Режим отчёта: публикуются РЕЗУЛЬТАТЫ, а не запрос согласования.
+        # Текст собирается из паспорта/INFORMATION/catalog, без ⛔ и без MR.
+        if thread_new or update_parent:
+            thread_texts = _report_thread_texts(
+                root, code, entry, info, criteria, catalog, date=date,
+                dochub_mr_url=dochub_mr_url, ssot_mr_url=ssot_mr_url,
+            )
+            if not thread_texts:
+                print(
+                    "ERROR: текст отчёта не собран — нет "
+                    f"criticality-passport.yaml или контекст не отрендерился; "
+                    f"соберите пакет: make start-apply IS={code}"
+                )
+                return 1
+            text = thread_texts[0]
+        else:
+            text = _report_text_for_is(
+                root, code, entry, info, criteria, catalog, date=date
+            )
+        if not text:
+            print(
+                "ERROR: текст отчёта не собран — нет criticality-passport.yaml "
+                f"или контекст не отрендерился; соберите пакет: "
+                f"make start-apply IS={code}"
+            )
+            return 1
         print(
-            "ERROR: текст сообщения не собран — нет расчёта или шаблон не "
-            f"отрендерился; перегенерируйте пакет: make start-apply IS={code} "
-            "FORCE=1"
+            f"handoff --report: {code} — режим отчёта: гейты MR/⛔/SSoT не "
+            "применяются"
+            + (
+                "; новый тред (родитель + ответы)"
+                if thread_new
+                else ("; правка родителя (chat.update)" if update_parent else "")
+            )
         )
-        return 1
-    # --- предусловия -----------------------------------------------------
-    allow_incomplete = bool(getattr(args, "allow_incomplete", False))
-    if _handoff_preflight(
-        root, code, entry, criteria, catalog, folder, text, allow_incomplete
-    ):
-        return 1
+    else:
+        text = _publication_text_for_is(
+            root, code, entry, info, criteria, gate, body, catalog
+        )
+        if not text:
+            print(
+                "ERROR: текст сообщения не собран — нет расчёта или шаблон не "
+                f"отрендерился; перегенерируйте пакет: make start-apply IS={code} "
+                "FORCE=1"
+            )
+            return 1
+        # --- предусловия -------------------------------------------------
+        allow_incomplete = bool(getattr(args, "allow_incomplete", False))
+        if _handoff_preflight(
+            root, code, entry, criteria, catalog, folder, text, allow_incomplete,
+            force=bool(getattr(args, "force", False)),
+        ):
+            return 1
     mode_saved, status_saved, thread_link = _handoff_state(entry)
     expired, deadline_text = _handoff_deadline_state(entry, folder)
-    if thread_link and status_saved == HANDOFF_STATUS_PUBLISHED and not force_resend:
+    # Дедупликация учитывает РЕЖИМ: опубликованный отчёт не блокирует запрос
+    # согласования и наоборот (это разные сообщения в треде). Внутри режима
+    # ключ прежний — thread_link + статус published (+ tmid в поиске).
+    saved_thread = bool(entry.get(HANDOFF_THREAD_FIELD))
+    saved_kind = (
+        ("report-thread" if saved_thread else HANDOFF_MODE_REPORT)
+        if mode_saved == HANDOFF_MODE_REPORT
+        else "approval"
+    )
+    current_kind = (
+        "report-thread" if thread_new
+        else (HANDOFF_MODE_REPORT if report else "approval")
+    )
+    # `--update-parent` работает ИМЕННО с опубликованным тредом: проверка
+    # идемпотентности к нему не применяется.
+    if (
+        thread_link and status_saved == HANDOFF_STATUS_PUBLISHED
+        and saved_kind == current_kind and not force_resend
+        and not update_parent
+    ):
         if dry_run:
             # Предпросмотр не отправляет и не меняет состояние: уже отправленный
             # тред — это ответ «отправка не требуется», а не ошибка.
@@ -36678,7 +38486,11 @@ def cmd_handoff(args) -> int:
     # --- FIX 1: истёк срок ожидания MCP → автоматический REST ------------
     # `--resume` проверяет то же состояние принудительно (не дожидаясь, пока
     # deadline истечёт сам): истёк — фолбэк, ещё нет — фолбэк по явной воле.
-    if status_saved == HANDOFF_STATUS_MCP_REQUESTED and (expired or resume):
+    if (
+        not report
+        and status_saved == HANDOFF_STATUS_MCP_REQUESTED
+        and (expired or resume)
+    ):
         if not expired:
             print(
                 f"WARN: срок ожидания MCP ещё не истёк ({deadline_text}) — "
@@ -36706,9 +38518,9 @@ def cmd_handoff(args) -> int:
             root, code, entry, criteria, catalog, mode_saved or HANDOFF_MODE_AUTO,
             HANDOFF_FALLBACK_MCP_TIMEOUT, text=text, channel=channel,
             allow_duplicate_risk=allow_duplicate_risk, dry_run=False,
-            force_resend=force_resend,
+            force_resend=force_resend, thread_id=thread_id,
         )
-    if resume:
+    if resume and not report:
         print(f"handoff: {code}")
         print(
             "  MCP: возобновлять нечего — "
@@ -36718,7 +38530,8 @@ def cmd_handoff(args) -> int:
     # Запрос уже отправлен и срок не истёк: не создаём второй запрос молча
     # (это был бы дубль в канале), ждём handoff-result или --force-resend.
     if (
-        status_saved == HANDOFF_STATUS_MCP_REQUESTED
+        not report
+        and status_saved == HANDOFF_STATUS_MCP_REQUESTED
         and not force_resend and not dry_run and send != HANDOFF_MODE_MANUAL
     ):
         print(f"handoff: {code}")
@@ -36732,6 +38545,14 @@ def cmd_handoff(args) -> int:
         )
         return 0
     # --- вопрос ----------------------------------------------------------
+    if report and send is None and not dry_run:
+        # Отчёт — не запрос согласования: интерактивный вопрос здесь не нужен,
+        # режим выбирается явно (`--send auto` или `--dry-run`).
+        print(
+            "ERROR: --report требует явного --send auto (отправка) или "
+            "--dry-run (показать текст целиком)"
+        )
+        return 2
     if send is None and not dry_run:
         if not sys.stdin.isatty():
             print(
@@ -36785,8 +38606,20 @@ def cmd_handoff(args) -> int:
             plan_reason = "--transport api (явно, MCP пропущен)"
         first, last = _handoff_preview(text)
         print(f"handoff (DRY-RUN): {code}")
-        print(f"  режим: {send or 'не задан — будет задан вопрос (--send auto|manual)'}")
+        print(
+            "  режим: "
+            + (
+                f"{HANDOFF_MODE_REPORT} — отчёт о результатах (без MR-гейтов)"
+                if report
+                else (send or "не задан — будет задан вопрос (--send auto|manual)")
+            )
+        )
         print(f"  канал: {channel}")
+        if thread_id:
+            print(
+                f"  тред: ответ в tmid {thread_id} "
+                f"(источник: {thread_source}) — не новое топ-сообщение"
+            )
         print(f"  транспорт: {planned} — {plan_reason}")
         print(
             f"  MCP-таймаут: {mcp_timeout} с"
@@ -36806,9 +38639,32 @@ def cmd_handoff(args) -> int:
             print("  REST-фолбэк недоступен: " + "; ".join(problems))
         if allow_duplicate_risk:
             print("  дедупликация: пропускается (--allow-duplicate-risk)")
-        print(f"  длина текста: {len(text)} символов")
-        print(f"  начало: {first}")
-        print(f"  конец: {last}")
+        if thread_texts:
+            print(
+                f"  длина: родитель {len(thread_texts[0])} + ответы "
+                + " + ".join(str(len(item)) for item in thread_texts[1])
+                + " символов"
+            )
+        else:
+            print(f"  длина текста: {len(text)} символов")
+        if report:
+            # Отчёт печатается целиком: его читают и правят до отправки, а
+            # «начало/конец» скрывали бы разделы «Расчёт» и «Что дальше».
+            print()
+            if thread_texts:
+                parent_text, reply_texts = thread_texts
+                print("--- родитель (top-level) ---")
+                print(parent_text.rstrip())
+                for index, reply in enumerate(reply_texts, 1):
+                    print()
+                    print(f"--- ответ {index} (tmid = id родителя) ---")
+                    print(reply.rstrip())
+            else:
+                print(text.rstrip())
+            print()
+        else:
+            print(f"  начало: {first}")
+            print(f"  конец: {last}")
         if getattr(args, "write", False):
             preview_path = _handoff_preview_path(folder)
             preview_path.parent.mkdir(parents=True, exist_ok=True)
@@ -36819,6 +38675,12 @@ def cmd_handoff(args) -> int:
         print("DRY-RUN: ничего не отправлено, catalog.yaml не изменён.")
         return 0
     # --- manual ----------------------------------------------------------
+    if send == HANDOFF_MODE_MANUAL and report:
+        print(
+            "ERROR: --report публикуется только автоматически: --send auto. "
+            "Текст без отправки — --dry-run"
+        )
+        return 2
     if send == HANDOFF_MODE_MANUAL:
         if not _handoff_write_fields(
             root, code,
@@ -36843,6 +38705,33 @@ def cmd_handoff(args) -> int:
             f"IS={code} MESSAGE_URL=<ссылка на сообщение>"
         )
         return 0
+    # --- update-parent: правка отправленного родителя --------------------
+    if update_parent:
+        print(f"handoff --report --update-parent: {code}")
+        return _handoff_update_parent(
+            root, code, entry, criteria, text, channel=channel
+        )
+    # --- report: REST, без MCP-запроса и без ожидания --------------------
+    if report:
+        print(f"handoff --report: {code}")
+        print(f"  режим: {HANDOFF_MODE_REPORT}")
+        print(f"  канал: {channel}")
+        if thread_new:
+            print("  формат: новый тред — родитель + ответы")
+            return _handoff_report_thread_publish(
+                root, code, entry, criteria, text, thread_texts[1],
+                channel=channel,
+                allow_duplicate_risk=allow_duplicate_risk,
+                force_resend=force_resend,
+            )
+        if thread_id:
+            print(f"  тред: ответ в tmid {thread_id} (источник: {thread_source})")
+        return _handoff_api_publish(
+            root, code, entry, criteria, text, HANDOFF_MODE_REPORT,
+            channel=channel,
+            allow_duplicate_risk=allow_duplicate_risk,
+            thread_id=thread_id,
+        )
     # --- auto: MCP → REST ------------------------------------------------
     if not _handoff_write_fields(root, code, {HANDOFF_MODE_FIELD: HANDOFF_MODE_AUTO}):
         return 1
@@ -36871,6 +38760,10 @@ def cmd_handoff(args) -> int:
             "created_at": requested_at,
             "attempt": attempts,
         }
+        if thread_id:
+            # Ответ в существующий тред: MCP-исполнитель должен передать tmid
+            # в chat.postMessage, а не создавать новое топ-сообщение.
+            request["tmid"] = thread_id
         try:
             _atomic_write(
                 request_path, json.dumps(request, ensure_ascii=False, indent=2) + "\n"
@@ -36929,6 +38822,7 @@ def cmd_handoff(args) -> int:
             HANDOFF_FALLBACK_MCP_UNAVAILABLE if transport == "auto" else None
         ),
         allow_duplicate_risk=allow_duplicate_risk,
+        thread_id=thread_id,
     )
 
 
@@ -36942,6 +38836,13 @@ def cmd_handoff_result(args) -> int:
     dry_run = bool(getattr(args, "dry_run", False))
     force_resend = bool(getattr(args, "force_resend", False))
     allow_duplicate_risk = bool(getattr(args, "allow_duplicate_risk", False))
+    # Тред-родитель нужен и здесь: если MCP-исполнитель не отчитался, REST-фолбэк
+    # должен отвечать в ТОТ ЖЕ тред, а не создавать новое топ-сообщение.
+    try:
+        thread_id, _thread_source = _handoff_thread(getattr(args, "thread", None))
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
+        return 2
     if message_url and failed:
         print(
             "ERROR: --message-url и --failed взаимоисключающие — непонятно, "
@@ -37035,7 +38936,7 @@ def cmd_handoff_result(args) -> int:
                 root, code, entry, criteria, catalog, mode,
                 HANDOFF_FALLBACK_MCP_INVALID_RESPONSE, channel=channel,
                 allow_duplicate_risk=allow_duplicate_risk, dry_run=dry_run,
-                force_resend=force_resend,
+                force_resend=force_resend, thread_id=thread_id,
             )
         if thread_link and thread_link == message_url:
             print(f"handoff-result: {code}")
@@ -37081,7 +38982,7 @@ def cmd_handoff_result(args) -> int:
         root, code, entry, criteria, catalog, mode,
         HANDOFF_FALLBACK_MCP_FAILED, channel=channel,
         allow_duplicate_risk=allow_duplicate_risk, dry_run=dry_run,
-        force_resend=force_resend,
+        force_resend=force_resend, thread_id=thread_id,
     )
 
 
@@ -37995,6 +39896,340 @@ def _publication_text_for_is(root, code, entry, info, criteria, gate, body, cata
         return None
 
 
+REPORT_REF_LIMIT = 120
+
+
+def _report_flat(value, limit=REPORT_REF_LIMIT):
+    """Однострочный короткий текст: провенанс в отчёте не должен занимать экран."""
+    flat = " ".join(str(value if value is not None else "").split())
+    if len(flat) <= limit:
+        return flat
+    return flat[: limit - 1].rstrip() + "…"
+
+
+def _report_input_rows(info, criteria):
+    """(заполненные строки, незаполненные подписи) по `criteria_inputs`.
+
+    Порядок — как в `INFORMATION.yaml → criteria_inputs` (он же порядок
+    критериев): отчёт читается сверху вниз так же, как паспорт. Пустое
+    значение — не ошибка отчёта, а честная строка «не заполнено».
+    """
+    block = info.get("criteria_inputs")
+    block = block if isinstance(block, dict) else {}
+    titles = {}
+    for spec in _input_specs(criteria):
+        titles[str(spec["id"])] = str(spec.get("title") or spec["id"])
+    rows, missing = [], []
+    for identifier, item in block.items():
+        identifier = str(identifier)
+        title = titles.get(identifier, identifier)
+        item = item if isinstance(item, dict) else {}
+        value = item.get("value")
+        if value in (None, "", [], {}):
+            missing.append(f"{identifier} ({title})")
+            continue
+        unit = str(item.get("unit") or "").strip()
+        source = item.get("source") if isinstance(item.get("source"), dict) else {}
+        source_type = str(source.get("type") or "").strip()
+        ref = _report_flat(source.get("ref"))
+        if source_type and ref:
+            source_text = f"{source_type}: {ref}"
+        else:
+            source_text = source_type or ref or "—"
+        rows.append(
+            {
+                "id": identifier,
+                "title": title,
+                "value": f"{_tpl_stringify(value)} {unit}".strip(),
+                "source": source_text,
+                "status": str(item.get("status") or "—").strip() or "—",
+            }
+        )
+    return rows, missing
+
+
+def _report_contacts_lines(info):
+    """Строки участников: TA, TL и остальные группы контактов.
+
+    Username'ы печатаются как есть (это логины Rocket.Chat, по ним ставится
+    упоминание), без перевода в ФИО: соответствия login → ФИО в SSoT нет.
+    """
+    contacts = info.get("contacts") if isinstance(info.get("contacts"), dict) else {}
+    groups = contacts.get("groups") if isinstance(contacts.get("groups"), dict) else {}
+    def people(key):
+        raw = groups.get(key)
+        if not isinstance(raw, list):
+            return []
+        return [str(item).strip() for item in raw if str(item).strip()]
+    lines = []
+    ta = people("ta")
+    tl = people("tl")
+    lines.append("• TA: " + (", ".join(ta) if ta else "не задан"))
+    lines.append("• TL: " + (", ".join(tl) if tl else "не задан"))
+    others = []
+    for key in sorted(groups):
+        if key in ("ta", "tl"):
+            continue
+        names = people(key)
+        if names:
+            others.append(f"{key} — {', '.join(names)}")
+    lines.append("• Остальные: " + ("; ".join(others) if others else "нет данных"))
+    return lines
+
+
+def _report_links_lines(
+    root, code, entry, info, criteria, catalog, include_ssot=True
+):
+    """Ссылки отчёта: карточка SSoT, страница ИС, паспорт/CRITICALITY."""
+    lines = []
+    card = _external_ref_pattern(criteria, "ssot_card_base", {"code": code})
+    if card and include_ssot:
+        lines.append(f"• SSoT: {card}")
+    links = info.get("links") if isinstance(info.get("links"), dict) else {}
+    page = ""
+    for key, value in links.items():
+        if str(key).strip().lower() in ("page", "страница", "страница ис", "wiki"):
+            page = _report_flat(value, 200)
+            break
+    if not page:
+        page = _page_url(criteria, (info.get("identity") or {}).get("confluence_page_id")) or ""
+    if page:
+        lines.append(f"• Страница ИС: {page}")
+    passport_link = ""
+    for key, value in links.items():
+        if "паспорт" in str(key).lower() or "passport" in str(key).lower():
+            passport_link = _report_flat(value, 200)
+            break
+    if passport_link:
+        lines.append(f"• Паспорт: {passport_link}")
+    folder_rel, _legacy = is_folder(root, code, entry)
+    lines.append(f"• CRITICALITY: {folder_rel}/CRITICALITY.md")
+    return lines
+
+
+def _report_mr_links(root, code, entry):
+    """(MR в dochub, MR в SSoT) из артефактов прогона; None — не создавался."""
+    dochub_mr = (
+        _mr_url_artifact_read(root, code, DOCHUB_MR_URL_DIR)
+        or _mr_url_artifact_read(root, code, DOCHUB_MR_DIR)
+    )
+    ssot_mr = _mr_url_artifact_read(root, code, SSOT_MR_DIR)
+    return dochub_mr or None, ssot_mr or None
+
+
+def _report_context(root, code, entry, info, criteria, catalog, date=None):
+    """Данные отчёта одним словарём: отчёт, тред и ответы считают одно и то же.
+
+    None — паспорта нет или контекст не собрался (вызывающий печатает ERROR).
+    """
+    body = passport_body(root, entry)
+    if body is None:
+        return None
+    day = date or today()
+    try:
+        gate = evaluate_gate(info, criteria)
+    except (YamlError, KeyError, TypeError, ValueError):
+        gate = {"records": {}, "method": None}
+    try:
+        computed = _compute_for_method(criteria, gate)
+    except (IncompleteError, KeyError, ValueError, TypeError, YamlError):
+        computed = None
+    try:
+        ctx = build_render_context(
+            code, entry, info, criteria, computed, day,
+            existing=body, catalog=catalog, root=root,
+        )
+    except (YamlError, TemplateError, KeyError, ValueError, TypeError, OSError):
+        return None
+    trace = ctx.get("score_trace") or {}
+    identity = ctx.get("identity") or {}
+    name = str(identity.get("name") or entry.get("name") or "").strip()
+    name = name or "название не задано"
+    method = str(trace.get("method") or "").strip() or "—"
+    raw_status = str(trace.get("status") or "").strip()
+    status_label = "confirmed" if raw_status == "complete" else (raw_status or "—")
+    level = (
+        str(body.get("object_criticality_estimation") or "").strip()
+        or str(entry.get("criticality") or "").strip()
+        or str(trace.get("final_level") or "").strip()
+        or "не определён"
+    )
+    generated = (
+        body.get("generated_at")
+        or entry.get("assigned_date")
+        or day.isoformat()
+    )
+    rows, missing = _report_input_rows(info, criteria)
+    calc = []
+    express = trace.get("express") if isinstance(trace.get("express"), dict) else None
+    if express:
+        if express.get("E") not in (None, ""):
+            calc.append(f"• E = {_fmt_num(express['E'])} баллов/час")
+        if express.get("interval") not in (None, ""):
+            calc.append(
+                f"• Интервал: #{express['interval']} "
+                f"{express.get('interval_label') or ''}".rstrip()
+            )
+        if express.get("score") not in (None, ""):
+            calc.append(f"• Score: {express['score']}")
+    elif method == "detailed":
+        if trace.get("business_level"):
+            calc.append(f"• Бизнес-уровень: {trace['business_level']}")
+        if trace.get("protection"):
+            calc.append(f"• Уровень защищённости: {trace['protection']}")
+    dochub_mr, ssot_mr = _report_mr_links(root, code, entry)
+    return {
+        "code": code,
+        "name": name,
+        "method": method,
+        "status_label": status_label,
+        "level": level,
+        "generated": generated,
+        "rows": rows,
+        "missing": missing,
+        "calc": calc,
+        "contacts": _report_contacts_lines(info),
+        "links": _report_links_lines(root, code, entry, info, criteria, catalog),
+        "links_no_ssot": _report_links_lines(
+            root, code, entry, info, criteria, catalog, include_ssot=False
+        ),
+        "ssot_card": _external_ref_pattern(
+            criteria, "ssot_card_base", {"code": code}
+        ),
+        "dochub_mr": dochub_mr,
+        "ssot_mr": ssot_mr,
+        "ssot_status": str(entry.get(SSOT_STATUS_FIELD) or "").strip(),
+    }
+
+
+def _report_mr_line(label, url, ssot_status=""):
+    """Строка «MR …: ссылка | не создавался» — с честной причиной, если она есть."""
+    if url:
+        return f"• {label}: {url}"
+    if label.endswith("SSoT") and ssot_status:
+        return f"• {label}: не создавался (`{SSOT_STATUS_FIELD}: {ssot_status}`)"
+    return f"• {label}: не создавался"
+
+
+def _report_text_for_is(root, code, entry, info, criteria, catalog, date=None):
+    """Текст ОТЧЁТА о результатах оценки для `handoff --report`.
+
+    Источники — только артефакты прогона: `criticality-passport.yaml` (уровень,
+    даты), `INFORMATION.yaml` (входы с провенансом, контакты, ссылки) и
+    `catalog.yaml` (запись ИС). Гейты этапа согласования (⛔, MR в dochub,
+    подтверждённый SSoT-MR) здесь НЕ применяются: отчёт публикует то, что уже
+    посчитано, и честно называет незаполненные входы обычным текстом.
+
+    None — паспорта нет или контекст не собрался (вызывающий печатает ERROR).
+    """
+    data = _report_context(root, code, entry, info, criteria, catalog, date=date)
+    if data is None:
+        return None
+    lines = [
+        f"**Оценка критичности ИС {code} — {data['name']}**",
+        "",
+        f"**Итог:** {data['level']} · метод {data['method']} · статус "
+        f"{data['status_label']} · дата генерации {data['generated']}",
+        "",
+        "**Участники**",
+    ]
+    lines.extend(data["contacts"])
+    lines.extend(["", "**Входные значения**"])
+    if data["rows"]:
+        for row in data["rows"]:
+            lines.append(
+                f"• {row['title']} (`{row['id']}`): {row['value']} — "
+                f"{row['source']} · {row['status']}"
+            )
+    else:
+        lines.append("• ни один вход не заполнен")
+    if data["calc"]:
+        lines.extend(["", "**Расчёт**"])
+        lines.extend(data["calc"])
+    if data["missing"]:
+        lines.extend(
+            [
+                "",
+                "**Незаполненные входы (не блокируют отчёт):** "
+                + ", ".join(data["missing"]),
+            ]
+        )
+    lines.extend(["", "**Ссылки**"])
+    lines.extend(data["links"])
+    lines.extend(
+        [
+            "",
+            "**Что дальше**",
+            "• требуется подтверждение SRE/TL по значениям входов и уровню;",
+            _report_mr_line("MR в dochub", data["dochub_mr"]),
+            _report_mr_line("MR в SSoT", data["ssot_mr"], data["ssot_status"]),
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _report_thread_texts(
+    root, code, entry, info, criteria, catalog, date=None,
+    dochub_mr_url=None, ssot_mr_url=None,
+):
+    """(родитель, [ответ1, ответ2, ответ3]) для `handoff --report --thread-new`.
+
+    Родитель — краткий итог и основные ссылки; детализация уходит ответами в
+    тред, чтобы канал не читал простыню. `--dochub-mr-url`/`--ssot-mr-url`
+    подставляются в родителя: MR появляются позже расчёта, и обновлять родителя
+    потом умеет `--update-parent`.
+
+    None — паспорта нет или контекст не собрался.
+    """
+    data = _report_context(root, code, entry, info, criteria, catalog, date=date)
+    if data is None:
+        return None
+    dochub_mr = str(dochub_mr_url or "").strip() or data["dochub_mr"]
+    ssot_mr = str(ssot_mr_url or "").strip() or data["ssot_mr"]
+    parent_lines = [
+        f"**Оценка критичности ИС {code} — {data['name']}**",
+        "",
+        f"**Итог:** {data['level']} · метод {data['method']} · статус "
+        f"{data['status_label']} · дата генерации {data['generated']}",
+        "",
+        "**Участники**",
+        *data["contacts"],
+        "",
+        "**Ссылки**",
+        "• SSoT: "
+        + (data["ssot_card"] or "не сконфигурирован (criteria.external_refs.ssot_card_base)"),
+        _report_mr_line("MR в dochub", dochub_mr),
+        _report_mr_line("MR в SSoT", ssot_mr, data["ssot_status"]),
+        "",
+        "Детализация — в ответах ниже.",
+    ]
+    inputs = ["**Входные значения и источники**"]
+    if data["rows"]:
+        for row in data["rows"]:
+            inputs.append(
+                f"• {row['title']} (`{row['id']}`): {row['value']} — "
+                f"{row['source']} · {row['status']}"
+            )
+    else:
+        inputs.append("• ни один вход не заполнен")
+    calc = ["**Расчёт**"]
+    calc.extend(data["calc"] or ["• расчёт не выполнен"])
+    if data["missing"]:
+        calc.extend(
+            [
+                "",
+                "**Незаполненные входы (не блокируют отчёт):** "
+                + ", ".join(data["missing"]),
+            ]
+        )
+    artifacts = ["**Артефакты и страницы**"]
+    artifacts.extend(data["links_no_ssot"] or ["• ссылок на артефакты нет"])
+    return (
+        "\n".join(parent_lines) + "\n",
+        ["\n".join(part) + "\n" for part in (inputs, calc, artifacts)],
+    )
+
+
 def _publication_missing_for_message(
     root, code, entry, info, criteria, gate, body, catalog
 ):
@@ -38123,6 +40358,26 @@ def _start_one(root, criteria, entry, code, date, args, catalog=None, explicit_d
         return blocked(f"{INFORMATION_FILE} не разобран: {exc}")
     if not isinstance(info, dict):
         return blocked(f"{INFORMATION_FILE}: ожидался словарь верхнего уровня")
+    # start-apply перегенерирует пакет после MR: если SSoT-MR уже записан,
+    # он обязан быть проверен (ssot_verify_change). Иначе пакет уходит со
+    # ссылкой на неподтверждённый MR. FORCE=1 — осознанный обход.
+    ssot_status = str(entry.get(SSOT_STATUS_FIELD) or "").strip()
+    if (
+        not getattr(args, "dry_run", False)
+        and ssot_status in (SSOT_STATUS_MR_CREATED, SSOT_STATUS_MR_UNVERIFIED)
+        and not _ssot_mr_gate(
+            root, code, entry, info, "start-apply",
+            bool(getattr(args, "force", False)),
+        )
+    ):
+        print("  артефакты не записаны.")
+        print()
+        return {
+            "status": "BLOCKED",
+            "code": code,
+            "reason": "SSoT-MR не подтверждён (ssot-verify)",
+            "missing": [],
+        }
     components = info.get("components")
     if not isinstance(components, list) or not [item for item in components if item]:
         return blocked(
@@ -38216,7 +40471,7 @@ def _start_one(root, criteria, entry, code, date, args, catalog=None, explicit_d
 
     _generation_context(ctx, code, folder_rel, catalog=catalog)
 
-    # Ссылка на SSoT-MR: её пишет `ssot --push` в клон (`.ssot/<код>-MR.url`).
+    # Ссылка на SSoT-MR: её пишет `ssot-record` в проект (`.ssot/<код>-MR.url`).
     # Без неё тред согласования неполон — в тексте сообщения стоит `⛔`, и гейт
     # `handoff` держит пакет в `pending_manual`. Подставляется ДО рендера
     # publication.md: текст сообщения собирается из этого же поля.
@@ -38567,9 +40822,24 @@ COMMAND_DESCRIPTIONS = {
         "да (--push)",
     ),
     "ssot": (
-        "обогатить SSoT критичностью: severity в base.yaml, ветка, коммит, MR",
-        "да (--apply)",
-        "да (--push)",
+        "алиас ssot-plan: план обогащения SSoT критичностью (шаги MCP)",
+        "да (.ssot/<код>-apply-plan.json)",
+        "нет",
+    ),
+    "ssot-plan": (
+        "план обогащения SSoT: целевые severity + шаги MCP, без сети и git",
+        "да (.ssot/<код>-apply-plan.json)",
+        "нет",
+    ),
+    "ssot-record": (
+        "записать факты SSoT-MR: .ssot/ + INFORMATION.yaml (ssot_status)",
+        "да (.ssot/, INFORMATION.yaml)",
+        "нет",
+    ),
+    "ssot-verify": (
+        "записать результат ssot_verify_change в снимок SSoT",
+        "да (INFORMATION.yaml, .ssot/<код>-verify.json)",
+        "нет",
     ),
     "handoff": (
         "этап handoff: вопрос об отправке и тред в #Criticality_assessment "
@@ -38596,13 +40866,14 @@ COMMAND_DESCRIPTIONS = {
 # publish → ssot → handoff; боковые этапы (index, due, reassess, exclude,
 # scaffold) — ниже.
 #
-# Порядок publish → ssot → handoff обязателен: SSoT-MR в «Основании» ссылается
-# на dochub-MR (`mr.passport_mr_url`), а тред в #Criticality_assessment — на оба
-# MR. Обратный порядок оставлял бы SSoT-MR без основания и тред без ссылок.
+# Порядок publish → ssot → handoff обязателен: MR в SSoT создаёт MCP-форма
+# (`ssot_form_save`), основание — `mrUrl` из её ответа, а не ссылка на
+# dochub-MR; тред в #Criticality_assessment — на оба MR. Обратный порядок
+# оставлял бы тред без ссылок.
 WORKFLOW_STAGES = [
     ("init", "make init", "каркас проекта: is.yaml, catalog.yaml, INDEX.md, is/"),
     ("prepare", "make prepare-apply", "собрать INFORMATION.yaml из SSoT, клонировать компоненты"),
-    ("contacts", "make contacts IS=<код> APPLY=1", "контакты TA/TL из SSoT team.yaml → INFORMATION.yaml → contacts"),
+    ("contacts", "make contacts IS=<код> APPLY=1", "контакты TA/TL из ответа MCP ssot_team → INFORMATION.yaml → contacts"),
     ("check (первичный)", "make check", "первый гейт: какой сценарий и каких входов не хватает"),
     ("collect", "make collect-apply IS=<код>", "маршрут сбора: страницы Confluence, дашборды и PromQL"),
     ("links", "make links-apply IS=<код>", "карта обхода ссылок: SSoT links.yaml, catalog, компоненты (LINK-MAP.*)"),
@@ -38617,7 +40888,7 @@ WORKFLOW_STAGES = [
     ("actions", "make start-apply IS=<код> TASK=1 CONFLUENCE=1 MESSAGE=1", "внешние действия — только по флагу и подтверждению"),
     ("validate", "make validate", "0 ERROR по паспортам и реестру (verify)"),
     ("publish", "make publish IS=<код> TASK=<key> → make publish-apply", "паспорт в dochub: ветка, коммит, описание MR (dochub-MR)"),
-    ("ssot", "make ssot IS=<код> TASK=<key> → make ssot-apply", "критичность в SSoT: только severity в base.yaml, ветка, коммит, MR со ссылкой на dochub-MR"),
+    ("ssot", "criticality.py ssot-plan --is <код> → шаги MCP → ssot-record", "критичность в SSoT через MCP-форму: severity.type/method/confirmation, MR создаёт SSoT, затем ssot-verify"),
     ("handoff", "make handoff IS=<код> SEND=auto", "тред в #Criticality_assessment: вопрос «отправить автоматически?»; MCP, при отказе — REST API; ссылка на dochub-MR и SSoT-MR, затем подтверждение SRE"),
 ]
 
@@ -38648,8 +40919,8 @@ WORKFLOW_ARTIFACTS = [
     ("publish", "dochub: architecture/app/<контур>/<сущность>/criticality_passport.yaml", "publish --apply (скрипт)"),
     ("publish", "dochub: architecture/app/<контур>/<сущность>/_root.yaml", "publish --apply (скрипт, импорт)"),
     ("publish", "dochub: .publish/<код>-MR.md", "publish --apply (скрипт)"),
-    ("ssot", "SSoT: entities/information-systems/<код>/base.yaml → severity", "ssot --apply (скрипт)"),
-    ("ssot", "SSoT: .ssot/<код>-MR.md", "ssot --apply (скрипт)"),
+    ("ssot", "SSoT: entities/information-systems/<код>/base.yaml → severity", "ssot-record (mrUrl из ssot_form_save)"),
+    ("ssot", ".ssot/<код>-MR.md", "ssot-record (скрипт)"),
     ("handoff", "is/<код ИС>/actions/handoff-preview.txt (точный отправленный текст)", "handoff --write (предпросмотр)"),
     ("handoff", "тред в #Criticality_assessment (текст — actions/rocketchat-message.md; ссылка — thread_link в catalog.yaml)", "handoff (MCP) или handoff-result (ссылка от MCP) / REST-фолбэк"),
 ]
@@ -38664,7 +40935,7 @@ HELP_WORKFLOW_LINES = (
     "       → при BLOCKED: ask (вопросы человеку) → DATA-REQUIREMENTS.* → enrich → check",
     "       → score → start → actions → validate → publish → ssot → handoff",
     "  (index — перегенерация INDEX.md после validate; боковые: due, reassess, exclude, scaffold)",
-    "  (publish — паспорт в dochub (MR); ssot — обогащение SSoT, SSoT-MR ссылается на dochub-MR;",
+    "  (publish — паспорт в dochub (MR); ssot — обогащение SSoT через MCP-форму, MR создаёт SSoT;",
     "   handoff — ПОСЛЕДНИЙ этап: тред в #Criticality_assessment собирается в момент вызова;",
     "   make handoff IS=<код> SEND=auto (MCP, при отказе — API), ссылается на оба MR;",
     "   --dry-run/--write — только предпросмотр, ничего не отправляет)",
@@ -38829,12 +41100,32 @@ def _index_stale(root, systems, by_code):
 
 
 def _ssot_available(root: Path) -> bool:
-    """Клон SSoT есть и не пуст (та же проверка, что в prepare)."""
-    ssot_dir = root / SSOT_DIR
+    """Снимок SSoT импортирован хотя бы для одной ИС (`ssot_snapshot`).
+
+    Клон SSoT больше не нужен: данные карточки живут в INFORMATION.yaml, их
+    пишет `ssot-import` из ответа MCP `ssot_get`. Наличие снимка — признак
+    «этап SSoT начат».
+    """
     try:
-        return ssot_dir.is_dir() and any(ssot_dir.iterdir())
+        candidates = list(Path(root).glob("is/*/INFORMATION.yaml"))
     except OSError:
         return False
+    for path in candidates:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not re.search(rf"^{SSOT_SNAPSHOT_SECTION}\s*:", text, re.MULTILINE):
+            continue
+        try:
+            doc = load_yaml(path)
+        except YamlError:
+            continue
+        if isinstance(doc, dict) and isinstance(
+            doc.get(SSOT_SNAPSHOT_SECTION), dict
+        ):
+            return True
+    return False
 
 
 def _dochub_clone_dir(root: Path):
@@ -39133,35 +41424,36 @@ def collect_state(root, criteria, codes=None, offline=False):
             passport_published = (
                 None if publish["state"] is None else publish["state"] != "no"
             )
-        # ssot_enriched: совпадает ли severity в клоне SSoT с целевым;
-        # None — клона SSoT нет (проверить нечем, не блокер).
+        # ssot_enriched: совпадает ли severity в снимке SSoT с целевым;
+        # None — снимка SSoT нет (проверить нечем, не блокер).
         ssot_enriched = (
             _ssot_enriched(root, code, entry, criteria) if has_passport else None
         )
-        # ssot_mr_ready: описание SSoT-MR подготовлено (`<ssot>/.ssot/<код>-MR.md`).
+        # ssot_mr_ready: план/описание SSoT-MR подготовлены (`.ssot/<код>-MR.md`).
         # Само по себе отсутствие файла НЕ делает SSoT «необогащённым»: если блок
-        # `severity` уже совпадает, `make ssot` печатает «изменений нет» и MR не
+        # `severity` уже совпадает, `ssot-plan` печатает «no_change» и MR не
         # создаёт — подсказка зациклилась бы. Флаг только уточняет причину.
         ssot_mr_ready = (
-            (root / SSOT_DEFAULT_DIR / SSOT_MR_DIR / f"{code}-MR.md").exists()
+            (root / SSOT_MR_DIR / f"{code}-MR.md").exists()
             if has_passport
             else False
         )
         # passport_mr_url: ссылка на dochub-MR из `.publish/<код>-MR.url|md`.
-        # Без неё `make ssot` отказывается писать описание MR — подсказка должна
-        # назвать эту причину, иначе повторный `make ssot` упирается в ту же
-        # ошибку молча.
         passport_mr_url = (
             _mr_url_artifact_read(root, code, DOCHUB_MR_DIR)
             if has_passport
             else ""
         )
-        # ssot_mr_url: ссылка на SSoT-MR (`.ssot/<код>-MR.url` в клоне SSoT).
+        # ssot_mr_url: ссылка на SSoT-MR (`.ssot/<код>-MR.url` в проекте).
         # Пустая — в тексте треда остаётся `⛔`: публикация заблокирована.
         ssot_mr_url = (
             _mr_url_artifact_read(root, code, SSOT_MR_DIR)
             if has_passport
             else ""
+        )
+        # ssot_verified: `ssot_snapshot.verified.matched` (None — проверки нет).
+        ssot_verified = (
+            _ssot_verified_matched(root, code, entry) if has_passport else None
         )
         # Незаполненные поля готового сообщения — из ОДНОГО источника с шапкой
         # action-пакета: `_publication_missing_fields` по отрендеренному тексту.
@@ -39244,6 +41536,7 @@ def collect_state(root, criteria, codes=None, offline=False):
                 "ssot_mr_ready": ssot_mr_ready,
                 "passport_mr_url": passport_mr_url,
                 "ssot_mr_url": ssot_mr_url,
+                "ssot_verified": ssot_verified,
                 "message_blocked_fields": message_blocked_fields,
                 "sheet_pending": sheet_pending,
                 "review_overdue": review_overdue,
@@ -39274,11 +41567,11 @@ def next_step(state):
 
     Порядок намеренный: сначала локальные проблемы уже рассчитанной ИС
     (паспорт, лист требований, переоценка, INDEX) и только потом глобальные
-    (нет is.yaml / нет SSoT). Иначе одна глобальная проблема («нет ssot/»)
+    (нет is.yaml / нет снимка SSoT). Иначе одна глобальная проблема
     скрывает весь конвейер и подсказка зацикливается.
 
-    Финальные этапы идут строго `publish` → `ssot` → `handoff`: SSoT-MR
-    ссылается на dochub-MR (`mr.passport_mr_url`), а тред в
+    Финальные этапы идут строго `publish` → `ssot` → `handoff`: MR в SSoT
+    создаёт MCP-форма (`mrUrl` из `ssot_form_save`), а тред в
     `#Criticality_assessment` — на оба MR.
 
     Подсказка не советует разрушительных команд и не зацикливается: признак
@@ -39498,9 +41791,9 @@ def next_step(state):
             # None (клона dochub нет / нет сети) не блокирует конвейер: проверить
             # публикацию нечем, в причине это сказано явно.
             #
-            # publish идёт ПЕРВЫМ: SSoT-MR в «Основании» ссылается на dochub-MR
-            # (`mr.passport_mr_url`), поэтому паспорт публикуется раньше, чем
-            # обогащается SSoT.
+            # publish идёт ПЕРВЫМ: паспорт публикуется раньше, чем
+            # обогащается SSoT; MR в SSoT создаёт MCP-форма (`mrUrl` из
+            # `ssot_form_save`), ссылка на dochub-MR для него не нужна.
             publish = state.get("publish") if isinstance(state.get("publish"), dict) else {}
             publish_state = publish.get("state")
             if publish_state is None:
@@ -39534,22 +41827,50 @@ def next_step(state):
                         "упадёт «ветка уже существует»)"
                     ),
                 }
+            # MR в SSoT записан (ssot-record), но изменения не проверены:
+            # ssot_verify_change обязателен — иначе handoff заблокирован гейтом.
+            if state.get("ssot_mr_url") and state.get("ssot_verified") is not True:
+                return {
+                    "stage": "ssot",
+                    "command": f"criticality.py ssot-verify --is {code} --verify-json -",
+                    "reason": (
+                        "MR в SSoT записан, но изменения не проверены "
+                        "(ssot_snapshot.verified.matched != true) — передайте "
+                        "ответ MCP ssot_verify_change"
+                    ),
+                }
+            # Изменения на ветке MR подтверждены, но в master SSoT ещё не
+            # влиты: дальше MCP-апрув и применение (человек/агент по явному
+            # разрешению), затем повторный ssot-import.
+            if (
+                state.get("ssot_mr_url")
+                and state.get("ssot_verified") is True
+                and state.get("ssot_enriched") is not True
+            ):
+                return {
+                    "stage": "ssot",
+                    "command": (
+                        "MCP: ssot_mr_approve(confirm:true) → "
+                        "ssot_apply_changes(confirm:true) → ssot_wait_master"
+                    ),
+                    "reason": (
+                        "изменения SSoT подтверждены на ветке MR, но master ещё "
+                        "не обновлён — подтвердите MR и примените изменения; "
+                        "после мержа повторите ssot-import"
+                    ),
+                }
             # Фаза ssot: паспорт опубликован в dochub, но критичность в SSoT ещё
-            # не приведена к паспорту. Идёт ПОСЛЕ publish: SSoT-MR без ссылки на
-            # dochub-MR не создаётся.
+            # не приведена к паспорту. Идёт ПОСЛЕ publish: план SSoT-MR
+            # по-прежнему опирается на опубликованный паспорт.
             if state.get("ssot_enriched") is False:
                 reason = (
-                    "критичность в SSoT расходится с паспортом — обогатите SSoT "
-                    "после публикации паспорта (make ssot — план, "
-                    "make ssot-apply — ветка и коммит)"
+                    "критичность в SSoT расходится с паспортом — план MCP-шагов: "
+                    "ssot-plan → ssot_entity_open → ssot_form_save → ssot-record"
                 )
                 if not state.get("ssot_mr_ready"):
-                    reason += "; описание SSoT-MR (.ssot/<код>-MR.md) ещё не подготовлено"
-                if state.get("passport_mr_url") == "":
                     reason += (
-                        "; ссылка на dochub-MR не записана "
-                        "(.publish/<код>-MR.url) — впишите её после пуша MR: "
-                        "без неё описание SSoT-MR не создаётся"
+                        "; план/описание SSoT-MR (.ssot/<код>-apply-plan.json) "
+                        "ещё не подготовлены"
                     )
                 if publish_state is None:
                     reason += (
@@ -39561,25 +41882,21 @@ def next_step(state):
                     )
                 return {
                     "stage": "ssot",
-                    "command": f"make ssot{is_arg} TASK=<key>",
+                    "command": f"criticality.py ssot-plan --is {code}",
                     "reason": reason,
                 }
-            # Фаза ssot не проверена: клона SSoT нет. Без обогащения SSoT этап
+            # Фаза ssot не проверена: снимка SSoT нет. Без обогащения SSoT этап
             # не пройден, поэтому handoff не советуется — подсказка ведёт к
-            # клонированию или к внешнему клону через --ssot. Клон есть, но
-            # severity не прочитан (ssot_enriched=None при has_ssot=True) —
-            # handoff не блокируем, причину называем ниже.
+            # импорту карточки из MCP.
             if state.get("ssot_enriched") is None and state.get("has_ssot") is not True:
                 return {
                     "stage": "ssot",
-                    "command": f"make prepare-apply{is_arg}",
+                    "command": f"criticality.py ssot-import --is {code} --entity-json -",
                     "reason": (
-                        "этап SSoT не выполнен: клон SSoT не найден — "
-                        f"make prepare-apply{is_arg} (клонирует SSoT) или "
-                        f"make ssot{is_arg} TASK=<key> SSOT=<путь> (--ssot) для "
-                        "внешнего клона; тред в #Criticality_assessment — только "
-                        "после обогащения SSoT (текст: "
-                        "actions/rocketchat-message.md)"
+                        "этап SSoT не выполнен: снимка карточки нет — вызовите MCP "
+                        "ssot_get и передайте ответ в ssot-import; тред в "
+                        "#Criticality_assessment — только после обогащения SSoT "
+                        "(текст: actions/rocketchat-message.md)"
                     ),
                 }
             # Фаза handoff: паспорт опубликован и SSoT обогащён — остаётся тред
@@ -39654,8 +41971,8 @@ def next_step(state):
                     )
                 elif state.get("ssot_enriched") is None:
                     reason = (
-                        "паспорт опубликован в dochub; SSoT-клон есть, но "
-                        "severity в base.yaml прочитать не удалось — проверьте "
+                        "паспорт опубликован в dochub; снимок SSoT есть, но "
+                        "severity в нём прочитать не удалось — проверьте "
                         "блок severity вручную. Затем тред согласования в "
                         "#Criticality_assessment (текст: "
                         "actions/rocketchat-message.md): отправить автоматически? "
@@ -39683,24 +42000,30 @@ def next_step(state):
             "command": "make init",
             "reason": "нет конфигурации проекта (is.yaml)",
         }
-    if not state.get("has_ssot"):
-        # prepare-apply склонирует SSoT (этап 1); без клона данные ИС не
-        # обновляются. Внешний клон — через `make ssot SSOT=<путь>` (--ssot).
-        # Этап SSoT не считается выполненным, пока клона нет.
+    if not state.get("has_information"):
+        # Файл данных создаёт `ssot-import` (из скелета шаблона) — он же пишет
+        # снимок SSoT. `prepare-apply` без снимка файл не создаёт (только
+        # печатает «нет данных SSoT»), поэтому советовать его здесь — дедлок.
         return {
             "stage": "prepare",
-            "command": "make prepare-apply",
+            "command": "criticality.py ssot-import --is <код> --entity-json -",
             "reason": (
-                "клон SSoT не найден — make prepare-apply склонирует SSoT "
-                "(или make ssot SSOT=<путь>, --ssot, для внешнего клона); "
-                "этап SSoT без клона не выполнен"
+                "нет рабочего файла данных (INFORMATION.yaml): вызовите MCP "
+                'ssot_get(group="information-systems", entity=<код>) и передайте '
+                "ответ в ssot-import — команда создаст файл из шаблона и запишет "
+                "снимок"
             ),
         }
-    if not state.get("has_information"):
+    if not state.get("has_ssot"):
+        # Снимок SSoT импортируется из MCP `ssot_get`; клон не нужен.
+        # Этап SSoT не считается выполненным, пока снимка нет.
         return {
             "stage": "prepare",
-            "command": "make prepare-apply",
-            "reason": "нет рабочего файла данных (INFORMATION.yaml)",
+            "command": "criticality.py ssot-import --is <код> --entity-json -",
+            "reason": (
+                "снимок SSoT не импортирован — вызовите MCP ssot_get(code=<код>) "
+                "и передайте ответ в ssot-import; этап SSoT без снимка не выполнен"
+            ),
         }
     return None
 
@@ -40614,15 +42937,13 @@ def _publish_mr_url_record(root, dochub, code, url):
 def _mr_url_artifact_read(root, code, folder):
     """URL MR из `<folder>/<код>-MR.url` или из `<код>-MR.md` (первая ссылка).
 
-    Ищет в рабочем дереве и в обоих клонах: `.publish` живёт в dochub, `.ssot` —
-    в клоне SSoT, `.dochub` — в проекте (симметрично `.ssot`: файл переживает
-    пересоздание клона). Так ссылка на MR попадает в тред согласования без
-    ручного копирования.
+    Ищет в рабочем дереве и в клоне dochub: `.publish` живёт в dochub, `.ssot`
+    и `.dochub` — в проекте (файл переживает пересоздание клона). Так ссылка на
+    MR попадает в тред согласования без ручного копирования.
     """
     bases = [
         Path(root) / DOCHUB_MR_URL_DIR,
         Path(root) / DOCHUB_DEFAULT_DIR,
-        Path(root) / SSOT_DEFAULT_DIR,
         Path(root),
     ]
     for base in bases:
@@ -40648,7 +42969,7 @@ def _mr_url_problem(url):
     """Проверка ссылки на MR: пусто или не URL MR — текст проблемы."""
     text = str(url or "").strip()
     if not text:
-        return "не заполнено поле 'mr.passport_mr_url'"
+        return "не заполнено поле: ссылка на MR (mrUrl из ssot_form_save)"
     if not MR_URL_RE.fullmatch(text):
         return (
             f"ссылка на MR не распознана: {text} "
@@ -40679,12 +43000,11 @@ DOCHUB_ENTITY = "ecom.criticality_passport"
 DOCHUB_TARGET_BRANCH = "master"
 DOCHUB_MR_DIR = ".publish"
 # Ссылка на созданный dochub-MR в рабочем дереве проекта — по аналогии с
-# `.ssot/<код>-MR.url` в клоне SSoT. Нужна этапу `start`: тред `handoff`
+# `.ssot/<код>-MR.url`. Нужна этапу `start`: тред `handoff`
 # ссылается на ОБА MR, и ссылка на паспорт подставляется из этого файла, а не
 # копируется руками (`.publish` живёт внутри клона и от проекта не видна).
 DOCHUB_MR_URL_DIR = ".dochub"
 DOCHUB_MR_TEMPLATE = "MR-dochub.md"
-SSOT_MR_TEMPLATE = "MR-ssot.md"
 DOCHUB_MR_LABEL = "criticality"
 DOCHUB_PUBLISH_SUBCOMMANDS = (
     "fetch", "rev-parse", "status", "checkout", "add", "commit", "push",
@@ -40852,6 +43172,30 @@ def _repo_clone_missing(criteria, key, target, label, flag, root, do_clone=False
     return False
 
 
+def _dochub_ensure_clone(criteria, dochub, override, root, force_clone=False):
+    """Клон dochub есть или создаётся сам. False — клона нет и создать нельзя.
+
+    Автономность «из коробки»: без `--dochub` и без клона публикация сама
+    клонирует `criteria.external_refs.repos.dochub.url` в `<проект>/dochub`
+    (поддерживается и `https://`, и `ssh://git@host:port/...`). Отсутствие
+    клона — WARN, а не ERROR: данные не потеряны, репозиторий просто скачается.
+    ERROR только если клонирование действительно не удалось.
+    """
+    if Path(dochub).is_dir():
+        return True
+    url, _branch, _note = _criteria_repo(criteria, "dochub")
+    auto_clone = (not override) and bool(url)
+    if auto_clone:
+        print(
+            f"WARN: клон dochub не найден ({dochub}) — клонирую автоматически "
+            "из criteria.external_refs.repos.dochub.url"
+        )
+    return _repo_clone_missing(
+        criteria, "dochub", dochub, "dochub", "dochub", root,
+        do_clone=bool(force_clone) or auto_clone,
+    )
+
+
 def _jira_task_hint() -> str:
     """Как получить Jira-ключ: задача создаётся action-пакетом самого скилла."""
     return (
@@ -41004,9 +43348,86 @@ def _publish_schema(dochub: Path):
     }
 
 
-def _publish_transform(body, dochub_key, dochub_object, dochub_level, schema):
+def _publish_derive_date(key, body, entry, criteria, catalog=None):
+    """Дата паспорта, выведенная из даты генерации, — вместо молчаливого пропуска.
+
+    `assigned_date`/`review_date` привязаны к дате генерации (`generated_at`),
+    поэтому пустое значение в паспорте — не повод выбрасывать поле из документа
+    dochub: дата берётся из реестра (`catalog.yaml`), иначе выводится из
+    `generated_at` (+ период переоценки для `review_date`). Формат — как в
+    паспорте и в схеме dochub: `YYYY.MM.DD`.
+    """
+    if key not in ("assigned_date", "review_date"):
+        return None
+    entry = entry if isinstance(entry, dict) else {}
+    body = body if isinstance(body, dict) else {}
+    raw = entry.get(key)
+    if raw not in (None, ""):
+        return raw
+    generated = None
+    raw_generated = body.get("generated_at") or entry.get("generated_at")
+    if raw_generated not in (None, ""):
+        try:
+            generated = parse_date(raw_generated)
+        except ValueError:
+            generated = None
+    if generated is None:
+        return None
+    if key == "assigned_date":
+        return generated.strftime("%Y.%m.%d")
+    derived = review_date_from_generation(catalog, entry, criteria, generated)
+    return derived.strftime("%Y.%m.%d") if derived is not None else None
+
+
+def _enum_semantic_key(value):
+    """Ключ смыслового сравнения enum: без скобок, регистра и пунктуации.
+
+    «Сотрудники компаний Группы (Внутренние клиенты)» и «сотрудники компаний
+    группы» — одно значение схемы; «(Внешние клиенты)» в скобках смысл не
+    меняет, но точным совпадением не является.
+    """
+    text = str(value or "").casefold().replace("ё", "е")
+    text = re.sub(r"\([^)]*\)", " ", text)
+    text = re.sub(r"[^0-9a-zа-я]+", " ", text)
+    return " ".join(text.split())
+
+
+def _publish_normalize_enum(value, allowed, key, label):
+    """(канон, warning|None, problem|None) для enum-поля паспорта.
+
+    Порядок: точное совпадение → как есть; смысловое (без скобок/регистра/
+    пунктуации) → каноническое значение схемы + WARN; иначе → ERROR со списком
+    допустимых. Ручная правка enum в паспорте больше не нужна.
+    """
+    if value in (None, "") or not allowed:
+        return value, None, None
+    text = str(value)
+    if text in allowed:
+        return text, None, None
+    canon = _canon_text(text)
+    for item in allowed:
+        if _canon_text(item) == canon:
+            return item, None, None
+    semantic = _enum_semantic_key(text)
+    matches = [item for item in allowed if _enum_semantic_key(item) == semantic]
+    if len(matches) == 1:
+        return matches[0], (
+            f"{key}: {text!r} → {matches[0]!r} — каноническое значение схемы "
+            "dochub (смысловое совпадение без скобок/регистра)"
+        ), None
+    return text, None, (
+        f"{key}={text!r} вне {label} dochub. Допустимо: "
+        + "; ".join(allowed)
+    )
+
+
+def _publish_transform(
+    body, dochub_key, dochub_object, dochub_level, schema,
+    entry=None, criteria=None, catalog=None, warnings=None,
+):
     """Наш паспорт → документ формата dochub. Возвращает (doc, проблемы)."""
     problems = []
+    warnings = warnings if warnings is not None else []
     properties = schema["properties"]
     allowed = set(properties)
     out = {}
@@ -41028,6 +43449,9 @@ def _publish_transform(body, dochub_key, dochub_object, dochub_level, schema):
             continue
         value = body.get(key)
         if value in (None, ""):
+            # Даты не теряются: пусто в паспорте — выводим из даты генерации.
+            value = _publish_derive_date(key, body, entry, criteria, catalog)
+        if value in (None, ""):
             continue
         out[key] = value
 
@@ -41045,6 +43469,18 @@ def _publish_transform(body, dochub_key, dochub_object, dochub_level, schema):
     for key, allowed_values, label in (
         ("object_consumers_type", schema["consumers"], "enum типов клиентов"),
         ("object_outage_impact", schema["impacts"], "enum влияния при простое"),
+    ):
+        normalized, warning, problem = _publish_normalize_enum(
+            out.get(key), allowed_values, key, label
+        )
+        if normalized not in (None, ""):
+            out[key] = normalized
+        if warning:
+            warnings.append(warning)
+        if problem:
+            problems.append(problem)
+
+    for key, allowed_values, label in (
         ("object_criticality_estimation", schema["levels"], "enum уровней"),
     ):
         value = out.get(key)
@@ -41549,6 +43985,19 @@ def _publish_limitations(criteria, entry, body, info, gate, computed, catalog=No
     return items
 
 
+def _publish_change_summary(level_before, dochub_level):
+    """Строка «Что меняется»: одинаковый уровень не рисуется стрелкой."""
+    if _canon_text(level_before) == _canon_text(dochub_level):
+        return (
+            f"Обновлён `{DOCHUB_PASSPORT_FILE}`: уровень `{dochub_level}` "
+            "не изменился (обновлены значения/даты)."
+        )
+    return (
+        f"Обновлён `{DOCHUB_PASSPORT_FILE}`: `{level_before}` → "
+        f"`{dochub_level}`."
+    )
+
+
 def _publish_level_before_text(criteria, level_before, had_passport, ssot_value, final):
     """Строка «Уровень до»: что было в dochub и что стоит в SSoT-реестре.
 
@@ -41617,9 +44066,7 @@ def _publish_mr_context(
     jira_base = _external_ref_pattern(criteria, "jira_browse_base", {})
     task_url = f"{jira_base.rstrip('/')}/browse/{task}" if jira_base and task else ""
     if had_passport:
-        change_summary = (
-            f"Обновлён `{DOCHUB_PASSPORT_FILE}`: `{level_before}` → `{dochub_level}`."
-        )
+        change_summary = _publish_change_summary(level_before, dochub_level)
     else:
         change_summary = (
             f"Добавлен `{DOCHUB_PASSPORT_FILE}` (уровень `{dochub_level}`) "
@@ -41757,6 +44204,35 @@ def _publish_digest(base: Path):
     return digest.hexdigest()
 
 
+TASK_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
+
+
+def _publish_task_suggestion(root):
+    """Jira-ключ из текущей ветки или недавних коммитов проекта (иначе None).
+
+    `--task` без ключа в реестре раньше просто отказывал. Ключ почти всегда
+    уже есть в имени ветки (`feature/E001-12345`) или в заголовке коммита —
+    предлагаем его, а не заставляем человека искать вручную. Значение только
+    предлагается: запись в `catalog.yaml` остаётся делом человека.
+    """
+    root = Path(root)
+    ok, branch = _run_git(
+        ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"], root
+    )
+    if ok:
+        match = TASK_KEY_RE.search(branch or "")
+        if match:
+            return match.group(0)
+    ok, log = _run_git(
+        ["git", "-C", str(root), "log", "-n", "30", "--pretty=%s"], root
+    )
+    if ok:
+        match = TASK_KEY_RE.search(log or "")
+        if match:
+            return match.group(0)
+    return None
+
+
 def _publish_task(entry, info, explicit):
     if explicit:
         return str(explicit).strip()
@@ -41770,6 +44246,81 @@ def _publish_task(entry, info, explicit):
         if value not in (None, ""):
             return str(value).strip()
     return None
+
+
+def _publish_existing_branch(dochub, branch, task):
+    """(ветка, неоднозначные) — реальная ветка MR по префиксу задачи.
+
+    MR часто создан с содержательным суффиксом
+    (`feature/E001-31346-opercrm-criticality`), а `publish` по умолчанию брал
+    `feature/<task>` и создавал вторую ветку той же задачи. Если на origin
+    ровно одна ветка с этим префиксом — используем её (WARN); несколько —
+    возвращаем список, вызывающий требует `--branch`; ни одной — прежний
+    дефолт.
+    """
+    prefix = f"feature/{task}"
+    ok, output = _run_git(
+        ["git", "-C", str(dochub), "branch", "--remotes", "--list",
+         f"origin/{prefix}*", "--format=%(refname:short)"],
+        dochub,
+        allow=DOCHUB_PUBLISH_SUBCOMMANDS,
+        boundary=dochub,
+        purpose="publish",
+    )
+    if not ok:
+        return branch, None
+    names = set()
+    for line in (output or "").splitlines():
+        name = line.strip()
+        if not name.startswith("origin/"):
+            continue
+        name = name[len("origin/"):]
+        # `feature/E001-31346` и `feature/E001-31346-<суффикс>` — одна задача;
+        # `feature/E001-313460` — уже другой номер, не подходит.
+        rest = name[len(prefix):]
+        if rest and rest[0].isdigit():
+            continue
+        names.add(name)
+    ordered = sorted(names)
+    if not ordered:
+        return branch, None
+    if len(ordered) > 1:
+        return branch, ordered
+    if ordered[0] != branch:
+        print(
+            f"WARN: --branch не задан — использую существующую ветку "
+            f"{ordered[0]} (по задаче {task})"
+        )
+    return ordered[0], None
+
+
+def _publish_branch_passport(dochub, branch, target_rel):
+    """(had_passport, level_before) паспорта на ЦЕЛЕВОЙ ветке.
+
+    Рабочее дерево клона стоит на master, поэтому `target.exists()` отвечает
+    про master, а не про ветку MR: при обновлении существующего паспорта план
+    писал «Было: НЕ ОЦЕНЕНО». Читаем файл из `origin/<branch>`, затем из
+    локальной ветки; None — ветки/файла нет (новая публикация).
+    """
+    rel = Path(target_rel).as_posix()
+    for ref in (f"origin/{branch}", branch):
+        ok, text = _run_git(
+            ["git", "-C", str(dochub), "show", f"{ref}:{rel}"],
+            dochub,
+            allow=DOCHUB_PUBLISH_SUBCOMMANDS,
+            boundary=dochub,
+            purpose="publish",
+        )
+        if not ok:
+            continue
+        try:
+            doc = _load_yaml_text(text, f"{ref}:{rel}")
+        except YamlError:
+            continue
+        _key, body = _passport_body(doc)
+        level = str(body.get("object_criticality_estimation") or "").strip()
+        return True, level or "НЕ ОЦЕНЕНО"
+    return None, None
 
 
 def _publish_branch(code, task, systems, override):
@@ -41904,13 +44455,13 @@ def cmd_publish(args) -> int:
     except (KeyError, ValueError, TypeError, YamlError) as exc:
         return _publish_fail(f"расчёт не выполнен: {type(exc).__name__}: {exc}")
 
-    dochub = _clone_abs(getattr(args, "dochub", None), root / DOCHUB_DEFAULT_DIR)
-    if not dochub.is_dir():
-        if not _repo_clone_missing(
-            criteria, "dochub", dochub, "dochub", "dochub", root,
-            do_clone=bool(getattr(args, "clone", False)),
-        ):
-            return 1
+    dochub_override = getattr(args, "dochub", None)
+    dochub = _clone_abs(dochub_override, root / DOCHUB_DEFAULT_DIR)
+    if not _dochub_ensure_clone(
+        criteria, dochub, dochub_override, root,
+        force_clone=bool(getattr(args, "clone", False)),
+    ):
+        return 1
     try:
         schema = _publish_schema(dochub)
     except YamlError as exc:
@@ -41956,9 +44507,14 @@ def cmd_publish(args) -> int:
             + ", ".join(sorted(components)) + ")"
         )
 
+    transform_warnings = []
     doc, problems = _publish_transform(
-        body, dochub_key, dochub_object, dochub_level, schema
+        body, dochub_key, dochub_object, dochub_level, schema,
+        entry=entry, criteria=criteria, catalog=catalog,
+        warnings=transform_warnings,
     )
+    for warning in transform_warnings:
+        print(f"WARN: {warning}")
     problems += _publish_validate(doc, schema)
     if problems:
         print(f"ERROR: паспорт {code} не приводится к формату dochub:")
@@ -41968,11 +44524,33 @@ def cmd_publish(args) -> int:
 
     task = _publish_task(entry, info, getattr(args, "task", None))
     if not task:
-        return _publish_fail(
-            "не задан Jira-ключ: укажите --task <JIRA-KEY> "
-            "(или jira_task/task в catalog.yaml/is.yaml)\n" + _jira_task_hint()
-        )
+        suggested = _publish_task_suggestion(root)
+        if suggested:
+            print(
+                f"WARN: Jira-ключ не задан в catalog.yaml — беру из git: "
+                f"{suggested}"
+            )
+            print(
+                "  закрепите его: catalog.yaml → systems.<код>.jira_task "
+                "(иначе следующий прогон снова будет угадывать)"
+            )
+            task = suggested
+        else:
+            return _publish_fail(
+                "не задан Jira-ключ: укажите --task <JIRA-KEY> "
+                "(или jira_task/task в catalog.yaml/is.yaml); ключ вида "
+                "E001-<N> не найден ни в имени текущей ветки, ни в последних "
+                "коммитах\n" + _jira_task_hint()
+            )
     branch = _publish_branch(code, task, systems, getattr(args, "branch", None))
+    if not getattr(args, "branch", None) and not getattr(args, "reuse_local", False):
+        branch, ambiguous = _publish_existing_branch(dochub, branch, task)
+        if ambiguous:
+            return _publish_fail(
+                f"по задаче {task} на origin несколько веток: "
+                + ", ".join(ambiguous)
+                + " — укажите --branch <имя>"
+            )
     update = bool(getattr(args, "update", False))
     if update:
         # Обновление существующей ветки MR — это фикс уже опубликованного
@@ -42017,13 +44595,22 @@ def cmd_publish(args) -> int:
             return 1
 
     level_before = "НЕ ОЦЕНЕНО"
-    had_passport = target.exists()
-    if had_passport:
-        try:
-            _existing_id, existing_body = read_passport(target)
-            level_before = existing_body.get("object_criticality_estimation") or level_before
-        except YamlError:
-            level_before = "НЕ ОЦЕНЕНО"
+    on_branch, branch_level = _publish_branch_passport(dochub, branch, target_rel)
+    if on_branch is not None:
+        # Паспорт уже есть в ветке MR — «Было» берётся оттуда, а не с master.
+        had_passport = on_branch
+        level_before = branch_level or level_before
+    else:
+        had_passport = target.exists()
+        if had_passport:
+            try:
+                _existing_id, existing_body = read_passport(target)
+                level_before = (
+                    existing_body.get("object_criticality_estimation")
+                    or level_before
+                )
+            except YamlError:
+                level_before = "НЕ ОЦЕНЕНО"
 
     mr_context = _publish_mr_context(
         code,
@@ -42057,7 +44644,7 @@ def cmd_publish(args) -> int:
     print(f"  ИС: {code}")
     print(f"  клон: {dochub}")
     dochub_url = dochub_repo_url(
-        criteria, _catalog, getattr(args, "dochub_url", None)
+        criteria, catalog, getattr(args, "dochub_url", None)
     )
     if dochub_url:
         print(f"  репозиторий: {dochub_url}")
@@ -42226,6 +44813,33 @@ def cmd_publish(args) -> int:
             _prev_id, prev_body = read_passport(target)
         except (YamlError, OSError):
             prev_body = {}
+        # Финальная сверка «Было» уже НА ветке: `git show origin/<branch>` мог
+        # не сработать (клон без свежего ref) — тогда план печатал «НЕ ОЦЕНЕНО».
+        actual_level = str(
+            (prev_body or {}).get("object_criticality_estimation") or ""
+        ).strip()
+        if prev_body and (
+            not had_passport or (actual_level and actual_level != level_before)
+        ):
+            had_passport = True
+            level_before = actual_level or level_before
+            mr_node = mr_context.get("mr") or {}
+            mr_node["level_before"] = level_before
+            mr_node["level_before_text"] = _publish_level_before_text(
+                criteria,
+                level_before,
+                True,
+                (info.get("identity") or {}).get("criticality_ssot"),
+                mr_node.get("level_ssot"),
+            )
+            mr_node["change_summary"] = _publish_change_summary(
+                level_before, dochub_level
+            )
+            try:
+                mr_text = _publish_mr_text(mr_context)
+            except (YamlError, TemplateError) as exc:
+                return _publish_fail(str(exc))
+            print(f"  уточнение: паспорт в ветке {branch} — `{level_before}`")
         new_section = (
             next(iter(doc.values()))
             if isinstance(doc, dict) and len(doc) == 1
@@ -42432,62 +45046,43 @@ def cmd_publish(args) -> int:
 
 
 # ---------------------------------------------------------------------------
-# ssot: обогащение SSoT критичностью
+# ssot: обогащение SSoT критичностью через MCP
 # ---------------------------------------------------------------------------
 # SSoT хранит критичность ТОЛЬКО в entities/information-systems/<код>/base.yaml
-# → блок severity {type, method, addon, confirmation}. Правка точечная:
-# переписывается только блок severity, остальное содержимое файла остаётся
-# побайтово прежним (префикс и суффикс файла не пересобираются).
-# Описание MR рендерится строго по шаблону templates/MR-ssot.md: пустое поле —
-# ошибка, а не заглушка; «дописать от себя» нечего.
+# → блок severity {type, method, addon, confirmation}. Скрипт в SSoT не пишет:
+# карточку меняет агент через MCP (ssot_entity_open → ssot_form_fields →
+# ssot_ui_select/ssot_ui_fill → ssot_form_save), а скрипт планирует точные шаги
+# (`ssot-plan`), записывает факты MR (`ssot-record`) и результат проверки
+# (`ssot-verify`). Клон SSoT, git и GITLAB_TOKEN не используются.
 
 SSOT_DEFAULT_DIR = SSOT_DIR
 SSOT_ENTITIES_DIR = "entities/information-systems"
 SSOT_BASE_FILE = "base.yaml"
-SSOT_SCHEMA_REL = ("schemas", "information-systems", "base.schema.json")
-SSOT_TARGET_BRANCH = "master"
+SSOT_GROUP = "information-systems"
 SSOT_MR_DIR = ".ssot"
 # Порядок ключей — из base.ui.json → severity.ui:order (type, addon, method,
-# confirmation). Существующий порядок файла сохраняется; отсутствующие ключи
-# вставляются после своего предшественника по этому порядку.
+# confirmation).
 SSOT_SEVERITY_KEYS = ("type", "addon", "method", "confirmation")
-SSOT_CONFIRMATION_RE = re.compile(r"^https://rocketchat\.samokat\.ru/\S*$")
-# Пишущие подкоманды этапа ssot разрешены только внутри клона SSoT и только
-# после --apply: как и publish, это единственное исключение из «клоны только
-# читаются», и граница проверяется до запуска процесса.
-SSOT_PUBLISH_SUBCOMMANDS = (
-    "fetch", "rev-parse", "status", "checkout", "add", "commit", "push",
-    "show", "diff", "log",
-)
-SSOT_REVIEWER_CHECKLIST = (
-    "изменён только блок `severity` файла `base.yaml` — остальные поля и файлы не тронуты",
-    "`severity.type` — значение enum SSoT (`mission-critical | business-critical | business-operational`)",
-    "`severity.confirmation` — актуальный тред согласования из `catalog.yaml` (`approve_link`)",
-    "`severity.addon` не добавлен и не изменён (допустим только при `business-critical`)",
-    "файл проходит схему `schemas/information-systems/base.schema.json`",
-)
-# Статус этапа SSoT — производная прогона `ssot`, а не ручное поле:
-#   no_change  — severity в SSoT уже совпадает с целевым, MR не требуется;
-#   mr_pending — ветка и коммит созданы, MR ещё не запушен;
-#   mr_created — ветка запушена, MR создан (ссылка лежит в `.ssot/`).
+# Статус этапа SSoT — производная прогона `ssot-plan`/`ssot-record`/`ssot-verify`:
+#   no_change     — severity в SSoT уже совпадает с целевым, MR не требуется;
+#   mr_created    — MR создан через MCP, ссылка и версия записаны (ssot-record);
+#   mr_verified   — ssot_verify_change подтвердил изменения;
+#   mr_unverified — проверка не прошла (matched: false) — блокирующий сигнал.
 # `no_change` в публикации — заполненное поле («не требуется»), а не `⛔`:
 # иначе уже обогащённая ИС не могла бы отправить тред без причины.
 SSOT_STATUS_FIELD = "ssot_status"
 SSOT_STATUS_NO_CHANGE = "no_change"
 SSOT_STATUS_MR_PENDING = "mr_pending"
 SSOT_STATUS_MR_CREATED = "mr_created"
+SSOT_STATUS_MR_VERIFIED = "mr_verified"
+SSOT_STATUS_MR_UNVERIFIED = "mr_unverified"
 SSOT_STATUS_VALUES = (
     SSOT_STATUS_NO_CHANGE, SSOT_STATUS_MR_PENDING, SSOT_STATUS_MR_CREATED,
+    SSOT_STATUS_MR_VERIFIED, SSOT_STATUS_MR_UNVERIFIED,
 )
 # Публикация: «MR не требуется» — осознанно заполненное поле. Гейт отправки
 # считает такую строку закрытой, а не блокером (см. `_publication_missing_fields`).
 NOT_REQUIRED_MARK = "не требуется"
-SSOT_UNCHANGED = (
-    "`components.yaml`, `links.yaml`, `resources.yaml`, `duty.yaml`, `roles.yaml` — не меняются",
-    "другие ИС (`entities/information-systems/<другая ИС>/`) — не меняются",
-    "`title`, `description`, `other`, `teamName`, `lifecycle`, `onSupport`, `releaseJiraTask` — не меняются",
-    "рабочий репозиторий паспортов (`is/`, `catalog.yaml`, `INDEX.md`) — не меняется",
-)
 
 
 # --- этап handoff: отправка треда в #Criticality_assessment -----------------
@@ -42516,7 +45111,14 @@ FALLBACK_REASON_FIELD = "fallback_reason"
 TRANSPORT_USED_FIELD = "transport_used"
 HANDOFF_MODE_AUTO = "auto"
 HANDOFF_MODE_MANUAL = "manual"
-HANDOFF_MODE_VALUES = (HANDOFF_MODE_AUTO, HANDOFF_MODE_MANUAL)
+# `report` — публикация РЕЗУЛЬТАТОВ оценки (`handoff --report`): отдельный
+# текст-отчёт без гейтов MR/⛔ и без запроса согласования. Режим пишется в
+# `catalog.yaml → handoff_mode`, поэтому он же различает дедупликацию:
+# опубликованный отчёт не блокирует запрос согласования и наоборот.
+HANDOFF_MODE_REPORT = "report"
+HANDOFF_MODE_VALUES = (
+    HANDOFF_MODE_AUTO, HANDOFF_MODE_MANUAL, HANDOFF_MODE_REPORT,
+)
 HANDOFF_STATUS_NOT_STARTED = "not_started"
 HANDOFF_STATUS_MCP_REQUESTED = "mcp_requested"
 HANDOFF_STATUS_PUBLISHED = "published"
@@ -42568,6 +45170,9 @@ HANDOFF_SEARCH_PREFIX = 80
 # истёкший токен и «нет прав на канал» повтором не лечатся).
 HANDOFF_HTTP_TIMEOUT = 15
 HANDOFF_API_PATH = "/api/v1/chat.postMessage"
+# Правка уже отправленного сообщения (`--update-parent`): SSoT-MR появляется
+# позже родителя отчёта, и обновлять родителя дешевле, чем создавать новый тред.
+HANDOFF_API_UPDATE_PATH = "/api/v1/chat.update"
 # Переменные окружения REST-фолбэка. Порядок в каждом кортеже — ФИКСИРОВАННЫЙ:
 # берётся первый непустой, остальные игнорируются (переменные не смешиваются,
 # чтобы токен одного контура не ушёл на адрес другого).
@@ -42607,6 +45212,15 @@ HANDOFF_URL_ENVS = (
     "STRELKA_URL",
     "STRELKA_BASE_URL",
 )
+# Тред-родитель для ответа (`tmid` — id сообщения-родителя). Флаг `--thread`
+# важнее env: одноразовый адрес треда не должен требовать экспорта переменной.
+HANDOFF_THREAD_ENVS = ("HANDOFF_THREAD", "ROCKETCHAT_THREAD", "RC_THREAD")
+# `handoff_thread` — признак того, что опубликован ТРЕД отчёта (родитель +
+# ответы), а не одно сообщение. Нужен идемпотентности: `handoff_mode: report`
+# одинаков у одиночного отчёта и у треда, а повторный `--thread-new` не должен
+# создавать второй родитель.
+HANDOFF_THREAD_FIELD = "handoff_thread"
+HANDOFF_THREAD_TMID_RE = re.compile(r"^[A-Za-z0-9_-]{3,64}$")
 HANDOFF_DEFAULT_BASE = "https://rocketchat.samokat.ru"
 HANDOFF_APPROVE_HINT = (
     "ссылка на сообщение вида "
@@ -42658,246 +45272,54 @@ def _ssot_status_write(root, code, status):
     return status
 
 
-def _split_trailing_comment(text):
-    """Разделить скаляр и хвостовой комментарий (`value  # комм`)."""
-    quote = None
-    for index, char in enumerate(text):
-        if quote:
-            if char == quote:
-                quote = None
-            continue
-        if char in "\"'":
-            quote = char
-            continue
-        if char == "#" and (index == 0 or text[index - 1] in " \t"):
-            value = text[:index].rstrip()
-            comment = text[index - 1:] if index > 0 else text[index:]
-            return value, comment
-    return text.rstrip(), ""
-
-
-def _severity_block_bounds(lines):
-    """Границы блока severity в строках base.yaml: (start, end) или (None, None)."""
-    start = None
-    for index, line in enumerate(lines):
-        if line.startswith("severity:"):
-            start = index
-            break
-    if start is None:
-        return None, None
-    end = len(lines)
-    for index in range(start + 1, len(lines)):
-        raw = lines[index]
-        if not raw.strip() or raw.lstrip().startswith("#"):
-            continue
-        if not raw[:1].isspace():
-            end = index
-            break
-    return start, end
-
-
-def _severity_entries(lines, start, end):
-    """Записи блока severity: key / comment / blank / other (с исходной строкой)."""
-    entries = []
-    for raw in lines[start + 1:end]:
-        stripped = raw.strip()
-        if not stripped:
-            entries.append({"kind": "blank", "raw": raw})
-            continue
-        if stripped.startswith("#"):
-            entries.append({"kind": "comment", "raw": raw})
-            continue
-        match = re.match(r"^(\s+)([A-Za-z0-9_.-]+):(\s*)(.*)$", raw.rstrip("\n"))
-        if not match:
-            entries.append({"kind": "other", "raw": raw})
-            continue
-        indent, key, _sep, tail = match.groups()
-        value, comment = _split_trailing_comment(tail)
-        entries.append(
-            {
-                "kind": "key",
-                "key": key,
-                "value": value,
-                "comment": comment,
-                "indent": indent,
-                "raw": raw,
-            }
-        )
-    return entries
-
-
-def _severity_header_line(line):
-    """Строка заголовка блока: `severity:` (хвостовой комментарий сохраняется)."""
-    rest = line.split(":", 1)[1]
-    stripped = rest.strip()
-    if stripped.startswith("#"):
-        return f"severity: {stripped}\n"
-    return "severity:\n"
-
-
-def _severity_insert_position(out, key):
-    """Куда вставить отсутствующий ключ: после предшественника по ui:order."""
-    predecessors = SSOT_SEVERITY_KEYS[: SSOT_SEVERITY_KEYS.index(key)]
-    position = 0
-    for index, raw in enumerate(out):
-        match = re.match(r"^\s+([A-Za-z0-9_.-]+):", raw)
-        if match and match.group(1) in predecessors:
-            position = index + 1
-    return position
-
-
-def _severity_render(entries, values, header_line):
-    """Перерисовать блок severity: меняются только заданные ключи."""
-    out = []
-    seen = set()
-    for entry in entries:
-        if entry["kind"] != "key" or entry["key"] not in values:
-            out.append(entry["raw"])
-            continue
-        key = entry["key"]
-        seen.add(key)
-        new_value = values[key]
-        if entry["value"] == dump_scalar(new_value):
-            # Значение не меняется — строка остаётся байт в байт.
-            out.append(entry["raw"])
-            continue
-        out.append(
-            f"{entry['indent']}{key}: {dump_scalar(new_value)}"
-            f"{entry['comment']}\n"
-        )
-    for key in SSOT_SEVERITY_KEYS:
-        if key not in values or key in seen:
-            continue
-        line = f"  {key}: {dump_scalar(values[key])}\n"
-        out.insert(_severity_insert_position(out, key), line)
-        seen.add(key)
-    return header_line + "".join(out)
-
-
-def _severity_update(text, values):
-    """Точечная правка блока severity. Возвращает (новый текст, было, стало)."""
-    lines = text.splitlines(True)
-    start, end = _severity_block_bounds(lines)
-    if start is None:
-        raise YamlError(
-            f"в {SSOT_BASE_FILE} нет блока severity на верхнем уровне — "
-            "структура файла не та, править нечего"
-        )
-    header_line = _severity_header_line(lines[start])
-    entries = _severity_entries(lines, start, end)
-    before = "".join(lines[start:end])
-    after = _severity_render(entries, values, header_line)
-    new_text = "".join(lines[:start]) + after + "".join(lines[end:])
-    return new_text, before, after
-
-
-def _severity_keys(new_text):
-    """Разобранный блок severity из нового текста (после правки)."""
-    doc = parse_yaml(new_text, f"{SSOT_BASE_FILE} (после правки)")
-    severity = doc.get("severity")
-    if not isinstance(severity, dict):
-        raise YamlError(f"{SSOT_BASE_FILE}: severity после правки не словарь")
-    return severity
-
-
-def _severity_other_fields(before_text, after_text):
-    """Поля файла, кроме severity: словарь «ключ → значение» для сверки."""
-    before = parse_yaml(before_text, f"{SSOT_BASE_FILE} (до правки)")
-    after = parse_yaml(after_text, f"{SSOT_BASE_FILE} (после правки)")
-    before.pop("severity", None)
-    after.pop("severity", None)
-    return before, after
-
-
-def _ssot_schema(clone: Path):
-    """Ограничения severity из схемы SSoT (enum/pattern/required)."""
-    path = Path(clone).joinpath(*SSOT_SCHEMA_REL)
-    if not path.exists():
-        raise YamlError(
-            f"нет схемы SSoT: {path} — валидация severity невозможна"
-        )
+def _ssot_folder_info(root, code, entry):
+    """(путь INFORMATION.yaml, разобранный info) — без клона SSoT."""
+    folder_rel, _legacy = is_folder(root, code, entry or {})
+    path = Path(root) / folder_rel / INFORMATION_FILE
     try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise YamlError(f"{path}: схема не читается: {exc}")
-    severity = ((doc.get("properties") or {}).get("severity") or {})
-    props = severity.get("properties") or {}
-    schema = {
-        "type_enum": [
-            str(item) for item in ((props.get("type") or {}).get("enum") or [])
-        ],
-        "method_enum": [
-            str(item) for item in ((props.get("method") or {}).get("enum") or [])
-        ],
-        "addon_enum": [],
-        "confirmation_pattern": None,
-        "required": [str(item) for item in (severity.get("required") or [])],
+        loaded = load_yaml(path)
+    except (YamlError, OSError):
+        return path, {}
+    return path, (loaded if isinstance(loaded, dict) else {})
+
+
+def _ssot_snapshot(root, code, entry=None):
+    """Снимок карточки ИС из INFORMATION.yaml → ssot_snapshot (пусто — нет)."""
+    _path, info = _ssot_folder_info(root, code, entry)
+    snapshot = info.get(SSOT_SNAPSHOT_SECTION)
+    return snapshot if isinstance(snapshot, dict) else {}
+
+
+def _ssot_snapshot_severity(snapshot):
+    """Текущее состояние severity из снимка: type/method/confirmation/addon."""
+    base = (snapshot or {}).get("base")
+    base = base if isinstance(base, dict) else {}
+    severity = base.get("severity")
+    severity = severity if isinstance(severity, dict) else {}
+
+    def _text(key):
+        value = severity.get(key)
+        return None if value in (None, "") else str(value)
+
+    return {
+        "type": _text("type"),
+        "method": _text("method"),
+        "confirmation": _text("confirmation"),
+        "addon": _text("addon"),
     }
-    for clause in severity.get("allOf") or []:
-        then_props = ((clause or {}).get("then") or {}).get("properties") or {}
-        if "addon" in then_props:
-            schema["addon_enum"] = list(
-                ((then_props.get("addon") or {}).get("enum") or [])
-            )
-        if "confirmation" in then_props:
-            schema["confirmation_pattern"] = (
-                then_props.get("confirmation") or {}
-            ).get("pattern")
-    if not schema["type_enum"]:
-        raise YamlError(f"{path}: в схеме нет enum severity.type")
-    return schema
 
 
-def _ssot_severity_problems(severity, schema, criteria=None):
-    """Проверки блока severity против схемы SSoT и критериев."""
-    problems = []
-    type_value = severity.get("type")
-    if type_value in (None, ""):
-        problems.append("severity.type не задан")
-    elif schema["type_enum"] and str(type_value) not in schema["type_enum"]:
-        problems.append(
-            f"severity.type={type_value!r} вне enum схемы SSoT "
-            f"({', '.join(schema['type_enum'])})"
-        )
-    method = severity.get("method")
-    if method not in (None, "") and schema["method_enum"] and str(method) not in schema["method_enum"]:
-        problems.append(
-            f"severity.method={method!r} вне enum схемы SSoT "
-            f"({', '.join(schema['method_enum'])})"
-        )
-    addon = severity.get("addon")
-    if addon not in (None, ""):
-        if str(type_value) != "business-critical":
-            problems.append(
-                "severity.addon допустим только при type: business-critical "
-                f"(сейчас type={type_value!r})"
-            )
-        if schema["addon_enum"] and addon not in schema["addon_enum"]:
-            problems.append(
-                f"severity.addon={addon!r} вне enum схемы SSoT"
-            )
-    confirmation = severity.get("confirmation")
-    if confirmation not in (None, ""):
-        text = str(confirmation)
-        pattern = schema["confirmation_pattern"]
-        if pattern and not re.search(pattern, text):
-            problems.append(
-                f"severity.confirmation не соответствует схеме SSoT ({pattern})"
-            )
-        if not SSOT_CONFIRMATION_RE.match(text):
-            problems.append(
-                "severity.confirmation не соответствует "
-                "^https://rocketchat.samokat.ru/\\S*$"
-            )
-        domain_problem = approve_link_problem(text, criteria)
-        if domain_problem:
-            problems.append(f"severity.confirmation: {domain_problem}")
-    if str(method) == "target" and confirmation in (None, ""):
-        problems.append("severity.method: target без confirmation — подтверждения нет")
-    for field in schema["required"]:
-        if severity.get(field) in (None, ""):
-            problems.append(f"severity.{field} обязателен по схеме SSoT")
-    return problems
+def _ssot_passport_body(root, code, entry):
+    """Тело паспорта ИС (для целевого уровня) — пусто, если паспорта нет."""
+    folder_rel, _legacy = is_folder(root, code, entry or {})
+    path = Path(root) / folder_rel / "criticality-passport.yaml"
+    if not path.exists():
+        return {}
+    try:
+        _object_id, body = read_passport(path)
+    except YamlError:
+        return {}
+    return body if isinstance(body, dict) else {}
 
 
 def _ssot_target_type(criteria, entry, body):
@@ -42925,242 +45347,186 @@ def _ssot_target_type(criteria, entry, body):
     return passport_enum or catalog_enum, passport_level or catalog_level
 
 
-def _ssot_values(target_type, existing, approve_link):
-    """Новые значения блока severity: только то, что подтверждено данными."""
-    values = {"type": target_type}
+def _ssot_plan(root, code, entry, criteria, body, current):
+    """План MCP-шагов по снимку SSoT: {status, target, only, steps, reason}."""
+    target_type, level_text = _ssot_target_type(criteria, entry, body)
+    approve_link = str((entry or {}).get("approve_link") or "").strip()
     if approve_link:
-        # Целевая оценка с подтверждением: method=target + confirmation из реестра.
-        values["method"] = "target"
-        values["confirmation"] = str(approve_link).strip()
-    elif existing.get("method") not in (None, ""):
-        # Подтверждения нет — метод не выдумываем, оставляем прежний.
-        values["method"] = existing.get("method")
-    # addon не добавляется никогда: только сохраняется существующее значение.
-    return values
-
-
-def _ssot_changes(before, after):
-    """Изменённые поля severity: [{field, before, after}] (пустое — «—»)."""
-    changes = []
-    for key in SSOT_SEVERITY_KEYS:
-        old = before.get(key)
-        new = after.get(key)
-        if old == new:
-            continue
-        changes.append(
+        problem = approve_link_problem(approve_link, criteria)
+        if problem:
+            raise YamlError(f"catalog.yaml → approve_link: {problem}")
+    target = {"type": target_type}
+    # addon не добавляется никогда: сохраняется только существующее значение.
+    if current.get("addon") is not None:
+        target["addon"] = current["addon"]
+    only = []
+    if target_type != current.get("type"):
+        only.append("severity.type")
+    if approve_link:
+        # Целевая оценка с подтверждением: method=target + confirmation.
+        target["method"] = "target"
+        target["confirmation"] = approve_link
+        if current.get("method") != "target":
+            only.append("severity.method")
+        if current.get("confirmation") != approve_link:
+            only.append("severity.confirmation")
+    if not only:
+        return {
+            "status": "no_change",
+            "target": target,
+            "only": [],
+            "steps": [],
+            "reason": "снимок SSoT уже совпадает с целевым — MR не требуется",
+        }
+    if not approve_link:
+        return {
+            "status": "blocked",
+            "target": target,
+            "only": only,
+            "steps": [],
+            "reason": (
+                "catalog.yaml → approve_link не задан: метод и подтверждение не "
+                "меняются, MR не планируется — заполните approve_link"
+            ),
+        }
+    steps = [
+        {
+            "tool": "ssot_entity_open",
+            "args": {"group": SSOT_GROUP, "entity": code},
+            "why": "открыть карточку ИС в SSoT",
+        },
+        {
+            "tool": "ssot_form_fields",
+            "args": {},
+            "why": "получить точные поля формы и метки enum",
+        },
+    ]
+    if "severity.type" in only:
+        steps.append(
             {
-                "field": key,
-                "before": "—" if old in (None, "") else str(old),
-                "after": "—" if new in (None, "") else str(new),
+                "tool": "ssot_ui_select",
+                "args": {"target": "severity.type", "option": target_type},
+                "why": f"уровень паспорта {level_text!r} → {target_type}",
             }
         )
-    return changes
-
-
-def _ssot_mr_context(code, entry, criteria, target_type, changes, task, branch,
-                     commit_message, approve_link, passport_mr_url=""):
-    name, contour = split_is_code(code)
-    dochub_level = publish_level(criteria, (entry or {}).get("criticality_ssot"))
-    dochub_path = (_publish_rel_dir(contour, name) / DOCHUB_PASSPORT_FILE).as_posix()
-    dochub_title = MR_TITLE_TEMPLATE.format(
-        task=task, code=code, level=dochub_level
-    )
-    context = {
-        "mr": {
-            "title": f"{task}: критичность {code} — {target_type}",
-            "task": task,
-            "code": code,
-            "type": target_type,
-            "changes": changes,
-            "approve_link": str(approve_link or "").strip(),
-            "passport_mr": (
-                f"`{dochub_path}` — MR «{dochub_title}», ветка `feature/{task}`"
-            ),
-            # Ссылка на dochub-MR: без неё ревьюер SSoT не видит основание.
-            # Пустое значение — ошибка рендера (strict), MR не создаётся.
-            "passport_mr_url": str(passport_mr_url or "").strip(),
-            "checklist": list(SSOT_REVIEWER_CHECKLIST),
-            "unchanged": list(SSOT_UNCHANGED),
-            "branch": branch,
-            "commit_message": commit_message,
+    if "severity.method" in only:
+        steps.append(
+            {
+                "tool": "ssot_ui_select",
+                "args": {"target": "severity.method", "option": "target"},
+                "why": "метод — целевая оценка (method: target)",
+            }
+        )
+    if "severity.confirmation" in only:
+        steps.append(
+            {
+                "tool": "ssot_ui_fill",
+                "args": {"target": "severity.confirmation", "value": approve_link},
+                "why": "тред согласования из catalog.yaml → approve_link",
+            }
+        )
+    steps.append(
+        {
+            "tool": "ssot_form_save",
+            "args": {"waitCanApply": False},
+            "why": "создаёт MR, возвращает mrUrl и version",
         }
-    }
-    return context
-
-
-def _ssot_mr_text(context):
-    template = SKILL_DIR / "templates" / SSOT_MR_TEMPLATE
-    if not template.exists():
-        raise YamlError(f"нет шаблона описания MR: {template}")
-    return render_template_file_strict(template, context)
-
-
-def _ssot_digest(base: Path):
-    """sha1 дерева клона SSoT (без .git и .ssot) — проверка «ничего не записано»."""
-    digest = hashlib.sha1()
-    base = Path(base)
-    for path in sorted(base.rglob("*")):
-        if ".git" in path.parts or SSOT_MR_DIR in path.parts:
-            continue
-        if not path.is_file():
-            continue
-        digest.update(path.relative_to(base).as_posix().encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
-    return digest.hexdigest()
-
-
-def _ssot_dirty(clone: Path):
-    """Грязные пути клона SSoT. Наш `.ssot/` (описание MR) грязью не считается."""
-    ok, output = _run_git(
-        ["git", "-C", str(clone), "status", "--porcelain"],
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
     )
-    if not ok:
-        return None, output
-    dirty = [
-        line
-        for line in output.splitlines()
-        if line.strip() and not line.strip().startswith(f"?? {SSOT_MR_DIR}/")
-    ]
-    return dirty, output
-
-
-def _ssot_return_to_base(clone: Path, branch: str) -> bool:
-    """Вернуть клон SSoT на master: коммит остаётся в ветке MR."""
-    ok, output = _run_git(
-        ["git", "-C", str(clone), "checkout", SSOT_TARGET_BRANCH],
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
-    )
-    if not ok:
-        print(
-            f"WARN: не удалось вернуть клон на {SSOT_TARGET_BRANCH} "
-            f"(ветка {branch} сохранена): {output}"
-        )
-        return False
-    print(
-        f"Клон возвращён на {SSOT_TARGET_BRANCH}; коммит остаётся в ветке "
-        f"{branch}."
-    )
-    return True
-
-
-def _ssot_task(entry, info, explicit):
-    return _publish_task(entry, info, explicit)
-
-
-def _ssot_severity_snapshot(root: Path, code: str, entry, criteria):
-    """Снимок блока `severity` карточки ИС в клоне SSoT.
-
-    Возвращает словарь `{"state": ..., "target": ..., "existing": ...,
-    "text": ...}`, где `state`:
-
-    - `ok`       — блок прочитан (`target`, `existing`, `text` заполнены);
-    - `no_clone` — клона SSoT нет, проверять нечем;
-    - `no_file`  — карточки ИС в клоне нет;
-    - `error`    — файл/блок не читается (битый YAML, нет блока severity).
-
-    Один разбор на два разных вопроса: «блок severity совпадает с целевым
-    целиком» (нужен ли `make ssot`) и «уровень критичности уже тот» (нужен ли
-    MR по критичности). Раньше оба вопроса решались побайтовым сравнением
-    блока, из-за чего расхождение `severity.confirmation` выглядело как
-    «критичность другая».
-    """
-    clone = root / SSOT_DEFAULT_DIR
-    if not clone.is_dir():
-        return {"state": "no_clone"}
-    path = clone / _ssot_rel_path(code)
-    if not path.exists():
-        return {"state": "no_file"}
-    try:
-        body = {}
-        folder = root / str((entry or {}).get("path") or f"is/{code}")
-        passport = folder / "criticality-passport.yaml"
-        if passport.exists():
-            _object_id, body = read_passport(passport)
-        target, _level = _ssot_target_type(criteria, entry, body)
-        text = path.read_text(encoding="utf-8")
-        lines = text.splitlines(True)
-        start, end = _severity_block_bounds(lines)
-        if start is None:
-            return {"state": "error"}
-        existing = {}
-        for item in _severity_entries(lines, start, end):
-            if item["kind"] == "key":
-                existing[item["key"]] = item["value"]
-    except (YamlError, OSError, ValueError, KeyError, TypeError):
-        return {"state": "error"}
     return {
-        "state": "ok",
+        "status": "changed",
         "target": target,
-        "existing": existing,
-        "text": text,
+        "only": only,
+        "steps": steps,
+        "reason": f"изменяются поля: {', '.join(only)}",
     }
 
 
-def _ssot_enriched(root: Path, code: str, entry, criteria):
-    """Совпадает ли блок severity в SSoT с целевым целиком: True/False/None.
+def _ssot_plan_path(root, code):
+    return Path(root) / SSOT_MR_DIR / f"{code}-apply-plan.json"
 
-    True — `make ssot` напечатает «изменений нет» и MR не создаст; False —
-    блок надо править; None — проверить нечем (клона нет, блок не читается).
-    Сравнение побайтовое: оно же учитывает `severity.confirmation`, поэтому
-    отставшая ссылка подтверждения остаётся поводом прогнать `make ssot`.
-    """
-    snapshot = _ssot_severity_snapshot(root, code, entry, criteria)
-    if snapshot["state"] == "no_file":
-        return False
-    if snapshot["state"] != "ok":
-        return None
+
+def _ssot_plan_write(root, code, plan):
+    path = _ssot_plan_path(root, code)
+    _atomic_write(path, json.dumps(plan, ensure_ascii=False, indent=2) + "\n")
+    return path
+
+
+def _ssot_plan_read(root, code):
+    path = _ssot_plan_path(root, code)
+    if not path.exists():
+        return None, f"нет плана {path} — сначала запустите ssot-plan"
     try:
-        values = _ssot_values(
-            snapshot["target"],
-            snapshot["existing"],
-            (entry or {}).get("approve_link"),
+        plan = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return None, f"{path}: план не читается: {exc}"
+    if not isinstance(plan, dict):
+        return None, f"{path}: ожидался объект плана"
+    return plan, None
+
+
+def _ssot_current_text(current):
+    def _value(key):
+        value = current.get(key)
+        return "—" if value in (None, "") else str(value)
+
+    return (
+        f"type={_value('type')}, method={_value('method')}, "
+        f"confirmation={_value('confirmation')}, addon={_value('addon')}"
+    )
+
+
+def _ssot_print_plan(plan):
+    print(f"План SSoT: {plan['is']} ({plan['status']})")
+    print(f"  текущее: {_ssot_current_text(plan['current'])}")
+    target = plan.get("target") or {}
+    print(
+        "  целевое: type={type}, method={method}, confirmation={confirmation}".format(
+            type=target.get("type") or "—",
+            method=target.get("method") or "—",
+            confirmation=target.get("confirmation") or "—",
         )
-        _new_text, before, after = _severity_update(snapshot["text"], values)
-    except (YamlError, OSError, ValueError, KeyError, TypeError):
+    )
+    print(f"  изменяются: {', '.join(plan.get('only') or []) or '—'}")
+    if plan.get("reason"):
+        print(f"  причина: {plan['reason']}")
+    steps = plan.get("steps") or []
+    if not steps:
+        print("  шаги MCP: нет")
+        return
+    print(f"  шаги MCP ({len(steps)}):")
+    for index, step in enumerate(steps, 1):
+        args = json.dumps(step.get("args") or {}, ensure_ascii=False)
+        print(f"    {index}. {step['tool']} {args}")
+        print(f"       зачем: {step.get('why') or '—'}")
+
+
+def _ssot_deprecated_flags(args):
+    """Устаревшие флаги записи в клон: явная ошибка вместо молчания."""
+    used = [
+        name
+        for name in (
+            "apply", "push", "clone", "reuse_local", "branch", "task",
+            "force_duplicate", "update_mr", "passport_mr_url",
+        )
+        if getattr(args, name, None) not in (None, False)
+    ]
+    if not used:
         return None
-    return before == after
+    flags = ", ".join("--" + name.replace("_", "-") for name in used)
+    return (
+        f"{flags}: SSoT теперь только через MCP: ssot-plan → ssot_entity_open → "
+        "ssot_form_save → ssot-record"
+    )
 
 
-def _ssot_level_matches(root: Path, code: str, entry, criteria):
-    """Совпадает ли УРОВЕНЬ критичности в SSoT с целевым: True/False/None.
-
-    Уровень — это `severity.type`: единственное поле, которым SSoT отвечает на
-    вопрос «какая у ИС критичность». Отличие от `_ssot_enriched` намеренное:
-    `severity.confirmation` может отставать от `catalog.yaml → approve_link`
-    (перегенерация паспорта, новый тред подтверждения) — это повод обновить
-    подтверждение, но НЕ повод писать в action-пакете «MR по критичности не
-    создан»: критичность в SSoT уже та же.
-
-    None — проверить нечем (клона/карточки нет, блок не читается).
-    """
-    snapshot = _ssot_severity_snapshot(root, code, entry, criteria)
-    if snapshot["state"] != "ok":
-        return None
-    existing = snapshot["existing"]
-    if str(existing.get("type") or "") != str(snapshot["target"] or ""):
-        return False
-    # `method: target` по схеме SSoT требует непустого `confirmation`:
-    # пусто — блок невалиден, значит уровень не зафиксирован.
-    if str(existing.get("method") or "") == "target" and not existing.get(
-        "confirmation"
-    ):
-        return False
-    return True
-
-
-def cmd_ssot(args) -> int:
+def cmd_ssot_plan(args) -> int:
+    """План обогащения SSoT критичностью: гейты + точные шаги MCP, без сети и git."""
     root = repo_root_from_args(args)
-    if getattr(args, "push", False) and not getattr(args, "apply", False):
-        return _ssot_fail("--push допустим только вместе с --apply", code=2)
+    print_project_root(root, args)
+    deprecated = _ssot_deprecated_flags(args)
+    if deprecated:
+        print(f"ERROR: {deprecated}")
+        return 2
     try:
         criteria = load_criteria()
     except YamlError as exc:
@@ -43169,47 +45535,21 @@ def cmd_ssot(args) -> int:
         catalog, systems = load_catalog(root)
     except YamlError as exc:
         return _ssot_fail(f"catalog.yaml: {exc}")
-    by_code = catalog_by_code(systems)
     code = str(args.is_ or "").strip()
-    entry = by_code.get(code)
+    entry = catalog_by_code(systems).get(code)
     if entry is None:
         return _ssot_fail(
             f"ИС {code!r} отсутствует в catalog.yaml — обогащать нечего"
         )
-    task = _ssot_task(entry, {}, getattr(args, "task", None))
-    if not task:
-        return _ssot_fail(
-            "не задан Jira-ключ: укажите --task <JIRA-KEY> "
-            "(или jira_task/task в catalog.yaml/is.yaml)\n" + _jira_task_hint()
-        )
-    clone = _clone_abs(getattr(args, "ssot", None), root / SSOT_DEFAULT_DIR)
-    if not clone.is_dir():
-        if not _repo_clone_missing(
-            criteria, "ssot", clone, "SSoT", "ssot", root,
-            do_clone=bool(getattr(args, "clone", False)),
-        ):
-            return 1
-    rel = _ssot_rel_path(code)
-    path = clone / rel
-    if not path.exists():
-        return _ssot_fail(f"ИС {code} не найдена в SSoT ({clone})")
-
     folder_rel, _legacy = is_folder(root, code, entry)
     passport_file = root / folder_rel / "criticality-passport.yaml"
-    body = {}
-    if passport_file.exists():
-        try:
-            _object_id, body = read_passport(passport_file)
-        except YamlError as exc:
-            return _ssot_fail(str(exc))
-    info = {}
-    info_path = root / folder_rel / INFORMATION_FILE
-    if info_path.exists():
-        try:
-            loaded = load_yaml(info_path)
-            info = loaded if isinstance(loaded, dict) else {}
-        except YamlError as exc:
-            return _ssot_fail(f"{folder_rel}/{INFORMATION_FILE}: {exc}")
+    body = _ssot_passport_body(root, code, entry)
+    info_path, info = _ssot_folder_info(root, code, entry)
+    if not info_path.exists():
+        return _ssot_fail(
+            f"нет {folder_rel}/{INFORMATION_FILE} — снимок SSoT некуда писать "
+            f"(соберите данные: ssot-import --is {code} --entity-json -)"
+        )
     # Внешнее изменение (severity в SSoT) — только после зелёной валидации:
     # тот же гейт, что у publish, чтобы «MR раньше validate» был невозможен.
     if not external_change_gate(
@@ -43217,333 +45557,505 @@ def cmd_ssot(args) -> int:
         force=bool(getattr(args, "force", False)),
     ):
         return 1
-    try:
-        target_type, level_text = _ssot_target_type(criteria, entry, body)
-        schema = _ssot_schema(clone)
-    except YamlError as exc:
-        return _ssot_fail(str(exc))
-    if schema["type_enum"] and target_type not in schema["type_enum"]:
+    snapshot = _ssot_snapshot(root, code, entry)
+    if not snapshot:
         return _ssot_fail(
-            f"уровень {level_text!r} → {target_type!r} отсутствует в enum схемы "
-            f"SSoT ({', '.join(schema['type_enum'])})"
+            f"{folder_rel}/{INFORMATION_FILE}: нет снимка SSoT — сначала "
+            f"импортируйте карточку: ssot-import --is {code} --entity-json -"
         )
-
-    approve_link = str(entry.get("approve_link") or "").strip()
-    if approve_link:
-        problem = approve_link_problem(approve_link, criteria)
-        if problem:
-            return _ssot_fail(f"catalog.yaml → approve_link: {problem}")
-
+    current = _ssot_snapshot_severity(snapshot)
     try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        return _ssot_fail(f"{rel}: {exc}")
-    try:
-        existing = _severity_keys(text)
+        planned = _ssot_plan(root, code, entry, criteria, body, current)
     except YamlError as exc:
         return _ssot_fail(str(exc))
-    values = _ssot_values(target_type, existing, approve_link)
-    try:
-        new_text, before_block, after_block = _severity_update(text, values)
-        after = _severity_keys(new_text)
-        other_before, other_after = _severity_other_fields(text, new_text)
-    except YamlError as exc:
-        return _ssot_fail(str(exc))
-    if other_before != other_after:
-        return _ssot_fail(
-            f"{rel}: правка затронула поля вне severity — запись отменена"
-        )
-    problems = _ssot_severity_problems(after, schema, criteria)
-    if problems:
-        print(f"ERROR: блок severity ИС {code} не проходит проверку:")
-        for problem in problems:
-            print(f"  - {problem}")
-        return 1
-
-    branch = str(getattr(args, "branch", None) or f"feature/{task}").strip()
-    commit_message = f"{task}: feat(ssot): критичность {code} — {target_type}"
-    changes = _ssot_changes(existing, after)
-    unchanged = before_block == after_block
-
-    print(
-        "Обогащение SSoT критичностью "
-        f"({'apply' if getattr(args, 'apply', False) else 'dry-run'})"
-    )
-    print(f"  ИС: {code}")
-    print(f"  клон: {clone}")
-    print(f"  файл: {rel}")
-    print(f"  уровень: {level_text!r} → {target_type}")
-    print(
-        "  подтверждение: "
-        + (approve_link if approve_link else "— (approve_link не задан, method не меняется)")
-    )
-    print(f"  задача: {task}")
-    print(f"  ветка: {branch}")
-    print(f"  коммит: {commit_message}")
-    print(f"  изменённых полей: {len(changes)}")
-    print()
-    print(f"--- было: {rel} → severity ---")
-    print(before_block, end="")
-    print()
-    print(f"--- стало: {rel} → severity ---")
-    print(after_block, end="")
-    print()
-
-    if unchanged:
-        print("изменений нет: блок severity уже совпадает с целевым — ветка и коммит не создаются.")
+    plan = {
+        "is": code,
+        "group": SSOT_GROUP,
+        "entity": code,
+        "status": planned["status"],
+        "current": current,
+        "target": planned["target"],
+        "only": planned["only"],
+        "steps": planned["steps"],
+        "verify": {
+            "group": SSOT_GROUP,
+            "entity": code,
+            "form": "base",
+            "pointer": "/severity/type",
+            "expected": planned["target"].get("type"),
+        },
+        "next": (
+            f"criticality.py ssot-record --is {code} --mr-url <mrUrl> "
+            "--version <version>"
+        ),
+    }
+    if planned.get("reason"):
+        plan["reason"] = planned["reason"]
+    path = _ssot_plan_write(root, code, plan)
+    _ssot_print_plan(plan)
+    print(f"  план: {path}")
+    print(f"  следующий шаг: {plan['next']}")
+    if plan["status"] == "no_change":
         # `no_change` — не «не заполнено»: в публикации это «MR не требуется».
         _ssot_status_write(root, code, SSOT_STATUS_NO_CHANGE)
         _emit_next_steps(root, criteria, args, codes=[code], single=True)
         return 0
-
-    if not changes:
-        return _ssot_fail(
-            f"{rel}: блок severity изменился, но ни одно поле не отличается — "
-            "проверьте форматирование файла"
-        )
-    # Основание SSoT-MR — dochub-MR. Ссылка приходит из --passport-mr-url или
-    # из артефакта этапа publish (`.publish/<код>-MR.url`, `<код>-MR.md`).
-    passport_mr_url = str(getattr(args, "passport_mr_url", None) or "").strip()
-    if not passport_mr_url:
-        passport_mr_url = _mr_url_artifact_read(root, code, DOCHUB_MR_DIR)
-    url_problem = _mr_url_problem(passport_mr_url)
-    if url_problem:
-        return _ssot_fail(
-            f"{url_problem} — создайте dochub-MR "
-            f"(make publish-apply IS={code} TASK={task} PUSH=1) и передайте "
-            "--passport-mr-url <URL>; SSoT-MR без основания не создаётся"
-        )
-    try:
-        mr_context = _ssot_mr_context(
-            code, entry, criteria, target_type, changes, task, branch,
-            commit_message, approve_link, passport_mr_url=passport_mr_url,
-        )
-        mr_text = _ssot_mr_text(mr_context)
-    except (YamlError, TemplateError) as exc:
-        return _ssot_fail(str(exc))
-    print(f"--- описание MR ({SSOT_MR_DIR}/{code}-MR.md) ---")
-    print(mr_text, end="")
-    print()
-
-    if getattr(args, "update_mr", False):
-        # Только описание существующего MR: ветка и коммит не трогаются.
-        # Нужно, когда шаблон уточнили (например, добавили ссылку на dochub-MR),
-        # а MR уже создан.
-        mr_path = clone / SSOT_MR_DIR / f"{code}-MR.md"
-        if not getattr(args, "apply", False):
-            print(
-                f"dry-run: {SSOT_MR_DIR}/{code}-MR.md не записан, описание MR не "
-                "обновлено. Запись — --apply."
-            )
-            _emit_next_steps(root, criteria, args, codes=[code], single=True)
-            return 0
-        _atomic_write(mr_path, mr_text)
-        print(f"Описание MR записано: {SSOT_MR_DIR}/{code}-MR.md")
-        sync = _mr_description_sync(
-            clone, branch, mr_text, label="SSoT",
-            artifact=f"{SSOT_MR_DIR}/{code}-MR.md",
-        )
-        code_rc = _mr_description_report(*sync, label="SSoT")
-        _emit_next_steps(root, criteria, args, codes=[code], single=True)
-        return code_rc or 0
-
-    if not getattr(args, "apply", False):
-        ok, head = _run_git(
-            ["git", "-C", str(clone), "rev-parse", "--abbrev-ref", "HEAD"],
-            clone,
-            allow=SSOT_PUBLISH_SUBCOMMANDS,
-            boundary=clone,
-            purpose="ssot",
-        )
-        if ok and head and head != SSOT_TARGET_BRANCH:
-            print(
-                f"WARN: клон не на {SSOT_TARGET_BRANCH} (сейчас {head}) — "
-                "--apply откажется работать"
-            )
-        dirty, _raw = _ssot_dirty(clone)
-        if dirty:
-            print("WARN: рабочее дерево клона не чистое — --apply откажется работать:")
-            for line in dirty[:5]:
-                print(f"  {line}")
-        print("dry-run: ни один файл не записан. Запись — --apply.")
-        _emit_next_steps(root, criteria, args, codes=[code], single=True)
-        return 0
-
-    # --- apply: ветка от origin/master, запись, коммит одного файла -------
-    ok, head = _run_git(
-        ["git", "-C", str(clone), "rev-parse", "--abbrev-ref", "HEAD"],
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
-    )
-    if not ok:
-        return _ssot_fail(f"git rev-parse в клоне: {head}")
-    if head != SSOT_TARGET_BRANCH:
-        return _ssot_fail(
-            f"клон не на {SSOT_TARGET_BRANCH} (сейчас {head}): обогащение "
-            "возможно только из базовой ветки"
-        )
-    dirty, raw = _ssot_dirty(clone)
-    if dirty is None:
-        return _ssot_fail(f"git status в клоне: {raw}")
-    if dirty:
-        return _ssot_fail(
-            "рабочее дерево клона не чистое — закоммитьте или уберите изменения:\n  "
-            + "\n  ".join(dirty[:10])
-        )
-    ok, exists = _run_git(
-        ["git", "-C", str(clone), "rev-parse", "--verify", "--quiet",
-         f"refs/heads/{branch}"],
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
-    )
-    if ok and exists:
-        return _ssot_fail(
-            f"ветка {branch} уже существует в клоне — выберите другое имя "
-            "(--branch) или удалите её вручную"
-        )
-    ok, output = _run_git(
-        ["git", "-C", str(clone), "fetch", "--prune"],
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
-    )
-    if not ok:
-        return _ssot_fail(f"git fetch --prune в клоне: {output}")
-    ok, output = _run_git(
-        ["git", "-C", str(clone), "checkout", "-b", branch,
-         f"origin/{SSOT_TARGET_BRANCH}"],
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
-    )
-    if not ok:
-        return _ssot_fail(f"git checkout ветки {branch}: {output}")
-
-    _atomic_write(path, new_text)
-    mr_path = clone / SSOT_MR_DIR / f"{code}-MR.md"
-    _atomic_write(mr_path, mr_text)
-
-    ok, output = _run_git(
-        ["git", "-C", str(clone), "add", "--", rel],
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
-    )
-    if not ok:
-        return _ssot_fail(f"git add: {output}")
-    ok, staged = _run_git(
-        ["git", "-C", str(clone), "diff", "--cached", "--name-only"],
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
-    )
-    if not ok:
-        return _ssot_fail(f"git diff --cached: {staged}")
-    if not (staged or "").strip():
-        _ssot_return_to_base(clone, branch)
-        print(
-            f"изменений нет: ветка {branch} уже содержит актуальный severity — "
-            "коммит не создан."
-        )
-        _ssot_status_write(root, code, SSOT_STATUS_NO_CHANGE)
-        _emit_next_steps(root, criteria, args, codes=[code], single=True)
-        return 0
-    ok, output = _run_git(
-        ["git", "-C", str(clone), "commit", "-m", commit_message],
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
-    )
-    if not ok:
-        return _ssot_fail(f"git commit: {output}")
-    ok, stat = _run_git(
-        ["git", "-C", str(clone), "show", "--stat", "--oneline", "HEAD"],
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
-    )
-    ok_names, names = _run_git(
-        ["git", "-C", str(clone), "show", "--name-only", "--format=", "HEAD"],
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
-    )
-    committed = [line for line in (names or "").splitlines() if line.strip()]
-    print("Коммит создан:")
-    for line in (stat or "").splitlines():
-        print("  " + line)
-    if committed != [rel]:
-        print(
-            f"WARN: в коммите {len(committed)} файл(ов) вместо 1 ({rel}) — "
-            "проверьте git show --stat"
-        )
-    print(f"Описание MR: {SSOT_MR_DIR}/{code}-MR.md")
-
-    _ssot_return_to_base(clone, branch)
-
-    if not getattr(args, "push", False):
-        print()
-        print("Ветка создана локально, push не выполнялся (--push не задан).")
-        print(
-            f"Ручной push: git -C {clone} push -u origin {branch} "
-            "-o merge_request.create -o merge_request.target=master"
-        )
-        # Коммит есть, MR ещё нет: в публикации ссылка останется `⛔` до пуша.
-        _ssot_status_write(root, code, SSOT_STATUS_MR_PENDING)
-        _emit_next_steps(root, criteria, args, codes=[code], single=True)
-        return 0
-
-    # Git не пропускает переводы строк в push-опциях («must not contain a NUL or
-    # LF character»), поэтому в push-options уходит тот же рендер шаблона,
-    # сжатый в одну строку, а полный текст ставится через API сразу после пуша.
-    push_description = _mr_push_option(mr_text)
-    command = [
-        "git", "-C", str(clone), "push", "-u", "origin", branch,
-        "-o", "merge_request.create",
-        "-o", f"merge_request.target={SSOT_TARGET_BRANCH}",
-        "-o", f"merge_request.title={mr_context['mr']['title']}",
-        "-o", f"merge_request.description={push_description}",
-        "-o", "merge_request.remove_source_branch",
-    ]
-    ok, output = _run_git(
-        command,
-        clone,
-        allow=SSOT_PUBLISH_SUBCOMMANDS,
-        boundary=clone,
-        purpose="ssot",
-    )
-    if not ok:
-        return _ssot_fail(f"git push: {output}")
-    print(
-        "Ветка запушена, MR создан push-options "
-        f"(target {SSOT_TARGET_BRANCH}, source удаляется после мержа)."
-    )
-    for line in (output or "").splitlines():
-        print("  " + line)
-    sync = _mr_description_sync(
-        clone, branch, mr_text, label="SSoT",
-        artifact=f"{SSOT_MR_DIR}/{code}-MR.md",
-    )
-    # URL созданного MR — вход этапа `handoff`: без него ссылка в треде пуста,
-    # а публикация с `⛔` заблокирована гейтом.
-    _mr_url_artifact_write(clone, code, sync[1], SSOT_MR_DIR)
-    # MR создан — публикация получает ссылку, статус этапа SSoT закрыт.
-    _ssot_status_write(root, code, SSOT_STATUS_MR_CREATED)
-    code_rc = _mr_description_report(*sync, label="SSoT")
+    if plan["status"] == "blocked":
+        print(f"ERROR: {plan['reason']}")
+        return 1
     _emit_next_steps(root, criteria, args, codes=[code], single=True)
-    return code_rc or 0
+    return 0
 
+
+def _ssot_mr_hosts(criteria):
+    """Домены, которым разрешено отдавать MR-ссылки (criteria.external_refs)."""
+    hosts = set()
+    block = (criteria or {}).get("external_refs") or {}
+    repos = block.get("repos") if isinstance(block, dict) else None
+    values = []
+    for item in (repos or {}).values():
+        if isinstance(item, dict):
+            values.extend([item.get("gitlab_base"), item.get("url")])
+    if isinstance(block, dict):
+        values.append(block.get("ssot_card_base"))
+    for value in values:
+        match = re.match(r"^[a-z][a-z0-9+.-]*://([^/]+)", str(value or ""))
+        if match:
+            hosts.add(match.group(1).lower())
+    return hosts
+
+
+def _ssot_mr_url_problem(url, criteria):
+    """Ссылка на MR SSoT: формат MR + домен из criteria.external_refs."""
+    problem = _mr_url_problem(url)
+    if problem:
+        return problem
+    hosts = _ssot_mr_hosts(criteria)
+    match = re.match(r"^[a-z][a-z0-9+.-]*://([^/]+)", str(url).strip())
+    host = match.group(1).lower() if match else ""
+    if hosts and host not in hosts:
+        return (
+            f"домен {host!r} не разрешён для SSoT-MR "
+            f"(criteria.external_refs: {', '.join(sorted(hosts))})"
+        )
+    return None
+
+
+def _ssot_info_fields_write(root, code, entry, values):
+    """Записать верхнеуровневые скаляры INFORMATION.yaml, сохранив остальное."""
+    path, _info = _ssot_folder_info(root, code, entry)
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines(True)
+    for key, value in values.items():
+        rendered = f"{key}: {dump_scalar(value)}\n"
+        pattern = re.compile(rf"^{re.escape(key)}:[ \t]*(?:.*)$")
+        for index, raw in enumerate(lines):
+            if pattern.match(raw.rstrip("\n")):
+                lines[index] = rendered
+                break
+        else:
+            if lines and not lines[-1].endswith("\n"):
+                lines[-1] += "\n"
+            lines.append(rendered)
+    new_text = "".join(lines)
+    doc = parse_yaml(new_text, str(path))
+    if not isinstance(doc, dict):
+        raise YamlError(f"{path}: после записи ожидался словарь верхнего уровня")
+    for key, value in values.items():
+        if str(doc.get(key)) != str(value):
+            raise YamlError(
+                f"{path}: поле {key} не записалось (получено {doc.get(key)!r})"
+            )
+    _atomic_write(path, new_text)
+    return path
+
+
+def _ssot_verified_write(root, code, entry, verified):
+    """`ssot_snapshot.verified` в INFORMATION.yaml (остальной файл не меняется)."""
+    path, info = _ssot_folder_info(root, code, entry)
+    snapshot = info.get(SSOT_SNAPSHOT_SECTION)
+    if not isinstance(snapshot, dict) or not snapshot:
+        raise YamlError(
+            f"{path}: нет снимка SSoT — сначала ssot-import"
+        )
+    text = path.read_text(encoding="utf-8")
+    updated = dict(snapshot)
+    updated["verified"] = verified
+    new_text = _splice_top_level_section(
+        text,
+        SSOT_SNAPSHOT_SECTION,
+        f"{SSOT_SNAPSHOT_SECTION}:\n" + _dump_block(updated, 2),
+    )
+    doc = parse_yaml(new_text, str(path))
+    section = doc.get(SSOT_SNAPSHOT_SECTION) if isinstance(doc, dict) else None
+    if not isinstance(section, dict) or not isinstance(
+        section.get("verified"), dict
+    ):
+        raise YamlError(f"{path}: секция verified не записалась")
+    _atomic_write(path, new_text)
+    return path
+
+
+def _ssot_record_markdown(code, facts):
+    """Описание SSoT-MR из ФАКТОВ MCP (без отдельного шаблона)."""
+
+    def _cell(value):
+        text = str(value if value not in (None, "") else "—")
+        return text.replace("|", "\\|")
+
+    rows = [
+        ("ИС", code),
+        ("MR", facts.get("mr_url")),
+        ("Версия", facts.get("version")),
+        ("canApply", facts.get("can_apply")),
+        ("Состояние", facts.get("state")),
+        ("Апрувы (нужно)", facts.get("approvals_required")),
+        ("Апрувы (осталось)", facts.get("approvals_left")),
+        ("Апрувы (нет)", facts.get("approvals_missing")),
+        ("Pipeline", facts.get("pipeline")),
+    ]
+    lines = [
+        f"# SSoT-MR: {code}",
+        "",
+        "Описание собрано из ответа MCP (`ssot_form_save` / `ssot_mr_status`):",
+        "значения не досочиняются.",
+        "",
+        "| Поле | Значение |",
+        "| --- | --- |",
+    ]
+    for label, value in rows:
+        lines.append(f"| {label} | {_cell(value)} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _read_raw_arg(value, label):
+    """Сырой текст ответа MCP: путь к файлу или `-` (stdin)."""
+    if str(value) == "-":
+        return sys.stdin.read()
+    return Path(str(value)).read_text(encoding="utf-8")
+
+
+def _write_raw_out(value, text):
+    """Сохранить сырой ответ: путь или `-` (stdout)."""
+    if str(value) == "-":
+        print(text, end="" if text.endswith("\n") else "\n")
+        return None
+    path = Path(str(value))
+    _atomic_write(path, text if text.endswith("\n") else text + "\n")
+    return path
+
+
+def _ssot_facts_from_payload(payload):
+    """Факты для описания MR из ответа ssot_form_save / ssot_mr_status."""
+    payload = payload if isinstance(payload, dict) else {}
+    nested = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+
+    def _pick(*keys):
+        for source in (payload, nested):
+            for key in keys:
+                if source.get(key) not in (None, ""):
+                    return source.get(key)
+        return None
+
+    approvals = _pick("approvals") or {}
+    approvals = approvals if isinstance(approvals, dict) else {}
+    pipeline = _pick("pipeline") or {}
+    pipeline = pipeline if isinstance(pipeline, dict) else {}
+    return {
+        "mr_url": _pick("mrUrl", "mr_url", "web_url"),
+        "version": _pick("version"),
+        "can_apply": _pick("canApply", "can_apply"),
+        "state": _pick("state", "status"),
+        "approvals_required": approvals.get("required"),
+        "approvals_left": approvals.get("left"),
+        "approvals_missing": approvals.get("missing"),
+        "pipeline": pipeline.get("status") or pipeline.get("state"),
+    }
+
+
+def cmd_ssot_record(args) -> int:
+    """Записать факты созданного SSoT-MR: `.ssot/` + INFORMATION.yaml."""
+    root = repo_root_from_args(args)
+    print_project_root(root, args)
+    deprecated = _ssot_deprecated_flags(args)
+    if deprecated:
+        print(f"ERROR: {deprecated}")
+        return 2
+    try:
+        criteria = load_criteria()
+    except YamlError as exc:
+        return _ssot_fail(str(exc))
+    try:
+        _catalog, systems = load_catalog(root)
+    except YamlError as exc:
+        return _ssot_fail(f"catalog.yaml: {exc}")
+    code = str(args.is_ or "").strip()
+    entry = catalog_by_code(systems).get(code)
+    if entry is None:
+        return _ssot_fail(f"ИС {code!r} отсутствует в catalog.yaml")
+    plan, problem = _ssot_plan_read(root, code)
+    if problem:
+        return _ssot_fail(problem)
+    plan_status = str(plan.get("status") or "")
+    if plan_status == "no_change":
+        return _ssot_fail(
+            "нечего записывать: план ssot-plan = no_change (severity в SSoT уже "
+            "совпадает) — MR не создаётся"
+        )
+    if plan_status != "changed":
+        return _ssot_fail(
+            "нечего записывать: план ssot-plan не в состоянии changed "
+            f"(status={plan_status or '—'}) — сначала устраните блокеры плана"
+        )
+    mr_url = str(getattr(args, "mr_url", "") or "").strip()
+    url_problem = _ssot_mr_url_problem(mr_url, criteria)
+    if url_problem:
+        return _ssot_fail(f"--mr-url: {url_problem}")
+    version = getattr(args, "version", None)
+    version = None if version in (None, "") else version
+
+    save_payload = None
+    save_json = getattr(args, "save_json", None)
+    if save_json:
+        try:
+            save_payload = json.loads(_read_raw_arg(save_json, "save-json"))
+        except (OSError, ValueError) as exc:
+            return _ssot_fail(f"--save-json: {exc}")
+    status_payload = None
+    status_json = getattr(args, "status_json", None)
+    if status_json:
+        try:
+            status_payload = json.loads(_read_raw_arg(status_json, "status-json"))
+        except (OSError, ValueError) as exc:
+            return _ssot_fail(f"--status-json: {exc}")
+
+    facts = _ssot_facts_from_payload(save_payload)
+    facts.update(
+        {
+            key: value
+            for key, value in _ssot_facts_from_payload(status_payload).items()
+            if value is not None
+        }
+    )
+    facts["mr_url"] = mr_url
+    if version is not None:
+        facts["version"] = version
+    can_apply = facts.get("can_apply")
+    can_apply = bool(can_apply) if can_apply is not None else None
+
+    folder_rel, _legacy = is_folder(root, code, entry)
+    info_path, info = _ssot_folder_info(root, code, entry)
+    if not info_path.exists():
+        return _ssot_fail(f"нет {folder_rel}/{INFORMATION_FILE}")
+    previous_url = _mr_url_artifact_read(root, code, SSOT_MR_DIR)
+    previous_version = info.get("ssot_version")
+    if previous_url == mr_url and str(previous_version or "") == str(version or ""):
+        print(f"{code}: без изменений — тот же mrUrl и version уже записаны")
+        return 0
+
+    url_path = Path(root) / SSOT_MR_DIR / f"{code}-MR.url"
+    _atomic_write(url_path, mr_url + "\n")
+    md_path = Path(root) / SSOT_MR_DIR / f"{code}-MR.md"
+    _atomic_write(md_path, _ssot_record_markdown(code, facts))
+    recorded_at = _utc_now_iso()
+    fields = {
+        SSOT_STATUS_FIELD: SSOT_STATUS_MR_CREATED,
+        "ssot_mr_url": mr_url,
+        "ssot_version": version,
+        "ssot_can_apply": can_apply,
+        "ssot_recorded_at": recorded_at,
+    }
+    try:
+        _ssot_info_fields_write(root, code, entry, fields)
+    except (YamlError, OSError) as exc:
+        return _ssot_fail(f"{info_path}: {exc}")
+    _ssot_status_write(root, code, SSOT_STATUS_MR_CREATED)
+    print(f"Записано: {url_path}")
+    print(f"Записано: {md_path}")
+    print(f"  {folder_rel}/{INFORMATION_FILE}: ssot_status={SSOT_STATUS_MR_CREATED}")
+    if version is not None:
+        print(f"  version: {version}")
+    if save_json:
+        saved = _write_raw_out(save_json, _read_raw_arg(save_json, "save-json"))
+        if saved is not None:
+            print(f"  сырой ответ ssot_form_save: {saved}")
+    if status_json:
+        saved = _write_raw_out(status_json, _read_raw_arg(status_json, "status-json"))
+        if saved is not None:
+            print(f"  сырой ответ ssot_mr_status: {saved}")
+    _emit_next_steps(root, criteria, args, codes=[code], single=True)
+    return 0
+
+
+def cmd_ssot_verify(args) -> int:
+    """Записать результат ssot_verify_change в снимок и `.ssot/<код>-verify.json`."""
+    root = repo_root_from_args(args)
+    print_project_root(root, args)
+    deprecated = _ssot_deprecated_flags(args)
+    if deprecated:
+        print(f"ERROR: {deprecated}")
+        return 2
+    try:
+        _catalog, systems = load_catalog(root)
+    except YamlError as exc:
+        return _ssot_fail(f"catalog.yaml: {exc}")
+    code = str(args.is_ or "").strip()
+    entry = catalog_by_code(systems).get(code)
+    if entry is None:
+        return _ssot_fail(f"ИС {code!r} отсутствует в catalog.yaml")
+    verify_json = getattr(args, "verify_json", None)
+    if verify_json:
+        try:
+            payload = json.loads(_read_raw_arg(verify_json, "verify-json"))
+        except (OSError, ValueError) as exc:
+            return _ssot_fail(f"--verify-json: {exc}")
+        if not isinstance(payload, dict):
+            return _ssot_fail("--verify-json: ожидался объект ответа MCP")
+    else:
+        payload = {
+            "matched": bool(getattr(args, "matched", False)),
+            "ref": getattr(args, "ref", None),
+            "commit": getattr(args, "commit", None),
+            "actual": getattr(args, "actual", None),
+        }
+    matched = payload.get("matched")
+    if not isinstance(matched, bool):
+        return _ssot_fail(
+            "--verify-json: поле matched отсутствует или не bool — "
+            "результат ssot_verify_change обязателен"
+        )
+    verified = {
+        "matched": matched,
+        "ref": payload.get("ref"),
+        "commit": payload.get("commit"),
+        "actual": payload.get("actual"),
+        "checked_at": _utc_now_iso(),
+    }
+    path = Path(root) / SSOT_MR_DIR / f"{code}-verify.json"
+    _atomic_write(path, json.dumps(verified, ensure_ascii=False, indent=2) + "\n")
+    try:
+        _ssot_verified_write(root, code, entry, verified)
+    except (YamlError, OSError) as exc:
+        return _ssot_fail(str(exc))
+    status = SSOT_STATUS_MR_VERIFIED if matched else SSOT_STATUS_MR_UNVERIFIED
+    try:
+        _ssot_info_fields_write(root, code, entry, {SSOT_STATUS_FIELD: status})
+    except (YamlError, OSError) as exc:
+        return _ssot_fail(f"{INFORMATION_FILE}: {exc}")
+    _ssot_status_write(root, code, status)
+    print(f"Записано: {path}")
+    print(f"  ssot_snapshot.verified.matched: {matched}")
+    if not matched:
+        print(
+            "WARN: изменения SSoT не подтверждены (matched: false) — "
+            f"ssot_status={SSOT_STATUS_MR_UNVERIFIED}; handoff заблокирован до "
+            "успешной проверки"
+        )
+    _emit_next_steps(root, None, args, codes=[code], single=True)
+    return 0
+
+
+def _ssot_enriched(root, code, entry, criteria):
+    """Совпадает ли severity в SSoT с целевым: True/False/None.
+
+    True — `ssot-plan` напечатает `no_change` и MR не создаст; False — блок
+    надо править; None — проверить нечем (снимка SSoT нет).
+    """
+    snapshot = _ssot_snapshot(root, code, entry)
+    if not snapshot:
+        return None
+    current = _ssot_snapshot_severity(snapshot)
+    try:
+        target, _level = _ssot_target_type(
+            criteria, entry, _ssot_passport_body(root, code, entry)
+        )
+    except YamlError:
+        return None
+    if str(current.get("type") or "") != str(target or ""):
+        return False
+    approve_link = str((entry or {}).get("approve_link") or "").strip()
+    if approve_link:
+        if str(current.get("method") or "") != "target":
+            return False
+        if str(current.get("confirmation") or "") != approve_link:
+            return False
+    return True
+
+
+def _ssot_level_matches(root, code, entry, criteria):
+    """Совпадает ли УРОВЕНЬ критичности в SSoT с целевым: True/False/None."""
+    snapshot = _ssot_snapshot(root, code, entry)
+    if not snapshot:
+        return None
+    current = _ssot_snapshot_severity(snapshot)
+    try:
+        target, _level = _ssot_target_type(
+            criteria, entry, _ssot_passport_body(root, code, entry)
+        )
+    except YamlError:
+        return None
+    if str(current.get("type") or "") != str(target or ""):
+        return False
+    # `method: target` по схеме SSoT требует непустого `confirmation`:
+    # пусто — блок невалиден, значит уровень не зафиксирован.
+    if str(current.get("method") or "") == "target" and not current.get(
+        "confirmation"
+    ):
+        return False
+    return True
+
+
+def _ssot_verified_matched(root, code, entry):
+    """`ssot_snapshot.verified.matched` снимка: True/False/None (нет проверки)."""
+    snapshot = _ssot_snapshot(root, code, entry)
+    verified = snapshot.get("verified")
+    if not isinstance(verified, dict):
+        return None
+    value = verified.get("matched")
+    return value if isinstance(value, bool) else None
+
+
+def _ssot_mr_gate(root, code, entry, info, label, force=False):
+    """Гейт отправки: MR в SSoT записан и проверен. True — можно идти дальше."""
+    status = str((entry or {}).get(SSOT_STATUS_FIELD) or "").strip()
+    if status == SSOT_STATUS_NO_CHANGE:
+        return True
+    problems = []
+    url = _mr_url_artifact_read(root, code, SSOT_MR_DIR)
+    if not url:
+        problems.append(
+            f"нет {SSOT_MR_DIR}/{code}-MR.url — MR в SSoT не записан "
+            "(ssot-plan → ssot_form_save → ssot-record)"
+        )
+    if _ssot_verified_matched(root, code, entry) is not True:
+        problems.append(
+            "изменения SSoT не проверены (ssot_snapshot.verified.matched != true) "
+            f"— запустите ssot-verify --is {code} --verify-json -"
+        )
+    if not problems:
+        return True
+    if force:
+        print(f"WARN: {label} {code} — гейт SSoT обойдён осознанно (--force):")
+        for problem in problems:
+            print(f"  - {problem}")
+        folder_rel, _legacy = is_folder(root, code, entry)
+        _gate_log_write(
+            Path(root) / folder_rel / "criticality-passport.yaml",
+            label,
+            problems,
+            reason="обход гейта SSoT (--force)",
+        )
+        return True
+    print(f"ERROR: {label} {code} заблокирован — SSoT-MR не подтверждён:")
+    for problem in problems:
+        print(f"  - {problem}")
+    print(
+        f"Следующий шаг: criticality.py ssot-verify --is {code} --verify-json - "
+        "(результат MCP ssot_verify_change)"
+    )
+    print(f"Осознанный обход: --force (запись в is/{code}/{GATE_LOG_FILE})")
+    return False
 
 # ---------------------------------------------------------------------------
 # handoff: тред в #Criticality_assessment (ПОСЛЕДНИЙ этап)
@@ -43646,6 +46158,11 @@ def cmd_handoff_apply(args) -> int:
     allow_incomplete = bool(getattr(args, "allow_incomplete", False))
     allow_duplicate_risk = bool(getattr(args, "allow_duplicate_risk", False))
     try:
+        thread_id, thread_source = _handoff_thread(getattr(args, "thread", None))
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
+        return 2
+    try:
         criteria = load_criteria()
         catalog, systems = load_catalog(root)
     except (YamlError, ValueError) as exc:
@@ -43689,7 +46206,8 @@ def cmd_handoff_apply(args) -> int:
         return 1
 
     if _handoff_preflight(
-        root, code, entry, criteria, catalog, folder, text, allow_incomplete
+        root, code, entry, criteria, catalog, folder, text, allow_incomplete,
+        force=bool(getattr(args, "force", False)),
     ):
         return 1
 
@@ -43710,11 +46228,17 @@ def cmd_handoff_apply(args) -> int:
     print(f"handoff-apply: {code}")
     print(f"  режим: {HANDOFF_MODE_AUTO}")
     print(f"  канал: {channel}")
+    if thread_id:
+        print(
+            f"  тред: ответ в tmid {thread_id} (источник: {thread_source}) — "
+            "не новое топ-сообщение"
+        )
     print("  MCP: пропущен (handoff-apply — только REST)")
     return _handoff_api_publish(
         root, code, entry, criteria, text, HANDOFF_MODE_AUTO,
         channel=channel,
         allow_duplicate_risk=allow_duplicate_risk,
+        thread_id=thread_id,
     )
 
 
@@ -43748,6 +46272,53 @@ def generation_titles_line(catalog):
     return _titles_line(checked, verified_at)
 
 
+def _confluence_gone_status(exc):
+    """HTTP 404/410 из текста `ConfluenceError` (страницы больше нет), иначе None.
+
+    Confluence отвечает 404 и на удалённую страницу, и на «нет прав»; в обоих
+    случаях это не сбой проверки, а недоступный page_id: его нельзя ни
+    подтвердить, ни исправить, поэтому он пропускается с WARN, а остальные
+    страницы проверяются дальше.
+    """
+    match = re.search(r"HTTP (404|410)\b", str(exc or ""))
+    return int(match.group(1)) if match else None
+
+
+def _verify_titles_flush(root, fixes, changes, date):
+    """Записать собранный кеш заголовков; 0 — записано (или нечего писать).
+
+    Общий путь для нормального финала и обрыва на 5xx/timeout: собранные до
+    ошибки заголовки не должны теряться — иначе следующий прогон начинает
+    проверку с нуля.
+    """
+    if not fixes:
+        return 0
+    if not _catalog_page_titles_write(root, fixes):
+        print("ERROR: catalog.yaml не найден — кеш заголовков не записан")
+        return 1
+    _catalog_top_scalar_write(root, "titles_verified_at", f'"{date}"')
+    print(
+        f"ЗАПИСАНО: кеш заголовков catalog.yaml → "
+        f"{PAGE_TITLES_SECTION} — {len(fixes)} страниц."
+    )
+    for page_id, title in changes:
+        print(f"  page {page_id}: «{title}»")
+    # Источники объявлений (criteria.external_refs.refs, meta.sources) правятся
+    # тем же проходом: иначе «устаревших» не станет 0 и следующий verify-titles
+    # покажет те же расхождения.
+    if _criteria_page_titles_write(root, fixes):
+        print(
+            "ЗАПИСАНО: критерии — external_refs.refs / meta.sources "
+            f"обновлены у {len(fixes)} страниц."
+        )
+    else:
+        print(
+            "WARN: критерии не обновлены (нет записей с title или файл "
+            "недоступен) — объявления в источнике остались прежними"
+        )
+    return 0
+
+
 def cmd_verify_titles(args) -> int:
     """Сверить сохранённые заголовки страниц с фактическими (REST Confluence).
 
@@ -43778,6 +46349,7 @@ def cmd_verify_titles(args) -> int:
     checked = 0
     mismatched = 0
     unverified = 0
+    unavailable = 0
     declared_stale = 0
     fixes = {}
     changes = []
@@ -43786,6 +46358,14 @@ def cmd_verify_titles(args) -> int:
         try:
             actual = confluence_page(page_id, criteria)
         except ConfluenceError as exc:
+            gone = _confluence_gone_status(exc)
+            if gone:
+                unavailable += 1
+                print(
+                    f"WARN  page {page_id}: страница недоступна (HTTP {gone}) "
+                    "— пропущена, проверка продолжена"
+                )
+                continue
             print(
                 f"ERROR: проверка заголовков не выполнена — {exc}"
             )
@@ -43794,6 +46374,15 @@ def cmd_verify_titles(args) -> int:
                 "заголовки верны. Задайте CONFLUENCE_TOKEN (и "
                 "CONFLUENCE_BASE_URL при необходимости) и повторите."
             )
+            if fixes:
+                # Собранное до сбоя не выбрасываем: иначе 5xx на последней
+                # странице отменял бы работу по всем предыдущим.
+                print()
+                print(
+                    f"  собранные заголовки сохраняются ({len(fixes)}) — "
+                    "остальные страницы проверятся следующим прогоном"
+                )
+                _verify_titles_flush(root, fixes, changes, date)
             print()
             print(f"Итого: проверено {checked} из {len(pages)} страниц — "
                   "проверка не выполнена")
@@ -43864,29 +46453,7 @@ def cmd_verify_titles(args) -> int:
             changes.append((page_id, title))
     print()
     if fixes:
-        if _catalog_page_titles_write(root, fixes):
-            _catalog_top_scalar_write(root, "titles_verified_at", f'"{date}"')
-            print(
-                f"ЗАПИСАНО: кеш заголовков catalog.yaml → "
-                f"{PAGE_TITLES_SECTION} — {len(fixes)} страниц."
-            )
-            for page_id, title in changes:
-                print(f"  page {page_id}: «{title}»")
-            # Источники объявлений (criteria.external_refs.refs, meta.sources)
-            # правятся тем же проходом: иначе «устаревших» не станет 0 и
-            # следующий verify-titles покажет те же расхождения.
-            if _criteria_page_titles_write(root, fixes):
-                print(
-                    "ЗАПИСАНО: критерии — external_refs.refs / meta.sources "
-                    f"обновлены у {len(fixes)} страниц."
-                )
-            else:
-                print(
-                    "WARN: критерии не обновлены (нет записей с title или файл "
-                    "недоступен) — объявления в источнике остались прежними"
-                )
-        else:
-            print("ERROR: catalog.yaml не найден — кеш заголовков не записан")
+        if _verify_titles_flush(root, fixes, changes, date):
             return 1
     elif mismatched or unverified:
         print("Исправить: make verify-titles --fix")
@@ -43897,13 +46464,15 @@ def cmd_verify_titles(args) -> int:
     if mismatched:
         print(
             f"Итого: проверено {checked} страниц, расхождений {mismatched}, "
-            f"без зафиксированного title {unverified}, устаревших в источнике "
+            f"без зафиксированного title {unverified}, недоступно (404/410) "
+            f"{unavailable}, устаревших в источнике "
             f"{declared_stale}" + (" — исправлено" if args.fix else "")
         )
         return 0 if args.fix else 1
     print(
         f"Итого: проверено {checked} страниц, расхождений 0, "
-        f"без зафиксированного title {unverified}, устаревших в источнике "
+        f"без зафиксированного title {unverified}, недоступно (404/410) "
+        f"{unavailable}, устаревших в источнике "
         f"{declared_stale}" + (" — исправлено" if args.fix and fixes else "")
     )
     if unverified and not args.fix:
@@ -45631,16 +48200,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     contacts = subparsers.add_parser(
         "contacts",
-        help="контакты команды из SSoT (TA/TL как @login)",
+        help="контакты команды из ответа MCP ssot_team (TA/TL как @login)",
         description=(
-            "Собрать контакты команды-владельца из ssot/entities/teams/<team>/team.yaml "
-            "и записать их в INFORMATION.yaml → contacts. Без --apply — dry-run: "
-            "печатает таблицу групп и блок, который был бы записан. --json — "
-            "машинная форма (stdout — только JSON). В SSoT нет соответствия "
-            "login -> ФИО, поэтому упоминание RocketChat — @<login>."
+            "Собрать контакты команды-владельца из ответа MCP "
+            "ssot_team(code=<team>) и записать их в INFORMATION.yaml → contacts. "
+            "Клон SSoT не читается: ростер передаётся через --team-json "
+            "(путь к файлу или - для stdin). Без --team-json — инструкция и код 2 "
+            "(нужны данные). Без --apply — dry-run: печатает таблицу групп и "
+            "блок, который был бы записан. --json — машинная форма (stdout — "
+            "только JSON). В SSoT нет соответствия login -> ФИО, поэтому "
+            "упоминание RocketChat — @<login>."
         ),
     )
     contacts.add_argument("--is", dest="is_", required=True, help="код ИС, напр. opercrm.smkt")
+    contacts.add_argument(
+        "--team-json", dest="team_json", default=None, metavar="PATH|-",
+        help=(
+            "ответ MCP ssot_team(code=<team>) в JSON: путь к файлу или - (stdin); "
+            "без него печатается инструкция, код 2"
+        ),
+    )
     contacts.add_argument(
         "--apply", action="store_true",
         help="записать секцию contacts в INFORMATION.yaml (по умолчанию dry-run)",
@@ -45648,6 +48227,34 @@ def build_parser() -> argparse.ArgumentParser:
     contacts.add_argument("--json", action="store_true", help="вывести JSON")
     add_path(contacts)
     contacts.set_defaults(func=cmd_contacts)
+
+    ssot_import = subparsers.add_parser(
+        "ssot-import",
+        help="импорт снимка карточки ИС из ответа MCP ssot_get в INFORMATION.yaml",
+        description=(
+            "Записать снимок карточки ИС в INFORMATION.yaml → ssot_snapshot из "
+            "ответа MCP ssot_get(group=\"information-systems\", entity=<код>). "
+            "Клон SSoT и сеть не читаются: команда разбирает переданный JSON "
+            "(путь или - для stdin). Остальной файл остаётся побайтово прежним, "
+            "перед записью — обратная проверка разбора. --team-json дополнительно "
+            "пишет секцию contacts из ответа MCP ssot_team. Повторный импорт тех "
+            "же данных — no-op."
+        ),
+    )
+    ssot_import.add_argument("--is", dest="is_", required=True, help="код ИС, напр. erm.mm")
+    ssot_import.add_argument(
+        "--entity-json", dest="entity_json", required=True, metavar="PATH|-",
+        help="ответ MCP ssot_get в JSON: путь к файлу или - (stdin)",
+    )
+    ssot_import.add_argument(
+        "--team-json", dest="team_json", default=None, metavar="PATH|-",
+        help=(
+            "ответ MCP ssot_team(code=<team>) в JSON: путь к файлу или - (stdin); "
+            "пишет секцию contacts"
+        ),
+    )
+    add_path(ssot_import)
+    ssot_import.set_defaults(func=cmd_ssot_import)
 
     validate = subparsers.add_parser(
         "validate",
@@ -45798,6 +48405,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--criticality-page-id",
         default=None,
         help="Confluence page_id страницы оценки критичности",
+    )
+    scaffold.add_argument(
+        "--date", default=None,
+        help=(
+            "дата генерации YYYY-MM-DD (по умолчанию — сегодня): от неё "
+            "считаются assigned_date и review_date записи реестра"
+        ),
     )
     add_path(scaffold)
     scaffold.set_defaults(func=cmd_scaffold)
@@ -46319,8 +48933,51 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     handoff.add_argument(
+        "--thread", default=None, metavar="<tmid>",
+        help=(
+            "ответ в существующий тред: tmid = id сообщения-родителя (из ссылки "
+            "Rocket.Chat ?msg=<tmid>); при наличии шлётся roomId+tmid. "
+            "Env-фолбэк: " + " / ".join(HANDOFF_THREAD_ENVS)
+        ),
+    )
+    handoff.add_argument(
         "--dry-run", dest="dry_run", action="store_true",
         help="показать канал и текст, ничего не отправляя и не записывая",
+    )
+    handoff.add_argument(
+        "--report", action="store_true",
+        help=(
+            "опубликовать РЕЗУЛЬТАТЫ оценки (отчёт из паспорта/INFORMATION/"
+            "catalog) вместо запроса согласования: гейты MR/⛔/SSoT не "
+            "применяются; текст целиком — с --dry-run"
+        ),
+    )
+    handoff.add_argument(
+        "--thread-new", dest="thread_new", action="store_true",
+        help=(
+            "с --report: создать НОВЫЙ тред — родитель (итог + основные "
+            "ссылки) и ответы с детализацией (входы, расчёт, артефакты). "
+            "thread_link/approve_link = родитель; handoff_mode: report"
+        ),
+    )
+    handoff.add_argument(
+        "--update-parent", dest="update_parent", action="store_true",
+        help=(
+            "с --report: обновить родительское сообщение опубликованного "
+            "треда (RocketChat chat.update) — например, добавить появившийся "
+            "SSoT-MR, не создавая новый тред"
+        ),
+    )
+    handoff.add_argument(
+        "--dochub-mr-url", dest="dochub_mr_url", default=None,
+        help="ссылка на MR в dochub для родителя отчёта (--thread-new)",
+    )
+    handoff.add_argument(
+        "--ssot-mr-url", dest="ssot_mr_url", default=None,
+        help=(
+            "ссылка на MR в SSoT для родителя отчёта; с --update-parent "
+            "подставляется в уже отправленного родителя"
+        ),
     )
     handoff.add_argument("--date", default=None, help="дата сбора сообщения YYYY-MM-DD")
     handoff.add_argument(
@@ -46333,6 +48990,13 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.add_argument(
         "--allow-incomplete", dest="allow_incomplete", action="store_true",
         help="осознанно разрешить отправку текста с ⛔ (по умолчанию запрещено)",
+    )
+    handoff.add_argument(
+        "--force", action="store_true",
+        help=(
+            "обойти гейт SSoT (нет .ssot/<код>-MR.url или verified.matched != "
+            "true); печатает WARN и пишет строку в is/<код>/.gate-overrides.log"
+        ),
     )
     add_path(handoff)
     handoff.set_defaults(func=cmd_handoff)
@@ -46356,6 +49020,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     handoff_result.add_argument(
         "--failed", default=None, help="причина отказа MCP (включает REST-фолбэк)",
+    )
+    handoff_result.add_argument(
+        "--thread", default=None, metavar="<tmid>",
+        help=(
+            "tmid треда для REST-фолбэка (иначе — env "
+            + " / ".join(HANDOFF_THREAD_ENVS) + ")"
+        ),
     )
     handoff_result.add_argument(
         "--force-resend", dest="force_resend", action="store_true",
@@ -46501,75 +49172,135 @@ def build_parser() -> argparse.ArgumentParser:
     add_path(publish)
     publish.set_defaults(func=cmd_publish)
 
+    def _ssot_deprecated(parser):
+        """Устаревшие флаги записи в клон: принимаются, но дают явную ошибку."""
+        for flag, dest in (
+            ("--apply", "apply"),
+            ("--push", "push"),
+            ("--clone", "clone"),
+            ("--reuse-local", "reuse_local"),
+            ("--force-duplicate", "force_duplicate"),
+            ("--update-mr", "update_mr"),
+        ):
+            parser.add_argument(
+                flag, dest=dest, action="store_true", default=False,
+                help=argparse.SUPPRESS,
+            )
+        for flag, dest in (
+            ("--branch", "branch"),
+            ("--task", "task"),
+            ("--passport-mr-url", "passport_mr_url"),
+        ):
+            parser.add_argument(
+                flag, dest=dest, default=None, help=argparse.SUPPRESS
+            )
+
+    def _ssot_plan_args(parser):
+        parser.add_argument(
+            "--is", dest="is_", required=True, help="код ИС, напр. erm.mm"
+        )
+        parser.add_argument(
+            "--force", action="store_true",
+            help=(
+                "обойти гейт валидации (validate ERROR / расхождение "
+                "criteria_fingerprint / незакрытые blocking-входы); печатает WARN "
+                "и пишет строку в is/<код>/.gate-overrides.log"
+            ),
+        )
+        _ssot_deprecated(parser)
+        add_path(parser)
+
+    ssot_plan = subparsers.add_parser(
+        "ssot-plan",
+        help="план обогащения SSoT: гейты + шаги MCP (без сети и git)",
+        description=(
+            "Собрать план обогащения SSoT критичностью по снимку карточки "
+            "(INFORMATION.yaml → ssot_snapshot): целевые severity.type / method / "
+            "confirmation, точные шаги MCP и проверка. В SSoT ничего не пишется: "
+            "план лежит в .ssot/<код>-apply-plan.json. Гейты те же, что раньше: "
+            "validate не OK / расхождение fingerprint / открытые blocking-входы — "
+            "отказ (обход только --force). Совпадение снимка с целевым — no_change "
+            "без шагов и без MR."
+        ),
+    )
+    _ssot_plan_args(ssot_plan)
+    ssot_plan.set_defaults(func=cmd_ssot_plan)
+
     ssot = subparsers.add_parser(
         "ssot",
-        help="обогатить SSoT критичностью: severity в base.yaml, ветка, коммит, MR",
+        help="алиас ssot-plan: план обогащения SSoT (шаги MCP)",
         description=(
-            "Обогатить SSoT критичностью: переписать ТОЛЬКО блок severity в "
-            "entities/information-systems/<код>/base.yaml (type, method, "
-            "confirmation), сохранив остальное содержимое файла побайтово. "
-            "Уровень берётся из паспорта (object_criticality_estimation) и "
-            "сверяется с catalog.yaml → criticality_ssot, enum — из критериев "
-            "(levels.ssot_enum). Без --apply — dry-run: печатает путь, было/стало, "
-            "ветку, сообщение коммита и описание MR, ничего не записывая. "
-            "Совпадение блока — no-op (код 0, без ветки и коммита). "
-            "--apply создаёт ветку feature/<task> от origin/master и коммит из "
-            "одного файла; --push (только с --apply) пушит ветку и создаёт MR "
-            "push-options."
+            "Алиас ssot-plan. Запись в SSoT идёт только через MCP: "
+            "ssot-plan → ssot_entity_open → ssot_form_fields → ssot_ui_* → "
+            "ssot_form_save → ssot-record. Клон SSoT, git и GITLAB_TOKEN не "
+            "используются."
         ),
     )
-    ssot.add_argument("--is", dest="is_", required=True, help="код ИС, напр. erm.mm")
-    ssot.add_argument(
-        "--ssot", default=None,
-        help=f"путь к клону SSoT (по умолчанию {SSOT_DEFAULT_DIR}/)",
-    )
-    ssot.add_argument(
-        "--clone", action="store_true",
-        help=(
-            "если клона нет — склонировать его по URL из "
-            "criteria.external_refs.repos.ssot (git clone --depth 1)"
+    _ssot_plan_args(ssot)
+    ssot.set_defaults(func=cmd_ssot_plan)
+
+    ssot_record = subparsers.add_parser(
+        "ssot-record",
+        help="записать факты созданного SSoT-MR (.ssot/ + INFORMATION.yaml)",
+        description=(
+            "Принять результат MCP ssot_form_save: --mr-url (обязателен) и "
+            "--version. Пишет .ssot/<код>-MR.url и .ssot/<код>-MR.md (описание из "
+            "фактов MCP), обновляет INFORMATION.yaml: ssot_status=mr_created, "
+            "ssot_mr_url, ssot_version, ssot_can_apply, ssot_recorded_at. Сырые "
+            "ответы MCP можно сохранить через --save-json/--status-json. Без "
+            "плана или при плане no_change — отказ: нечего записывать."
         ),
     )
-    ssot.add_argument(
-        "--task", default=None,
-        help="Jira-ключ (обязателен); по умолчанию jira_task/task из реестра/is.yaml",
+    ssot_record.add_argument(
+        "--is", dest="is_", required=True, help="код ИС, напр. erm.mm"
     )
-    ssot.add_argument(
-        "--branch", default=None,
-        help="имя ветки; по умолчанию feature/<task>",
+    ssot_record.add_argument(
+        "--mr-url", dest="mr_url", required=True,
+        help="ссылка на созданный SSoT-MR (mrUrl из ssot_form_save)",
     )
-    ssot.add_argument(
-        "--passport-mr-url", dest="passport_mr_url", default=None,
-        help="URL dochub-MR — основание SSoT-MR; по умолчанию из "
-             f"{DOCHUB_MR_DIR}/<код>-MR.url (пишет publish --push)",
+    ssot_record.add_argument(
+        "--version", default=None, help="версия формы (version из ssot_form_save)"
     )
-    ssot.add_argument(
-        "--update-mr", dest="update_mr", action="store_true",
-        help="с --apply: переписать только описание существующего MR "
-             f"({SSOT_MR_DIR}/<код>-MR.md + PUT), ветку и коммит не трогать",
+    ssot_record.add_argument(
+        "--save-json", dest="save_json", default=None,
+        help="сохранить сырой ответ ssot_form_save: путь или - (stdout)",
     )
-    ssot.add_argument(
-        "--apply", action="store_true",
-        help="записать base.yaml в клон, создать ветку и коммит",
+    ssot_record.add_argument(
+        "--status-json", dest="status_json", default=None,
+        help="сохранить сырой ответ ssot_mr_status: путь или - (stdout)",
     )
-    ssot.add_argument(
-        "--push", action="store_true",
-        help="с --apply: запушить ветку с push-options (создание MR)",
-    )
-    ssot.add_argument(
-        "--force", action="store_true",
-        help=(
-            "обойти гейт валидации (validate ERROR / расхождение "
-            "criteria_fingerprint / незакрытые blocking-входы); печатает WARN "
-            "и пишет строку в is/<код>/.gate-overrides.log"
+    _ssot_deprecated(ssot_record)
+    add_path(ssot_record)
+    ssot_record.set_defaults(func=cmd_ssot_record)
+
+    ssot_verify = subparsers.add_parser(
+        "ssot-verify",
+        help="записать результат ssot_verify_change в снимок SSoT",
+        description=(
+            "Принять результат MCP ssot_verify_change (--verify-json -) или "
+            "флаги --matched/--ref/--commit/--actual. Пишет "
+            "ssot_snapshot.verified в INFORMATION.yaml и .ssot/<код>-verify.json. "
+            "matched: false — WARN и ssot_status=mr_unverified: блокирующий сигнал "
+            "для handoff и start-apply."
         ),
     )
-    ssot.add_argument(
-        "--dry-run", dest="dry_run", action="store_true",
-        help="явный dry-run (поведение по умолчанию)",
+    ssot_verify.add_argument(
+        "--is", dest="is_", required=True, help="код ИС, напр. erm.mm"
     )
-    add_path(ssot)
-    ssot.set_defaults(func=cmd_ssot)
+    ssot_verify.add_argument(
+        "--verify-json", dest="verify_json", default=None,
+        help="сырой ответ ssot_verify_change: путь или - (stdin)",
+    )
+    ssot_verify.add_argument(
+        "--matched", action="store_true",
+        help="изменения подтверждены (без --verify-json)",
+    )
+    ssot_verify.add_argument("--ref", default=None, help="ref проверки")
+    ssot_verify.add_argument("--commit", default=None, help="commit проверки")
+    ssot_verify.add_argument("--actual", default=None, help="фактическое значение")
+    _ssot_deprecated(ssot_verify)
+    add_path(ssot_verify)
+    ssot_verify.set_defaults(func=cmd_ssot_verify)
 
     handoff_apply = subparsers.add_parser(
         "handoff-apply",
@@ -46608,6 +49339,21 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "пропустить поиск своего сообщения в канале (аварийный обход, "
             "когда поиск недоступен; возможен дубль)"
+        ),
+    )
+    handoff_apply.add_argument(
+        "--thread", default=None, metavar="<tmid>",
+        help=(
+            "ответ в существующий тред: tmid = id сообщения-родителя (из ссылки "
+            "Rocket.Chat ?msg=<tmid>). Env-фолбэк: "
+            + " / ".join(HANDOFF_THREAD_ENVS)
+        ),
+    )
+    handoff_apply.add_argument(
+        "--force", action="store_true",
+        help=(
+            "обойти гейт SSoT (нет .ssot/<код>-MR.url или verified.matched != "
+            "true); печатает WARN и пишет строку в is/<код>/.gate-overrides.log"
         ),
     )
     add_path(handoff_apply)

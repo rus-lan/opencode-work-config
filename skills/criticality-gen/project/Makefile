@@ -18,7 +18,7 @@ SELF_MAKEFILE := $(abspath $(lastword $(MAKEFILE_LIST)))
 PYTHON ?= python3
 CLI := $(PYTHON) $(SKILL_DIR)/scripts/criticality.py --root $(ROOT)
 
-.PHONY: help help-fast info paths init prepare prepare-apply contacts validate index due show next-step reassess reassess-apply scaffold criteria criteria-check score check check-diag check-prepare selftest docs-sync docs-check verify-titles research verify start start-apply finalize handoff handoff-apply handoff-result publish publish-apply ssot ssot-apply ssot-mr ssot-mr-apply requirements collect collect-apply links links-apply sources sources-apply services services-apply ask ask-apply ask-answers enrich enrich-apply exclude include skill-install skill-uninstall skill-check
+.PHONY: help help-fast info paths init prepare prepare-apply contacts validate index due show next-step reassess reassess-apply scaffold criteria criteria-check score check check-diag check-prepare selftest docs-sync docs-check verify-titles research verify start start-apply finalize handoff handoff-apply handoff-result publish publish-apply ssot-import ssot-plan ssot-record ssot-verify requirements collect collect-apply links links-apply sources sources-apply services services-apply ask ask-apply ask-answers enrich enrich-apply exclude include skill-install skill-uninstall skill-check
 
 DRY ?= 1
 
@@ -51,8 +51,10 @@ help: ## Показать справку скилла с текущим сост
 	@echo "  make start-apply IS=erm.mm FORCE=1"
 	@echo "  make publish IS=erm.mm TASK=E001-31245"
 	@echo "  make publish-apply IS=erm.mm TASK=E001-31245"
-	@echo "  make ssot IS=erm.mm TASK=E001-31245"
-	@echo "  make ssot-apply IS=erm.mm TASK=E001-31245"
+	@echo "  make ssot-import IS=erm.mm ENTITY_JSON=/tmp/ssot_get.json"
+	@echo "  make ssot-plan IS=erm.mm"
+	@echo "  make ssot-record IS=erm.mm MR_URL=<mrUrl из ssot_form_save>"
+	@echo "  make ssot-verify IS=erm.mm VERIFY_JSON=/tmp/ssot_get-after.json"
 	@echo "  make handoff IS=erm.mm SEND=auto    (MCP, при отказе — REST API; SEND=manual — оставить вручную)"
 	@echo "  make handoff IS=erm.mm DRY_RUN=1"
 	@echo "  make handoff IS=erm.mm DRY_RUN=1 WRITE=1 ALLOW_INCOMPLETE=1"
@@ -102,15 +104,15 @@ validate: ## Проверить паспорта и реестр (ненулев
 init: ## Создать каркас проекта: is.yaml, catalog.yaml, INDEX.md, is/ (FORCE=1 — перезаписать is.yaml)
 	@$(CLI) init $(if $(filter 1,$(FORCE)),--force,)
 
-prepare: ## Подготовка данных (dry-run): ssot -> INFORMATION.yaml, план клонирования
+prepare: ## Подготовка данных (dry-run): снимок ssot_get -> INFORMATION.yaml, план клонирования apps/
 	@$(CLI) prepare $(if $(IS),--is $(IS),)
 
-prepare-apply: ## Подготовка данных (apply): запись INFORMATION.yaml + git-операции
+prepare-apply: ## Подготовка данных (apply): запись INFORMATION.yaml + git-операции для apps/
 	@$(CLI) prepare --apply $(if $(IS),--is $(IS),) $(if $(filter 1,$(NO_CLONE)),--no-clone,) $(if $(filter 1,$(FORCE_OVERWRITE)),--force-overwrite,) $(if $(filter 1,$(ALLOW_EMPTY_SECTIONS)),--allow-empty-sections,) $(if $(filter 1,$(NO_BACKUP)),--no-backup,) $(if $(BACKUP_KEEP),--backup-keep $(BACKUP_KEEP),)
 
-contacts: ## Собрать контакты TA/TL из SSoT team.yaml: make contacts IS=<код> [APPLY=1]
+contacts: ## Контакты TA/TL из ответа ssot_team: make contacts IS=<код> TEAM_JSON=<файл|-> [APPLY=1]
 	@if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make contacts IS=erm.mm"; exit 1; fi
-	@$(CLI) contacts --is $(IS) $(if $(filter 1,$(APPLY)),--apply,) $(if $(filter 1,$(JSON)),--json,)
+	@$(CLI) contacts --is $(IS) $(if $(TEAM_JSON),--team-json "$(TEAM_JSON)",) $(if $(filter 1,$(APPLY)),--apply,) $(if $(filter 1,$(JSON)),--json,)
 
 index: ## Перегенерировать INDEX.md: make index [DATE=YYYY-MM-DD]
 	@$(CLI) index --write $(if $(DATE),--date $(DATE),)
@@ -264,27 +266,28 @@ start: ## Генерация артефактов, dry-run по умолчани
 start-apply: ## Записать артефакты: make start-apply [IS=...] [FORCE=1] [REASSESSMENT=1] [TASK=1] [CONFLUENCE=1] [MESSAGE=1]
 	@$(CLI) start $(if $(IS),--is $(IS),) $(if $(DATE),--date $(DATE),) $(if $(filter 1,$(FORCE)),--force,) $(if $(filter 1,$(REASSESSMENT)),--reassessment,) $(if $(filter 1,$(NO_REQUIREMENTS)),--no-requirements,) $(if $(filter 1,$(TASK)),--create-task,) $(if $(filter 1,$(CONFLUENCE)),--create-confluence,) $(if $(filter 1,$(MESSAGE)),--create-message,)
 
-ssot: ## Обогащение SSoT критичностью (dry-run): make ssot IS=erm.mm TASK=E001-31245 [SSOT=путь] [BRANCH=имя] [PASSPORT_MR_URL=...]
-	@if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make ssot IS=erm.mm TASK=E001-31245"; exit 1; fi
-	@$(CLI) ssot --is $(IS) $(if $(TASK),--task $(TASK),) $(if $(SSOT),--ssot $(SSOT),) $(if $(BRANCH),--branch $(BRANCH),) $(if $(PASSPORT_MR_URL),--passport-mr-url $(PASSPORT_MR_URL),)
+ssot-import: ## Снимок карточки ИС из ssot_get в INFORMATION.yaml: make ssot-import IS=... ENTITY_JSON=<файл|-> [TEAM_JSON=<файл|->]
+	@if [ -z "$(IS)" ] || [ -z "$(ENTITY_JSON)" ]; then echo "ERROR: укажите IS=<код> и ENTITY_JSON=<файл|->, например: make ssot-import IS=erm.mm ENTITY_JSON=/tmp/ssot_get.json"; exit 1; fi
+	@$(CLI) ssot-import --is $(IS) --entity-json "$(ENTITY_JSON)" $(if $(TEAM_JSON),--team-json "$(TEAM_JSON)",)
 
-ssot-apply: ## Ветка и коммит в клоне SSoT: make ssot-apply IS=... TASK=... [SSOT=...] [BRANCH=...] [PASSPORT_MR_URL=...] [PUSH=1]
-	@if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make ssot-apply IS=erm.mm TASK=E001-31245"; exit 1; fi
-	@$(CLI) ssot --is $(IS) --apply $(if $(TASK),--task $(TASK),) $(if $(SSOT),--ssot $(SSOT),) $(if $(BRANCH),--branch $(BRANCH),) $(if $(PASSPORT_MR_URL),--passport-mr-url $(PASSPORT_MR_URL),) $(if $(filter 1,$(PUSH)),--push,)
-	@echo "ВНИМАНИЕ: MR из ветки feature/<task> не пройдёт джоб codeowners для путей entities/**."
-	@echo "Нужен @codeowners approve от maintainer'а проекта (access level >= 40), иначе MR останется красным."
-	@echo "Для severity.* дополнительно требуется один апрув SRE/техархитектуры — см. references/data-sources.md."
+ssot-plan: ## План применения критичности в SSoT (dry-run): make ssot-plan IS=... [FORCE=1]
+	@if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make ssot-plan IS=erm.mm"; exit 1; fi
+	@$(CLI) ssot-plan --is $(IS) $(if $(filter 1,$(FORCE)),--force,)
 
-ssot-mr: ## Обновить описание существующего SSoT-MR (dry-run): make ssot-mr IS=... TASK=... [PASSPORT_MR_URL=...]
-	@if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make ssot-mr IS=erm.mm TASK=E001-31245"; exit 1; fi
-	@$(CLI) ssot --is $(IS) --update-mr $(if $(TASK),--task $(TASK),) $(if $(SSOT),--ssot $(SSOT),) $(if $(BRANCH),--branch $(BRANCH),) $(if $(PASSPORT_MR_URL),--passport-mr-url $(PASSPORT_MR_URL),)
+ssot-record: ## Результат ssot_form_save: make ssot-record IS=... MR_URL=<url> [VERSION=] [SAVE_JSON=] [STATUS_JSON=]
+	@if [ -z "$(IS)" ] || [ -z "$(MR_URL)" ]; then echo "ERROR: укажите IS=<код> и MR_URL=<mrUrl из ssot_form_save>"; exit 1; fi
+	@$(CLI) ssot-record --is $(IS) --mr-url "$(MR_URL)" $(if $(VERSION),--version $(VERSION),) $(if $(SAVE_JSON),--save-json "$(SAVE_JSON)",) $(if $(STATUS_JSON),--status-json "$(STATUS_JSON)",)
 
-handoff: ## Этап handoff: спросить и отправить тред в #Criticality_assessment: make handoff IS=... [SEND=auto|manual] [TRANSPORT=auto|mcp|api] [DRY_RUN=1] [WRITE=1] [ALLOW_INCOMPLETE=1] [FORCE_RESEND=1] [RESUME=1] [MCP_TIMEOUT=сек] [ALLOW_DUPLICATE_RISK=1]
+ssot-verify: ## Сверка применённой критичности с SSoT: make ssot-verify IS=... [VERIFY_JSON=<файл|->]
+	@if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make ssot-verify IS=erm.mm VERIFY_JSON=/tmp/ssot_get.json"; exit 1; fi
+	@$(CLI) ssot-verify --is $(IS) $(if $(VERIFY_JSON),--verify-json "$(VERIFY_JSON)",)
+
+handoff: ## Этап handoff: спросить и отправить тред в #Criticality_assessment: make handoff IS=... [SEND=auto|manual] [TRANSPORT=auto|mcp|api] [THREAD=tmid] [REPORT=1 [THREAD_NEW=1|UPDATE_PARENT=1] [DOCHUB_MR_URL=...] [SSOT_MR_URL=...]] [DRY_RUN=1] [WRITE=1] [ALLOW_INCOMPLETE=1] [FORCE_RESEND=1] [RESUME=1] [MCP_TIMEOUT=сек] [ALLOW_DUPLICATE_RISK=1]
 	@if [ -n "$(ARGS)" ]; then \
 		$(CLI) handoff $(if $(IS),--is $(IS),) $(ARGS); \
 	else \
 		if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make handoff IS=erm.mm"; exit 1; fi; \
-		$(CLI) handoff --is $(IS) $(if $(SEND),--send $(SEND),) $(if $(TRANSPORT),--transport $(TRANSPORT),) $(if $(filter 1,$(FORCE_RESEND)),--force-resend,) $(if $(filter 1,$(RESUME)),--resume,) $(if $(MCP_TIMEOUT),--mcp-timeout $(MCP_TIMEOUT),) $(if $(filter 1,$(ALLOW_DUPLICATE_RISK)),--allow-duplicate-risk,) $(if $(filter 1,$(ALLOW_INCOMPLETE)),--allow-incomplete,) $(if $(filter 1,$(WRITE)),--write,) $(if $(filter 1,$(DRY_RUN)),--dry-run,); \
+		$(CLI) handoff --is $(IS) $(if $(SEND),--send $(SEND),) $(if $(TRANSPORT),--transport $(TRANSPORT),) $(if $(filter 1,$(FORCE_RESEND)),--force-resend,) $(if $(filter 1,$(RESUME)),--resume,) $(if $(MCP_TIMEOUT),--mcp-timeout $(MCP_TIMEOUT),) $(if $(filter 1,$(ALLOW_DUPLICATE_RISK)),--allow-duplicate-risk,) $(if $(THREAD),--thread $(THREAD),) $(if $(filter 1,$(REPORT)),--report,) $(if $(filter 1,$(THREAD_NEW)),--thread-new,) $(if $(filter 1,$(UPDATE_PARENT)),--update-parent,) $(if $(DOCHUB_MR_URL),--dochub-mr-url "$(DOCHUB_MR_URL)",) $(if $(SSOT_MR_URL),--ssot-mr-url "$(SSOT_MR_URL)",) $(if $(filter 1,$(ALLOW_INCOMPLETE)),--allow-incomplete,) $(if $(filter 1,$(WRITE)),--write,) $(if $(filter 1,$(DRY_RUN)),--dry-run,); \
 	fi
 
 finalize: ## Финализация ИС одной командой (approve_link, даты, критичность, status=confirmed + гейты): make finalize IS=... [APPROVE_LINK=...] [ASSIGNED_DATE=YYYY-MM-DD] [REVIEW_DATE=YYYY-MM-DD] [DRY_RUN=1]
@@ -295,14 +298,10 @@ handoff-result: ## Результат MCP-отправки: make handoff-result 
 	@if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make handoff-result IS=erm.mm MESSAGE_URL=..."; exit 1; fi
 	@$(CLI) handoff-result --is $(IS) $(if $(MESSAGE_URL),--message-url "$(MESSAGE_URL)",) $(if $(FAILED),--failed "$(FAILED)",) $(if $(filter 1,$(FORCE_RESEND)),--force-resend,) $(if $(filter 1,$(ALLOW_DUPLICATE_RISK)),--allow-duplicate-risk,) $(if $(filter 1,$(DRY_RUN)),--dry-run,)
 
-handoff-apply: ## Отправка в #Criticality_assessment (REST, необратимо): make handoff-apply IS=... CONFIRM=1 [DATE=...] [FORCE=1] [ALLOW_INCOMPLETE=1]
+handoff-apply: ## Отправка в #Criticality_assessment (REST, необратимо): make handoff-apply IS=... CONFIRM=1 [DATE=...] [THREAD=tmid] [FORCE=1] [ALLOW_INCOMPLETE=1]
 	@if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make handoff-apply IS=erm.mm"; exit 1; fi
 	@if [ "$(CONFIRM)" != "1" ]; then echo "ERROR: handoff-apply требует CONFIRM=1: отправка сообщения в канал необратима"; exit 1; fi
-	@$(CLI) handoff-apply --is $(IS) $(if $(filter 1,$(CONFIRM)),--confirm,) $(if $(DATE),--date $(DATE),) $(if $(filter 1,$(FORCE)),--force-resend,) $(if $(filter 1,$(ALLOW_INCOMPLETE)),--allow-incomplete,)
-
-ssot-mr-apply: ## Переписать описание SSoT-MR по шаблону (PUT): make ssot-mr-apply IS=... TASK=... [PASSPORT_MR_URL=...]
-	@if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make ssot-mr-apply IS=erm.mm TASK=E001-31245"; exit 1; fi
-	@$(CLI) ssot --is $(IS) --update-mr --apply $(if $(TASK),--task $(TASK),) $(if $(SSOT),--ssot $(SSOT),) $(if $(BRANCH),--branch $(BRANCH),) $(if $(PASSPORT_MR_URL),--passport-mr-url $(PASSPORT_MR_URL),)
+	@$(CLI) handoff-apply --is $(IS) $(if $(filter 1,$(CONFIRM)),--confirm,) $(if $(DATE),--date $(DATE),) $(if $(THREAD),--thread $(THREAD),) $(if $(filter 1,$(FORCE)),--force-resend,) $(if $(filter 1,$(ALLOW_INCOMPLETE)),--allow-incomplete,)
 
 publish: ## Публикация паспорта в dochub (dry-run): make publish IS=erm.mm TASK=E001-31245 [DOCHUB=путь] [BRANCH=имя]
 	@if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make publish IS=erm.mm TASK=E001-31245"; exit 1; fi
@@ -347,7 +346,7 @@ skill-check: ## Проверить структуру скилла: frontmatter,
 	test -f $(abspath $(dir $(lastword $(MAKEFILE_LIST)))commands/criticality_gen.md) || { echo "ERROR: нет .opencode/commands/criticality_gen.md"; exit 1; }; \
 	test -f $$skill/scripts/criticality.py || { echo "ERROR: нет $$skill/scripts/criticality.py"; exit 1; }; \
 	test -f $$skill/criteria/criticality-criteria.yaml || { echo "ERROR: нет $$skill/criteria/criticality-criteria.yaml"; exit 1; }; \
-	for t in criticality-passport.yaml CRITICALITY.md GENERATION.md publication.md MR-dochub.md MR-ssot.md INFORMATION.yaml ASK.md CANDIDATES.yaml ANSWERS.yaml actions/jira-task.md actions/confluence-page.md actions/rocketchat-message.md; do \
+	for t in criticality-passport.yaml CRITICALITY.md GENERATION.md publication.md MR-dochub.md INFORMATION.yaml ASK.md CANDIDATES.yaml ANSWERS.yaml actions/jira-task.md actions/confluence-page.md actions/rocketchat-message.md; do \
 		test -f $$skill/templates/$$t || { echo "ERROR: нет $$skill/templates/$$t"; exit 1; }; \
 	done; \
 	echo "OK: frontmatter корректен (name, version, description, user-invocable, compatibility, allowed-tools)"; \

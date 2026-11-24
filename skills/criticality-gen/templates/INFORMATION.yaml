@@ -1,13 +1,14 @@
 # INFORMATION.yaml — слой данных между SSoT и паспортом критичности.
 #
 # Путь: is/{{ is_code }}/INFORMATION.yaml  (legacy: is/<контур>/<name_is>/INFORMATION.yaml)
-# Кто пишет: `make prepare` (python3 scripts/criticality.py prepare --apply).
+# Кто пишет: `ssot-import --entity-json` (снимок ответа MCP `ssot_get`); компоненты
+# и клоны apps/ — `make prepare`.
 # Процесс: INFORMATION.md, docs/09-pipeline.md.
 #
-# ЧТО ЗАПОЛНЯЕТСЯ АВТОМАТИЧЕСКИ (перезаписывается при каждом `make prepare`):
+# ЧТО ЗАПОЛНЯЕТСЯ АВТОМАТИЧЕСКИ (перезаписывается при каждом `ssot-import`):
 #   meta, identity, components, resources, duties, links, roles, ssot_snapshot.
-#   Источник — ssot/entities/information-systems/<код ИС>/*.yaml и catalog.yaml,
-#   переопределения — is.yaml (product, teamName).
+#   Источник — ответ MCP ssot_get(group="information-systems", entity=<код ИС>)
+#   и catalog.yaml; переопределения — is.yaml (product, teamName).
 #
 # ЧТО ЗАПОЛНЯЕТСЯ РУКАМИ (prepare никогда не перезаписывает эти секции):
 #   criteria_inputs, facts, conflicts, notes, publication.
@@ -36,9 +37,9 @@ meta:
   layout: "is/{{ is_code }}"
   sources:
     - type: ssot
-      ref: "ssot/entities/information-systems/{{ is_code }}/base.yaml"
+      ref: "ssot_get: information-systems/{{ is_code }}@<version из ответа MCP>"
     - type: ssot
-      ref: "ssot/entities/information-systems/{{ is_code }}/components.yaml"
+      ref: "ssot_get: information-systems/{{ is_code }}#components@<version>"
     - type: is_yaml_override
       ref: "is.yaml#is.{{ is_code }}"
 
@@ -59,17 +60,17 @@ identity:
   product_source: null      # { type: ssot|is_yaml_override, ref: ... }
   team: null                # base.yaml -> teamName, переопределяется is.yaml
   team_source: null         # { type: ssot|is_yaml_override, ref: ... }
-  criticality_ssot: null    # base.yaml -> severity.type (нормализация)
-  criticality_source: null  # { type: ssot, ref: .../base.yaml#severity.type }
+  criticality_ssot: null    # ssot_get -> severity.type (нормализация)
+  criticality_source: null  # { type: ssot, ref: "ssot_get: information-systems/<код>#severity.type@<version>" }
   arch_code: null           # catalog.yaml, если ИС там есть
   arch_code_source: null    # { type: catalog, ref: catalog.yaml#systems.<код> }
 
 # contacts — контакты команды-владельца (TA/TL/SRE и др.).
-# contacts: сгенерировано make contacts из ssot/entities/teams/<team>/team.yaml; вручную не править.
+# contacts: сгенерировано make contacts из ответа MCP ssot_team; вручную не править.
 # contacts: упоминание в RocketChat — @<login> (соответствия login -> ФИО в SSoT нет).
 contacts:
   team: null                # код команды из catalog.yaml -> team (нижний регистр)
-  source: null              # { type: ssot, ref: entities/teams/<team>/team.yaml }
+  source: null              # { type: ssot, ref: "ssot_team: <team>@<version>" }
   groups: {}                # { <роль>: [<login>, ...] }, например { ta: [dkozlov], tl: [ipilyaev] }
 
 components:
@@ -88,8 +89,18 @@ duties: []                     # duty.yaml -> onCallSchedule (startTime — HH:M
 links: {}
 roles: []
 
-# Дословно распарсенные файлы SSoT (провенанс; prepare перезаписывает).
+# Снимок ответа MCP ssot_get (провенанс; пишет `ssot-import --entity-json`).
+# Поля: source (ssot_get), commit/version (из ответа), imported_at (UTC),
+# verified ({matched, ref, commit, actual, checked_at} — пишет `ssot-verify`),
+# base/links/components/resources/duty — разобранные файлы карточки.
 ssot_snapshot: {}
+
+# Результат записи критичности через MCP-форму (пишет `ssot-record`):
+#   ssot_mr_url      — mrUrl из ответа ssot_form_save (ссылка на SSoT-MR)
+#   ssot_version     — версия сущности из ответа MCP
+#   ssot_can_apply   — можно ли применять (canApply из статуса MR)
+#   ssot_status      — awaiting_approvers | can_apply | applied | no_change | ...
+#   ssot_recorded_at — UTC-метка записи
 
 # --- РУЧНЫЕ ДАННЫЕ: prepare не перезаписывает ------------------------------
 criteria_inputs:

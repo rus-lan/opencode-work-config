@@ -32,7 +32,7 @@ services_cloned: {{ findings.services_cloned }}
 {{/each}}
 Сервисы без `docs/` и `openspec/` здесь не указаны — см. §7.
 
-## 2. Пропущенные сервисы (lifecycle и --no-clone)
+## 2. Пропущенные сервисы (lifecycle, не git-репозиторий и --no-clone)
 
 {{#if findings.skipped_services}}
 | сервис | репозиторий | lifecycle | причина |

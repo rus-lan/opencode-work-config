@@ -66,10 +66,10 @@
 #                     thread_link); подтверждение фиксируется мержем MR,
 #                     отдельного ответа SRE не ждём. null = треда ещё нет
 #   status          — draft (не подтверждено SRE) | confirmed
-#   ssot_status     — статус этапа SSoT, выставляется командой `make ssot`
-#                     (руками не править): no_change (severity уже совпадает,
-#                     MR не требуется) | mr_pending (коммит есть, MR не запушен)
-#                     | mr_created (MR создан). В публикации `no_change`
+#   ssot_status     — статус этапа SSoT, выставляется командами `ssot-plan` /
+#                     `ssot-record` (руками не править): no_change (severity уже
+#                     совпадает, MR не требуется) | mr_pending (план есть, MR в
+#                     SSoT ещё не создан) | mr_created (MR создан). В публикации `no_change`
 #                     печатается как «не требуется», а не `⛔ не заполнено`
 #   notes           — свободные заметки по записи (основания, расхождения)
 #   handoff_mode    — режим этапа handoff, выставляется `make handoff`

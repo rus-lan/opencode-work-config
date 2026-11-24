@@ -112,7 +112,7 @@ search: {}
 #     shallow:
 #       - 'confluence: "object_sla" opercrm.smkt'
 #       - "grafana: namespace=opercrm"
-#       - 'ssot: grep -r "opercrm.smkt" ssot/entities/'
+#       - 'ssot: ssot_get(information-systems/opercrm.smkt)'
 #     deep:
 #       - 'confluence CQL: label = "functional-area" and ancestor = <product_scope_page_id>'
 #       - 'confluence: "opercrm" and "RTO"'

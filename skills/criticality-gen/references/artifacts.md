@@ -22,19 +22,18 @@ related: [workflow.md, commands.md, interactive.md]
 | Артефакт | Путь | Шаблон | Кто создаёт | Входные данные | Политика перезаписи | Обязателен |
 |----------|------|--------|-------------|----------------|---------------------|------------|
 | `is.yaml` | `is.yaml` | `templates/is.example.yaml` | `criticality.py init` | шаблон скилла | `never` (только `--force`) | да |
-| Клон SSoT | `ssot/` | — | `criticality.py prepare --apply` (`git clone` / `git pull`); `ssot --apply` — ветка `feature/<task>` + коммит | `is.yaml#ssot.url` | `always` (git pull; локальные правки запрещены, кроме `ssot --apply` — только блок `severity`) | да |
-| Описание SSoT-MR | `<ssot>/.ssot/IS-MR.md` | `templates/MR-ssot.md` (строгий рендер) | `criticality.py ssot --apply` | паспорт, `catalog.yaml` (`approve_link`), `criteria.levels.ssot_enum` | `always` (в клоне SSoT, грязью не считается) | нет (при `ssot --apply`) |
+| Снимок SSoT (`ssot_snapshot`) + `.ssot/IS-*` | `is/IS/INFORMATION.yaml#ssot_snapshot`, `.ssot/IS-apply-plan.json`, `.ssot/IS-MR.url`, `.ssot/IS-MR.md`, `.ssot/IS-verify.json` | — | `ssot-import --entity-json` (ответ `ssot_get`); `ssot-plan`, `ssot-record`, `ssot-verify` дописывают `.ssot/*` | ответ MCP `ssot_get`/`ssot_team`, паспорт, `catalog.yaml` | `always` (снимок и производные; перезаписываются прогоном) | да |
 | Описание MR публикации | `<dochub>/.publish/IS-MR.md` | `templates/MR-dochub.md` (строгий рендер) | `criticality.py publish --apply` | паспорт, `catalog.yaml`, расчёт | `always` (в клоне dochub, грязью не считается) | нет (при `publish --apply`) |
-| `INFORMATION.yaml` | `is/IS/INFORMATION.yaml` | `templates/INFORMATION.yaml` (скелет) | `prepare --apply` — автосекции; человек — `criteria_inputs`, `facts`, `conflicts`, `notes` | `ssot/entities/information-systems/IS/*.yaml`, `catalog.yaml`, `is.yaml` | `always` для автосекций, `never` для ручных | да |
-| Клоны компонентов | `apps/IS/COMPONENT/` | — | `prepare --apply` (`git clone` / `git pull`) | `ssot/.../components.yaml#gitRepository` | `always` (git pull) | нет |
+| `INFORMATION.yaml` | `is/IS/INFORMATION.yaml` | `templates/INFORMATION.yaml` (скелет) | `ssot-import --entity-json` (снимок) + `prepare --apply` (автосекции); человек — `criteria_inputs`, `facts`, `conflicts`, `notes` | ответ `ssot_get` (`ssot_snapshot`), `catalog.yaml`, `is.yaml` | `always` для автосекций, `never` для ручных | да |
+| Клоны компонентов | `apps/IS/COMPONENT/` | — | `prepare --apply` (`git clone` / `git pull`) | снимок карточки (`ssot_get`) → `components[].gitRepository` | `always` (git pull) | нет |
 | Файл требований (человеку) | `is/IS/DATA-REQUIREMENTS.md` | `templates/DATA-REQUIREMENTS.md` | `criticality.py requirements --apply` (также автоматически из `check`/`start` при `BLOCKED`) | `INFORMATION.yaml`, критерии, `is.yaml` | `always`; удаляется, когда незакрытых входов нет | нет (только при `BLOCKED`) |
 | Файл требований (для заполнения) | `is/IS/DATA-REQUIREMENTS.yaml` | `templates/DATA-REQUIREMENTS.yaml` | то же | то же | `always`; удаляется вместе с `.md` | нет (только при `BLOCKED`) |
-| План сбора данных | `is/IS/RESEARCH-PLAN.md` | `templates/RESEARCH-PLAN.md` | `criticality.py collect --apply` | `INFORMATION.yaml`, критерии, `catalog.yaml`, SSoT `links.yaml`/`components.yaml` | `always`; удаляется, когда незакрытых входов нет | нет (только при `BLOCKED`) |
+| План сбора данных | `is/IS/RESEARCH-PLAN.md` | `templates/RESEARCH-PLAN.md` | `criticality.py collect --apply` | `INFORMATION.yaml`, критерии, `catalog.yaml`, снимок карточки (`ssot_get`) → `links`/`components` | `always`; удаляется, когда незакрытых входов нет | нет (только при `BLOCKED`) |
 | Протокол выполненного поиска | `is/IS/RESEARCH.md` | — (рендер из `_research_report`) | `criticality.py research` | `criteria.inputs.*`/`routes.*` (CQL-запросы), `INFORMATION.yaml`, `catalog.yaml`, Confluence REST | `always` (перезаписывается каждым прогоном) | нет |
 | Находки по коду сервисов | `is/IS/SERVICE-FINDINGS.md` | `templates/SERVICE-FINDINGS.md` | `criticality.py services --apply` | клоны `apps/IS/COMPONENT/` (только чтение), `INFORMATION.yaml#components[]` | `always` | нет (этап `services`) |
 | Пропущенные сервисы | `is/IS/SERVICE-FINDINGS.md` §2 | `templates/SERVICE-FINDINGS.md` | то же | `INFORMATION.yaml#components[].lifecycle`, `criteria.service_lifecycle` | `always` (часть отчёта) | нет |
-| План вопросов | `is/IS/ASK.md` | `templates/ASK.md` | `criticality.py ask --apply` | `INFORMATION.yaml`, критерии, `CANDIDATES.yaml`, `SERVICE-FINDINGS.md` §6, SSoT `base.yaml`/`links.yaml` | `always` (при `--apply`); когда незакрытых входов нет, файл не создаётся и не удаляется | нет (этап `ask`) |
-| Кандидаты значений | `is/IS/CANDIDATES.yaml` | `templates/CANDIDATES.yaml` | шаг сбора: агент или человек | `SERVICE-FINDINGS.md` §6, SSoT `base.yaml`/`links.yaml`, Confluence/Grafana, экспертиза | `never` (ведёт человек/агент; `ask` только читает) | нет (этап `ask`) |
+| План вопросов | `is/IS/ASK.md` | `templates/ASK.md` | `criticality.py ask --apply` | `INFORMATION.yaml`, критерии, `CANDIDATES.yaml`, `SERVICE-FINDINGS.md` §6, снимок карточки (`ssot_get`) | `always` (при `--apply`); когда незакрытых входов нет, файл не создаётся и не удаляется | нет (этап `ask`) |
+| Кандидаты значений | `is/IS/CANDIDATES.yaml` | `templates/CANDIDATES.yaml` | шаг сбора: агент или человек | `SERVICE-FINDINGS.md` §6, снимок карточки (`ssot_get`), Confluence/Grafana, экспертиза | `never` (ведёт человек/агент; `ask` только читает) | нет (этап `ask`) |
 | Ответы человека | `is/IS/ANSWERS.yaml` | `templates/ANSWERS.yaml` | человек (по плану `ASK.md`) | `ASK.md`, `CANDIDATES.yaml` | `never` (ведёт человек; `ask --answers` только читает) | нет (этап `ask`) |
 | Паспорт dochub | `is/IS/criticality-passport.yaml` | `templates/criticality-passport.yaml` | `criticality.py start` | `INFORMATION.yaml` + критерии + расчёт | `only-with-force` | да |
 | Человекочитаемый паспорт | `is/IS/CRITICALITY.md` | `templates/CRITICALITY.md` | `criticality.py start` | `INFORMATION.yaml` + критерии + расчёт | `only-with-force` | да |
@@ -64,7 +63,7 @@ related: [workflow.md, commands.md, interactive.md]
 |-------|-----------|------------|
 | Исходные (ручные) | `is.yaml`, `INFORMATION.yaml` (`criteria_inputs`, `facts`, `conflicts`, `notes`), `catalog.yaml`, `criteria/criticality-criteria.yaml`, `is/IS/CANDIDATES.yaml`, `is/IS/ANSWERS.yaml` | человек |
 | Производные (генерируемые) | `criticality-passport.yaml`, `CRITICALITY.md`, `GENERATION.md`, `actions/*`, `INDEX.md`, `reassessment-*.md`, `DATA-REQUIREMENTS.md`/`.yaml`, `RESEARCH-PLAN.md`, `RESEARCH.md`, `SERVICE-FINDINGS.md`, `ASK.md` | скрипт |
-| Внешние клоны | `ssot/`, `apps/` | `git`; правки запрещены, кроме `ssot --apply` (только блок `severity` в `base.yaml`) |
+| Внешние клоны | `apps/` | `git`; правки запрещены (R12) — SSoT правится только через MCP-форму |
 
 ## Что где искать при разборе значения
 

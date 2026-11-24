@@ -3,7 +3,7 @@ title: Поиск и навигация
 purpose: Дать проверенные рецепты поиска по репозиторию и правила навигации в Obsidian.
 audience: [ai-agent, human]
 read_when: [нужно найти ИС или значение без скрипта, ищете «где посмотреть критичность ИС X», настраиваете Obsidian]
-updated: 2026-11-12
+updated: 2026-11-24
 status: actual
 related: [07-scripts.md, 05-mapping.md, 09-pipeline.md]
 ---
@@ -21,7 +21,8 @@ related: [07-scripts.md, 05-mapping.md, 09-pipeline.md]
 - Канонические рецепты даны на `grep`/`find`: они есть в любом окружении; `rg`-эквивалент указан рядом.
 - Точка входа для поиска — `catalog.yaml`; точка входа для машинной выборки — `make show IS=<код>`.
 - Любое изменение критичности обязано оставить след в трёх местах: `criticality-passport.yaml`, `CRITICALITY.md`, `INDEX.md`.
-- Пустой результат по `Mission critical`, `reassessment-*.md`, `ssot/` (до `make prepare-apply`) и `apps/` (до `make prepare-apply` / `make services-apply`) — ожидаемое состояние, а не поломка поиска.
+- Пустой результат по `Mission critical`, `reassessment-*.md` и `apps/` (до `make prepare-apply` / `make services-apply`) — ожидаемое состояние, а не поломка поиска.
+- SSoT не ищется `grep` по файлам: карточку читает `ssot_get` (список — `ssot_list`), снимок лежит в `INFORMATION.yaml → ssot_snapshot`.
 
 Репозиторий устроен так, чтобы по нему можно было искать без специального
 инструмента: `grep`, `find`, Obsidian и один скрипт покрывают все типовые
@@ -203,27 +204,31 @@ grep -rnE '[А-Яа-яЁё]0*01\b' --include='*.md' --include='*.yaml' .; echo "
 
 ### Данные ИС в SSoT
 
-```bash
-find 'ssot/entities/information-systems/<name_is>.<контур>' -name '*.yaml'
-grep -rn 'severity' 'ssot/entities/information-systems/<name_is>.<контур>'
+SSoT не ищется `grep` по файлам — локального клона нет. Карточка читается
+MCP-инструментами:
+
+```text
+ssot_get(group="information-systems", entity="<name_is>.<контур>")  # карточка ИС
+ssot_list(group="information-systems")                              # если код неизвестен
+ssot_team(code="<team>")                                            # ростер команды
 ```
 
 `<name_is>.<контур>` — полный код ИС, ровно как в `catalog.yaml` (например
-`erm.mm`, `cc-exchanger.smkt`). Папки SSoT названы полным кодом, без обрезки
-контура: `ssot/entities/information-systems/erm.mm/`. Кавычки нужны, чтобы
-оболочка не приняла `<` за перенаправление. Критичность в SSoT лежит в поле
-`severity` (`base.yaml` → `severity.type`), поэтому вторая команда ищет
-`severity`, а не `criticality`: поиск по `criticality` вернёт пусто.
+`erm.mm`, `cc-exchanger.smkt`). Ответ `ssot_get` приходит секциями карточки
+(`base`, `components`, `duty`, `links`, `resources`, `roles`); критичность
+лежит в `base → severity` (`severity.type`, `severity.confirmation`), поэтому
+поиск по `criticality` вернёт пусто. Снимок ответа в репозитории —
+`INFORMATION.yaml → ssot_snapshot` (его пишет `make ssot-import IS=<код>
+ENTITY_JSON=-`): по нему работают `grep`-рецепты, когда MCP недоступен.
 
-`rg`-эквивалент: `rg --files 'ssot/entities/information-systems/<name_is>.<контур>'`,
-`rg -n 'severity' 'ssot/entities/information-systems/<name_is>.<контур>'`.
+Навигация по карточке — `ssot_entity_open(group="information-systems",
+entity=<код>)`: открывает форму карточки (дальше `ssot_form_fields`), это
+точка входа и для чтения, и для точечной правки `severity.*`.
 
-> **Важно.** Каталог `ssot/` **не версионируется** (он в `.gitignore`): он
-> появляется после `make prepare-apply` (клон SSoT-репозитория по инструкции из
-> `INFORMATION.md` в корне проекта) и в рабочей копии присутствует. В свежем
-> клоне до `prepare-apply` обе команды вернут `No such file or directory` — это
-> ожидаемо и не является поломкой поиска.
-> Веб-UI SSoT: https://ssot.ecom.tech/.
+> **Важно.** Если MCP `ssot-mcp` не авторизован (`ssot_status` ≠
+> `authorized`), `ssot_get` вернёт `auth_required`: сначала `ssot_status`,
+> при необходимости `ssot_login`, затем повтор. Веб-UI SSoT:
+> https://ssot.ecom.tech/.
 
 ### Документация клонов сервисов
 
@@ -338,12 +343,12 @@ aliases: [Единое рабочее место оператора ММ, erm.mm
 | Ответственный | `catalog.yaml` → `sa`; реестр ответственных | `make show IS=<код>` |
 | Список ИС для анализа (входной конфиг) | `is.yaml` в корне (gitignored, см. `INFORMATION.md` в корне проекта) | `cat is.yaml`, `grep -n -e '\.mm:' -e '\.smkt:' is.yaml` |
 | Критерии расчёта (шкалы, матрицы, веса, границы) | `.opencode/skills/criticality-gen/criteria/criticality-criteria.yaml` | `make criteria`, `make criteria-check` |
-| Данные ИС в SSoT (сервисы, репозитории, дежурства, роли, размещение) | SSoT-репозиторий `ssot/entities/information-systems/<name_is>.<контур>/` (не версионируется, появляется после `make prepare-apply`, см. INFORMATION.md), веб-UI https://ssot.ecom.tech/ | `find ssot/entities/information-systems/<name_is>.<контур> -name '*.yaml'`, `cat .../base.yaml` |
+| Данные ИС в SSoT (сервисы, репозитории, дежурства, роли, размещение) | карточка ИС в SSoT (веб-UI https://ssot.ecom.tech/); снимок — `INFORMATION.yaml → ssot_snapshot` | `ssot_get(group="information-systems", entity="<код>")`, `ssot_list`; навигация — `ssot_entity_open` |
 | Документация клонов сервисов (назначение, нормативы, потоки) | `apps/<код ИС>/<сервис>/docs/`, `openspec/`; готовые цитаты — `is/<код ИС>/SERVICE-FINDINGS.md` (`apps/` не версионируется, появляется после `make prepare-apply` / `make services-apply`) | `find 'apps/<код ИС>' -maxdepth 2 -type d \( -name docs -o -name openspec \)`, `grep -n 'норматив' 'is/<код ИС>/SERVICE-FINDINGS.md'` |
 
 Все команды колонки «Чем» проверены в текущем состоянии репозитория; где
-результат пуст по существу (Mission critical, `reassessment-*.md`, `ssot/` до
-`make prepare-apply`), это отмечено в §3. Если установлен `ripgrep`, любую
+результат пуст по существу (Mission critical, `reassessment-*.md`), это отмечено
+в §3. Если установлен `ripgrep`, любую
 команду `grep -rn` можно заменить на `rg -n`, `grep -rl` — на `rg -l`,
 `find … -name` — на `rg --files -g`.
 

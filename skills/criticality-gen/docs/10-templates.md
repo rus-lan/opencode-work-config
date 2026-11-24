@@ -3,7 +3,7 @@ title: Шаблоны и генерация артефактов
 purpose: Описать каталог .opencode/skills/criticality-gen/templates/, мини-движок шаблонов и правило «любой артефакт = шаблон + факты + расчёт».
 audience: [ai-agent, human]
 read_when: [меняете шаблон или добавляете артефакт, выясняете откуда в паспорте значение, разбираете синтаксис движка]
-updated: 2026-11-13
+updated: 2026-11-24
 status: actual
 related: [09-pipeline.md, 07-scripts.md, 11-skill.md, ../templates]
 ---
@@ -27,7 +27,7 @@ related: [09-pipeline.md, 07-scripts.md, 11-skill.md, ../templates]
 - `SERVICE-FINDINGS.md` — что даёт код сервисов (`docs/`, `openspec/`): цитаты «файл:строка», нормативы, потоки, «вход → основание»; рендерится `services --apply`.
 - `LINK-MAP.md` и `LINK-MAP.yaml` — карта обхода ссылок ИС (узлы с `id`, `kind`, `expand`, `candidate_for`) и контракт обхода для MCP-агента; рендерятся `links --apply`.
 - `SOURCES-FINDINGS.yaml` — скелет фактов, которые агент собрал по `LINK-MAP.md`; не рендерится движком, заполняется агентом, принимается `sources --apply`.
-- `MR-dochub.md` и `MR-ssot.md` — описания MR для `publish` и `ssot`; рендерятся в строгом режиме: пустая переменная — ошибка, `or_missing`/`default` запрещены.
+- `MR-dochub.md` — описание MR для `publish`; рендерится в строгом режиме: пустая переменная — ошибка, `or_missing`/`default` запрещены. Описание SSoT-MR собирает SSoT-приложение; наши данные — поля `severity.type`/`severity.confirmation`.
 
 ## 1. Каталог шаблонов
 
@@ -48,16 +48,23 @@ related: [09-pipeline.md, 07-scripts.md, 11-skill.md, ../templates]
 | `.opencode/skills/criticality-gen/templates/actions/confluence-page.md` | инструкция: страница оценки критичности (draft) | `actions.confluence.*`, `identity.*`, `actions.e2e_list` | всегда (`start`) |
 | `.opencode/skills/criticality-gen/templates/actions/rocketchat-message.md` | готовое сообщение + чеклист перед отправкой (ссылки на **оба** MR — dochub и SSoT) | `actions.message.*`, `actions.jira.task_key`, `actions.jira.task_link`, `actions.mr_link`, `actions.ssot_mr_text`, `actions.ssot_card_link`, `actions.adr_link`, `identity.*`, `passport.*` | всегда (`start`) |
 | `.opencode/skills/criticality-gen/templates/MR-dochub.md` | описание MR публикации паспорта в dochub (9 блоков) | `mr.*` (см. §3.4) | `publish` (`.publish/<код>-MR.md`) |
-| `.opencode/skills/criticality-gen/templates/MR-ssot.md` | описание MR обогащения SSoT (`severity`) | `mr.*` (см. §3.4) | `ssot --apply` (`.ssot/<код>-MR.md`) |
-| `.opencode/skills/criticality-gen/templates/INFORMATION.yaml` | YAML-скелет `INFORMATION.yaml` для `prepare` | **не рендерится движком** — это структура, а не шаблон | `prepare` |
+| `.opencode/skills/criticality-gen/templates/INFORMATION.yaml` | YAML-скелет `INFORMATION.yaml`: автосекции из снимка `ssot_snapshot`, поля `ssot_*`, ручные секции | **не рендерится движком** — это структура, а не шаблон | `ssot-import`, `prepare` |
 
 `.opencode/skills/criticality-gen/templates/INFORMATION.yaml` — единственный файл в `.opencode/skills/criticality-gen/templates/`, который **не**
 проходит через движок: его разбирает мини-парсер YAML, а `prepare` берёт из него
 скелет ручных секций (`criteria_inputs`, `facts`, `conflicts`, `notes`).
 Поэтому в нём нет управляющих конструкций `{{#if}}` / `{{#each}}`.
 Секция `contacts` в этом файле — описание структуры: значения в неё пишет
-`prepare` / `make contacts` из `ssot/entities/teams/<team>/team.yaml`, а не
-человек (см. [data-sources.md](data-sources.md)).
+`make contacts` из ответа MCP `ssot_team(code=<team>)`, а не человек (см.
+[data-sources.md](data-sources.md)).
+
+Секции снимка и записи заполняет не человек: `ssot_snapshot` —
+`{base, source, commit, version, imported_at, verified{matched, ref, commit,
+actual, checked_at}}` (пишут `ssot-import` и `ssot-verify`); поля записи
+`ssot_mr_url`, `ssot_version`, `ssot_can_apply`, `ssot_status`,
+`ssot_recorded_at` — `ssot-record`. Отдельного шаблона описания SSoT-MR нет:
+описание и основание собирает SSoT-приложение из полей формы, скилл передаёт
+только `severity.type`/`severity.confirmation`.
 
 **Роль `.opencode/skills/criticality-gen/templates/publication.md`.** Это источник текста сообщения, а не отдельный файл-артефакт. `start` рендерит шаблон, извлекает из него блок кода с языком `text` и подставляет результат в `actions/rocketchat-message.md` (поле «Готовое сообщение»). Отдельного файла публикации в папке ИС нет — итоговый текст всегда лежит в action-пакете.
 
@@ -300,14 +307,15 @@ Frontmatter (все поля — из `findings.*`):
 Отчёт **не пишет** в `INFORMATION.yaml` и не закрывает входы: цитата из клона —
 основание, значение подтверждает человек и принимает `enrich` (R14).
 
-### 3.4. Контекст `mr.*` (описания MR)
+### 3.4. Контекст `mr.*` (описание dochub-MR)
 
-`MR-dochub.md` рендерит `_publish_mr_text()` (`publish`), `MR-ssot.md` —
-`_ssot_mr_text()` (`ssot`). Оба идут через `render_template_file_strict()`:
-**пустая переменная — ошибка** (`не заполнено поле '<имя>' в шаблоне <файл>`,
-код 1, MR не создаётся), а фильтры `or_missing` и `default` в этих шаблонах
-запрещены. Причина: описание MR уходит человеку как есть — подставлять
-`⛔ не заполнено` или выдуманный дефолт недопустимо.
+`MR-dochub.md` рендерит `_publish_mr_text()` (`publish`) через
+`render_template_file_strict()`: **пустая переменная — ошибка** (`не заполнено
+поле '<имя>' в шаблоне <файл>`, код 1, MR не создаётся), а фильтры `or_missing`
+и `default` в этом шаблоне запрещены. Причина: описание MR уходит человеку как
+есть — подставлять `⛔ не заполнено` или выдуманный дефолт недопустимо. Описание
+SSoT-MR скилл не рендерит: MR создаёт `ssot_form_save`, описание собирает
+SSoT-приложение, наши данные — только поля `severity.type`/`severity.confirmation`.
 
 Git не пропускает переводы строк в push-опциях («must not contain a NUL or LF
 character»), поэтому в `merge_request.description` уходит тот же рендер,
@@ -330,17 +338,12 @@ character»), поэтому в `merge_request.description` уходит тот 
 | `mr.input_rows`, `.calc_rows`, `.provenance_rows`, `.checklist`, `.checklist_note`, `.limitations` | готовые строки блоков (списки строк, а не объекты) |
 | `mr.confluence_base` | база ссылки Confluence (`external_refs.base_url`) — по ней блок «Провенанс» резолвит `page_id` |
 
-`MR-ssot.md` (что меняется, основание, проверка, что не меняется, `Closes`):
-
-| Переменная | Что содержит |
-|------------|--------------|
-| `mr.title` | заголовок `<task>: критичность <код> — <уровень>` |
-| `mr.changes[]` | `.field`, `.before`, `.after` — точечные правки `severity`; отсутствующее «было» — `—` |
-| `mr.passport_mr` | путь паспорта в dochub, заголовок его MR и ветка |
-| `mr.passport_mr_url` | URL dochub-MR (основание; из `.publish/<код>-MR.url` или `--passport-mr-url`); пусто — ошибка |
-| `mr.approve_link` | тред согласования (`catalog.yaml → approve_link`) |
-| `mr.task` | ключ задачи |
-| `mr.checklist[]`, `.unchanged[]` | чек-лист ревьюера и перечень того, что правка не трогает |
+Отдельного шаблона описания SSoT-MR нет: SSoT-MR создаёт `ssot_form_save`, его
+описание собирает SSoT-приложение. Скилл готовит только данные формы — целевые
+`severity.type` (enum из `levels.ssot_enum`) и `severity.confirmation` (=
+`catalog.yaml → approve_link`), — а результат фиксирует `ssot-record`
+(`.ssot/<код>-MR.url`, `.ssot/<код>-MR.md`, поля `ssot_*`). Подробности —
+[../references/workflow.md](../references/workflow.md), фаза 9.
 
 ### 3.5. Контекст `actions.*`: E2E-процессы и ссылка на АДР
 

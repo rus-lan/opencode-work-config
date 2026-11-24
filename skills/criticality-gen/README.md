@@ -1,8 +1,9 @@
 # criticality-gen
 
 Оценка и переоценка критичности информационных систем по процессу D6.1.1: из
-`is.yaml` через SSoT-репозиторий (`INFORMATION.yaml`) и детерминированный расчёт
-по [`criteria/criticality-criteria.yaml`](./criteria/criticality-criteria.yaml).
+`is.yaml` через карточку ИС в SSoT (MCP `ssot_get` → `INFORMATION.yaml`) и
+детерминированный расчёт по
+[`criteria/criticality-criteria.yaml`](./criteria/criticality-criteria.yaml).
 Два сценария — простой (экспресс, 4 входа) и сложный (детальная оценка, 7
 входов); у каждого значения провенанс `{type, ref}`; артефакты рендерятся только
 по шаблонам и только из фактов — нет данных, значит блокировка и лист
@@ -24,7 +25,7 @@
 - Собрать основания из документации клонов сервисов (`docs/`, `openspec/`) —
   `SERVICE-FINDINGS.md` с цитатами «файл:строка».
 - Опубликовать готовый паспорт в dochub и обновить критичность в SSoT (`severity`)
-  с MR по шаблону.
+  через MCP-форму — MR создаёт SSoT.
 - Исключить ИС из расчёта, обновить `INDEX.md`, найти просроченные переоценки
   (`exclude`, `index`, `due`, `reassess`).
 
@@ -47,9 +48,10 @@ criticality in SSoT», «why is the gate blocked».
   `max(бизнес, ИБ)`.
 - **Рендерит только из шаблонов.** `templates/` — единственный источник текстов
   артефактов; ручная правка сгенерированного запрещена.
-- **Публикует и передаёт.** `publish` — MR в dochub, `ssot` — MR в SSoT,
-  `handoff` — последний этап: сообщение в тред со ссылками на оба MR, показ
-  целиком и публикация одним сообщением только после явного подтверждения.
+- **Публикует и передаёт.** `publish` — MR в dochub; `ssot-plan` → MCP-форма →
+  `ssot-record` — MR в SSoT (создаёт его SSoT-приложение); `handoff` — последний
+  этап: сообщение в тред со ссылками на оба MR, показ целиком и публикация одним
+  сообщением только после явного подтверждения.
 
 Не делает (полный список — [`SKILL.md`](./SKILL.md#чего-скилл-не-делает)):
 
@@ -62,8 +64,10 @@ criticality in SSoT», «why is the gate blocked».
 - **Не собирает и не запускает код сервисов.** В `apps/` разрешён только `git`
   из allowlist: ни сборки, ни тестов, ни установки зависимостей, ни запуска
   скриптов из клона.
-- **Не мержит MR** и не пушит без `PUSH=1` и подтверждения человека; не правит
-  SSoT сверх блока `severity`.
+- **Не мержит и не применяет MR.** Апрув (`ssot_mr_approve`) и применение
+  (`ssot_apply_changes`) — человек с `confirm:true` (или агент по явному
+  разрешению); push в dochub — только с `PUSH=1` и подтверждением. SSoT правится
+  только в полях `severity.type`/`severity.confirmation` через MCP-форму.
 - **Не отправляет сообщения в чат.** MCP RocketChat нет: текст для
   `#Criticality_assessment` формируется как `actions/rocketchat-message.md`,
   отправляет человек.
@@ -75,16 +79,17 @@ criticality in SSoT», «why is the gate blocked».
 | Что | Зачем | Проверка |
 |-----|-------|----------|
 | `python3` ≥ 3.9 | движок `scripts/criticality.py` | `python3 --version` |
-| `git` | клоны `ssot/`, `apps/`, ветки и коммиты `publish`/`ssot` | `git --version` |
+| `git` | клоны `apps/`, `dochub/`, ветки и коммиты `publish` | `git --version` |
 | `make` | цели из `.opencode/Makefile` | `make --version` |
 | POSIX `sh` | `install.sh` (работает под `sh`/`dash`/`bash`/`zsh`) | `sh -n install.sh` |
-| доступ по ssh/https к SSoT | `prepare --apply` клонирует SSoT | `make prepare` |
+| MCP `ssot-mcp` | чтение карточки ИС (`ssot_get`/`ssot_team`) и запись `severity` через форму | `ssot_status` в MCP |
 
 Сторонних Python-пакетов нет — только стандартная библиотека. `PyYAML`
 используется, если установлен; без него работает встроенный мини-парсер с тем же
-поведением. Сеть нужна только для `git` (клоны, `--push`) и одного HTTP-вызова
-GitLab API при сверке описания MR. Для сбора значений агенту нужны MCP
-Confluence и Grafana — сам скрипт в них не обращается.
+поведением. Сеть нужна только для `git` (клоны `apps/`/`dochub/`, `--push`) и
+одного HTTP-вызова GitLab API при сверке описания dochub-MR. SSoT читается и
+пишется через MCP `ssot-mcp` — без git, ssh и `GITLAB_TOKEN`. Для сбора значений
+агенту нужны MCP Confluence и Grafana — сам скрипт в них не обращается.
 
 ## Установка
 
@@ -194,10 +199,11 @@ python3 ~/.config/opencode/skills/criticality-gen/scripts/criticality.py --root 
 make init                                    # 2. каркас: is.yaml, catalog.yaml, INDEX.md, is/, .gitignore
 make scaffold IS=erm.mm                      # 3. папка ИС + записи в catalog.yaml и is.yaml
 $EDITOR catalog.yaml                         # 4. владелец, page_id, approve_link, review_date
-make prepare                                 # 5. план подготовки данных (dry-run)
-make prepare-apply                           # 6. клон SSoT + is/erm.mm/INFORMATION.yaml
-make check                                   # 7. гейт: OK или BLOCKED + лист требований
-make start IS=erm.mm DIFF=1                  # 8. dry-run: что будет сгенерировано
+make ssot-import IS=erm.mm ENTITY_JSON=-     # 5. снимок карточки ИС из ответа MCP ssot_get
+make prepare                                 # 6. план подготовки данных (dry-run)
+make prepare-apply                           # 7. is/erm.mm/INFORMATION.yaml из снимка + apps/
+make check                                   # 8. гейт: OK или BLOCKED + лист требований
+make start IS=erm.mm DIFF=1                  # 9. dry-run: что будет сгенерировано
 ```
 
 Дальше, после просмотра diff:
@@ -208,7 +214,7 @@ make validate                                # 0 ERROR по паспортам �
 make publish IS=erm.mm TASK=E001-31245       # план публикации в dochub
 ```
 
-Если шаг 7 вернул `BLOCKED`, `start` не запускается — гейт уже создал лист:
+Если шаг 8 вернул `BLOCKED`, `start` не запускается — гейт уже создал лист:
 
 ```bash
 make requirements IS=erm.mm                  # план: что именно нужно
@@ -228,9 +234,10 @@ make check                                   # повторить гейт
 ## Канон флоу
 
 ```text
-init → prepare → check → collect → research → сбор (SSoT → Confluence → Grafana)
-     → services → check → ask → ask-answers → enrich-apply → score → start
-     → validate (+ verify-titles) → index → publish → ssot → handoff
+init → ssot-import → prepare → check → collect → research → сбор (SSoT → Confluence
+     → Grafana) → services → check → ask → ask-answers → enrich-apply → score
+     → start → validate (+ verify-titles) → index → publish → ssot-plan
+     → MCP-форма → ssot-record → ssot-verify → handoff
 ```
 
 Каждая фаза закрывается только своим гейтом; провал останавливает конвейер.
@@ -244,20 +251,20 @@ init → prepare → check → collect → research → сбор (SSoT → Confl
 | Этап | Что это | Куда пишет |
 |------|---------|------------|
 | `publish` | публикация **паспорта** — MR в **dochub** | клон `dochub/`: паспорт в `architecture/app/...`, импорт в `_root.yaml`, ветка, коммит |
-| `ssot` | обогащение **SSoT** — MR с блоком `severity` | клон `ssot/`: только `entities/information-systems/<код>/base.yaml` |
+| `ssot-plan` → `ssot-record` | обогащение **SSoT** — MR с `severity` через MCP-форму | `.ssot/<код>-*`: план, ссылка MR, сводка; поля `ssot_*` в `INFORMATION.yaml`; MR создаёт SSoT |
 | `handoff` | передача человеку — тред в **`#Criticality_assessment`** | чат: ссылки на dochub-MR и SSoT-MR, подтверждение SRE |
 
-Порядок `publish → ssot → handoff` обязателен: SSoT-MR в «Основании» ссылается
-на dochub-MR (`mr.passport_mr_url`), а тред — на оба MR. Обратный порядок оставил
-бы SSoT-MR без основания, а тред — без ссылок. «Публикация в
-`#Criticality_assessment`» — это всегда `handoff`, а не `publish`.
+Порядок `publish → ssot-plan → … → handoff` обязателен: SSoT-MR создаётся после
+dochub-MR (уровень и основание — из опубликованного паспорта), а тред — на оба
+MR. Обратный порядок оставил бы SSoT-MR без основания, а тред — без ссылок.
+«Публикация в `#Criticality_assessment`» — это всегда `handoff`, а не `publish`.
 
 Боковые этапы вне линейного конвейера: `scaffold`, `index`, `due`, `reassess`,
 `exclude`/`include`.
 
 ## Команды
 
-33 подкоманды `scripts/criticality.py`. Колонка «изменяет файлы» — пишет ли
+37 подкоманд `scripts/criticality.py`. Колонка «изменяет файлы» — пишет ли
 команда в проект; «сеть» — нужен ли git или внешний доступ. Полный синтаксис и
 все флаги — [`references/commands.md`](./references/commands.md).
 
@@ -267,8 +274,8 @@ init → prepare → check → collect → research → сбор (SSoT → Confl
 | `info` | критерии с пояснениями (уровни, сценарии, входы, enum, матрицы) | нет | нет |
 | `init` | каркас проекта: `is.yaml`, `catalog.yaml`, `INDEX.md`, папку `is/` | да | нет |
 | `next-step` | следующий шаг конвейера по текущему состоянию (`make next-step`) | нет | нет |
-| `prepare` | `ssot/` → `INFORMATION.yaml` → `apps/` (dry-run по умолчанию) | да (`--apply`) | да |
-| `contacts` | контакты TA/TL из SSoT `team.yaml` (упоминания — полный username RocketChat) | да (`--apply`) | нет |
+| `prepare` | автосекции `INFORMATION.yaml` из снимка `ssot_snapshot` → `apps/` (dry-run по умолчанию); данные SSoT — из `ssot-import` | да (`--apply`) | да (git для `apps/`) |
+| `contacts` | контакты команды из ответа MCP `ssot_team` (упоминания — полный username RocketChat) | да (`--apply`) | нет |
 | `validate` | паспорта, `catalog.yaml`, `CRITICALITY.md`; просрочка по `review_date` | нет | нет |
 | `verify-titles` | сверка заголовков страниц Confluence с сохранёнными (`--fix`) | да (`--fix`) | да |
 | `index` | таблица `INDEX.md` (без `--write` — в stdout) | да (`--write`) | нет |
@@ -291,7 +298,11 @@ init → prepare → check → collect → research → сбор (SSoT → Confl
 | `include` | вернуть исключённую ИС в расчёт | да | нет |
 | `start` | паспорт, `CRITICALITY.md`, `GENERATION.md`, `actions/*` | да (`--force`) | нет |
 | `publish` | паспорт в dochub: файл, `_root.yaml`, ветка, коммит, MR | да (`--apply`) | да (`--push`) |
-| `ssot` | `severity` в SSoT (после `publish`): `base.yaml`, ветка, коммит, MR | да (`--apply`) | да (`--push`) |
+| `ssot-import` | снимок карточки ИС из ответа MCP `ssot_get` → `INFORMATION.yaml → ssot_snapshot` (+ `contacts` при `--team-json`) | да | нет |
+| `ssot-plan` | план применения `severity` в SSoT (после `publish`): `status`, изменения, шаги MCP; `.ssot/<код>-apply-plan.json` | да (план) | нет |
+| `ssot` | алиас `ssot-plan`: план обогащения SSoT (шаги MCP) | да (план) | нет |
+| `ssot-record` | результат `ssot_form_save`: `mrUrl` → `.ssot/<код>-MR.url`/`.md` и поля `ssot_*` | да | нет |
+| `ssot-verify` | сверка применённой критичности с SSoT (`ssot_verify_change`) → `ssot_snapshot.verified` | да | нет |
 | `handoff` | тред в `#Criticality_assessment`: вопрос, MCP (основной) → REST-фолбэк, дедупликация по `roomId` | да (`--write`: предпросмотр) | да |
 | `handoff-result` | результат MCP-отправки: ссылка на сообщение или причина отказа | да | нет |
 | `handoff-apply` | тонкая обёртка REST-отправки (нужен `--confirm`; идемпотентность общая с `handoff`) | да | да |
@@ -313,13 +324,14 @@ init → prepare → check → collect → research → сбор (SSoT → Confl
 | Проверить | `make check`, `make check-diag`, `make validate`, `make verify-titles`, `make verify`, `make criteria-check`, `make docs-check`, `make selftest` |
 | Разобрать `BLOCKED` | `make requirements`, `make collect`/`collect-apply`, `make research`, `make services`/`services-apply`, `make ask`/`ask-apply`/`ask-answers`, `make enrich`/`enrich-apply` |
 | Посчитать и записать | `make score`, `make start IS=<код> DIFF=1`, `make start-apply IS=<код> FORCE=1` |
-| Опубликовать | `make publish`/`publish-apply`, `make ssot`/`ssot-apply`, `make ssot-mr`/`ssot-mr-apply` |
+| Опубликовать | `make publish`/`publish-apply`; SSoT — `make ssot-import`, `make ssot-plan`, `make ssot-record`, `make ssot-verify` |
 | Передать в тред (последний этап) | `make handoff IS=<код>` (MCP, при отказе — REST), `make handoff-result IS=<код> MESSAGE_URL=<ссылка>`, `make handoff-apply IS=<код> CONFIRM=1` (только REST), затем `make finalize IS=<код>` |
 | Ведение реестра | `make index`, `make due`, `make show IS=<код>`, `make reassess`/`reassess-apply`, `make exclude`/`include` |
 | Сам скилл | `make paths`, `make skill-check`, `make skill-install TARGET=<путь>`, `make skill-uninstall TARGET=<путь>` |
 
 Значимые переменные: `IS=`, `FORCE=1`, `DATE=`, `NO_CLONE=1`, `DRY=0`, `DIFF=1`,
-`APPLY=1`, `PUSH=1`, `REUSE=1`, `TASK=`, `UPDATE=1`, `NO_REQUIREMENTS=1`,
+`APPLY=1`, `PUSH=1` (только `publish`), `REUSE=1`, `TASK=`, `UPDATE=1`,
+`ENTITY_JSON=`, `TEAM_JSON=`, `MR_URL=`, `VERIFY_JSON=`, `NO_REQUIREMENTS=1`,
 `CONFIRM=1` (публикация в тред), `WRITE=1` (предпросмотр `handoff`),
 `ALLOW_INCOMPLETE=1` (публикация с `⛔`).
 
@@ -401,7 +413,7 @@ init → prepare → check → collect → research → сбор (SSoT → Confl
 
 | Артефакт | Класс | Кто создаёт |
 |----------|-------|-------------|
-| `INFORMATION.yaml` | вход (ручной слой) | `prepare --apply` — автосекции; человек — `criteria_inputs`, `facts`, `conflicts`, `notes` |
+| `INFORMATION.yaml` | вход (ручной слой) | `ssot-import` — `ssot_snapshot`/`contacts`; `prepare --apply` — автосекции; человек — `criteria_inputs`, `facts`, `conflicts`, `notes` |
 | `criticality-passport.yaml` | производный | `start` (перезапись только с `--force`) |
 | `CRITICALITY.md` | производный | `start` (перезапись только с `--force`) |
 | `GENERATION.md` | производный | `start` |
@@ -415,10 +427,11 @@ init → prepare → check → collect → research → сбор (SSoT → Confl
 
 В корне проекта: `is.yaml` (локальный конфиг, gitignored), `catalog.yaml`
 (реестр ИС, версионируется), `INDEX.md` (сводная таблица), `is.example.yaml`
-(шаблон), клоны `ssot/`, `apps/`, `dochub/` (gitignored). В клонах:
-`.publish/<код>-MR.md` — описание dochub-MR, `.ssot/<код>-MR.md` — описание
-SSoT-MR. `INFORMATION.yaml` — версионируемый слой ручных данных: он
-**коммитится в git**; `ssot/`, `apps/`, `is.yaml` — нет.
+(шаблон), клоны `apps/`, `dochub/` и служебный `.ssot/` (gitignored). В
+`.publish/`/`.dochub/` — `<код>-MR.md`/`.url` dochub-MR; в `.ssot/` —
+`<код>-apply-plan.json` (план), `<код>-MR.url`/`.md` (ссылка и сводка SSoT-MR),
+`<код>-verify.json`. `INFORMATION.yaml` — версионируемый слой ручных данных: он
+**коммитится в git**; `apps/`, `dochub/`, `.ssot/`, `is.yaml` — нет.
 
 Полный реестр с политиками перезаписи — [`references/artifacts.md`](./references/artifacts.md).
 
@@ -430,12 +443,15 @@ SSoT-MR. `INFORMATION.yaml` — версионируемый слой ручны
 Уровень переводится в enum dochub по `levels.publish_enum` критериев, а не по
 зашитому списку. `is/`, `catalog.yaml` и `criteria_inputs` публикация не меняет.
 
-`ssot` — критичность в SSoT. Правит **только** блок `severity` в
-`entities/information-systems/<код>/base.yaml`: `type` — из `levels.ssot_enum`
-(`Office productivity` → `business-operational`), `confirmation` — из
-`catalog.yaml → approve_link`. Остальные ключи, их порядок, комментарии и
-форматирование сохраняются побайтово. Расхождений нет — `изменений нет`, ветка и
-коммит не создаются.
+`ssot-plan` → MCP-форма → `ssot-record` — критичность в SSoT. Клона, ветки и
+коммита нет: `ssot-plan` считает целевые значения и пишет план
+(`.ssot/<код>-apply-plan.json`), агент выполняет `ssot_entity_open` →
+`ssot_form_fields` → `ssot_ui_select`/`ssot_ui_fill` → `ssot_form_save`,
+`ssot-record` фиксирует `mrUrl` и `version`. Меняются **только**
+`severity.type` (из `levels.ssot_enum`, `Office productivity` →
+`business-operational`) и `severity.confirmation` (из `catalog.yaml →
+approve_link`); остальные поля формы не трогаются. `severity` уже совпадает —
+`status: no_change`, MR не создаётся.
 
 `handoff` — последний этап: сообщение в `#Criticality_assessment` со ссылками на
 оба MR, подтверждение SRE, карточка SSoT, дата следующей переоценки.
@@ -456,17 +472,15 @@ SSoT-MR. `INFORMATION.yaml` — версионируемый слой ручны
 
 Строгие правила MR:
 
-- описания рендерятся только по `templates/MR-dochub.md` и
-  `templates/MR-ssot.md`; незаполненная переменная — ошибка, а не пустая строка
-  в MR (`or_missing`/`default` запрещены);
-- в «Основание» SSoT-MR входит кликабельная ссылка на dochub-MR
-  (`mr.passport_mr_url`); ссылки нет — `ERROR: не заполнено поле
-  'mr.passport_mr_url'`, MR не создаётся;
-- `--push` допустим только вместе с `--apply` (иначе код 2) и только по явному
-  подтверждению человека;
-- ветка уже существует — `publish-apply ... UPDATE=1`; описание уже созданного
-  SSoT-MR переписывается `make ssot-mr-apply IS=<код> TASK=<key>` без изменения
-  ветки и коммита;
+- описание dochub-MR рендерится только по `templates/MR-dochub.md`;
+  незаполненная переменная — ошибка, а не пустая строка в MR
+  (`or_missing`/`default` запрещены); описание SSoT-MR собирает SSoT-приложение —
+  наши данные в нём только `severity.type`/`severity.confirmation`;
+- SSoT-MR создаётся только после dochub-MR: уровень и основание берутся из
+  опубликованного паспорта, иначе `ssot-plan` даёт `status: blocked` с причиной;
+- `--push` (только `publish`) допустим вместе с `--apply` (иначе код 2) и только
+  по явному подтверждению человека;
+- ветка уже существует — `publish-apply ... UPDATE=1`;
 - ветка есть **только локально** (на `origin` её нет) — `publish-apply ...
   REUSE=1` (`--reuse-local`): содержимое не изменилось → `unchanged` и код 0
   без коммита, изменилось → коммит поверх локальной ветки. С `--update`
@@ -476,18 +490,16 @@ SSoT-MR. `INFORMATION.yaml` — версионируемый слой ручны
   `criteria.dochub.url`. URL не сконфигурирован — подсказка добавить
   `dochub_url` в `catalog.yaml`, а не «клон не найден».
 
-**Гейт `entities/**`.** Путь `feature/<task>` (в том числе `make ssot-apply`)
-не проходит джоб `codeowners`: апрув дают только боты `project_14598_bot_*`,
-а они апрувят лишь MR, созданные через SSoT-UI. Штатный путь записи severity —
-UI / MCP `ssot` (`ssot_form_save` → апрувы → `ssot_apply_changes`). Git-путь
-остаётся fallback'ом и требует `@codeowners approve` от maintainer'а проекта
-(access level ≥ 40) отдельным комментарием. Подробно — «Запись severity: два
-пути» в `references/data-sources.md`.
+**Гейт `entities/**`.** Апрув дают только боты `project_14598_bot_*`, а они
+апрувят лишь MR, созданные через SSoT-UI. Поэтому единственный путь записи
+severity — UI / MCP-форма (`ssot-plan` → `ssot_form_save` → апрувы →
+`ssot_apply_changes`); git-путь удалён. Подробно — «Запись severity: только через
+MCP-форму» в `references/data-sources.md`.
 
 ### Jira-ключ и ссылка на задачу
 
 `TASK=<ключ>` (`--task`) — ключ задачи по оценке критичности; обязателен для
-`publish`/`ssot`, из него строится ветка `feature/<task>`. По умолчанию ключ
+`publish` (из него строится ветка `feature/<task>`). По умолчанию ключ
 берётся из данных проекта: `catalog.yaml → systems[].jira_task` (прежнее имя
 ключа — `task`) или `is.yaml → jira_task`.
 
@@ -501,8 +513,9 @@ UI / MCP `ssot` (`ssot_form_save` → апрувы → `ssot_apply_changes`). Gi
 ## Ограничения и известные особенности
 
 - **SSoT обогащается точечно.** Только `severity.type` и `severity.confirmation`
-  в `base.yaml`. Поля `review_date`, `assigned_date`, `tech_architect` в SSoT
-  отсутствуют — их туда не добавляют: они живут в `catalog.yaml` и Confluence.
+  формы base через MCP. Поля `review_date`, `assigned_date`, `tech_architect` в
+  SSoT отсутствуют — их туда не добавляют: они живут в `catalog.yaml` и
+  Confluence.
 - **`review_date` — из реестра.** Дата переоценки считается по
   `catalog.yaml → review_date`; копия в паспорте вторична, иначе дата генерации
   маскировала бы просрочку. Обновляет только `make reassess-apply IS=<код>`.
@@ -528,7 +541,7 @@ UI / MCP `ssot` (`ssot_form_save` → апрувы → `ssot_apply_changes`). Gi
 |-----|-----|-------|
 | [`docs/`](./docs/README.md) | инженерная документация инструмента: процесс, методика, поля, пайплайн, шаблоны, CLI, установка | 14 файлов |
 | [`references/`](./references/workflow.md) | справочники для агента: workflow, commands, rules, artifacts, data-sources, dependencies, failure-modes, checklist | 8 файлов |
-| [`templates/`](./templates/criticality-passport.yaml) | тексты артефактов: паспорт, `CRITICALITY.md`, `GENERATION.md`, листы, планы, MR, `actions/` | 18 файлов |
+| [`templates/`](./templates/criticality-passport.yaml) | тексты артефактов: паспорт, `CRITICALITY.md`, `GENERATION.md`, листы, планы, dochub-MR, `actions/` | 18 файлов |
 | [`criteria/`](./criteria/criticality-criteria.yaml) | единственный источник правил расчёта | 1 файл |
 
 **Пользовательская документация ведётся в Confluence**, а не здесь: методика
@@ -575,11 +588,11 @@ bash scripts/release.sh --dry-run             # план сборки бандл
 | Симптом | Причина | Что делать |
 |---------|---------|------------|
 | `check` → `BLOCKED`, данных нет | нет blocking-входа сценария | лист уже создан: `make requirements IS=<код>` → `make collect-apply IS=<код>` → сбор → `make enrich-apply IS=<код>` → `make check`; если взять негде — `make exclude IS=<код> REASON="..."` |
-| `ssot` → `ERROR: не заполнено поле 'mr.passport_mr_url'` | паспорт ещё не опубликован в dochub | сначала `make publish-apply IS=<код> TASK=<key> PUSH=1`, затем `make ssot-apply` |
+| `ssot-plan` → `status: blocked` | нет dochub-MR или `approve_link`, уровень паспорта расходится с `criticality_ssot`, либо не пройден гейт R18 | `make publish-apply IS=<код> TASK=<key> PUSH=1`, проверить `catalog.yaml → approve_link` и `make check`; затем повторить `make ssot-plan IS=<код>` |
 | `publish-apply` → «ветка уже существует» | ветка MR создана прошлым прогоном | `make publish-apply IS=<код> TASK=<key> UPDATE=1` |
 | `publish-apply` → «ветка есть локально, но не на origin» | прошлый прогон создал ветку без push | `make publish-apply IS=<код> TASK=<key> REUSE=1` (`--reuse-local`): без изменений — `unchanged` и код 0, с изменениями — коммит поверх локальной ветки |
 | `publish` → «URL репозитория не сконфигурирован» | нет клона `dochub/` и не задан URL | добавить `dochub_url` в `catalog.yaml` (или `--dochub-url <URL>`, `criteria.dochub.url`) |
-| `prepare-apply` → `ERROR: нет клона SSoT (ssot/)` | нет доступа, нет `ssot.url` или задан `NO_CLONE=1` | проверить `is.yaml → ssot.url` и доступ по ssh; внешний клон — `make ssot ... SSOT=<путь>` |
+| `ssot-import` → `ERROR: сущности нет в ответе` | `ssot_get` вернул карточку без этой ИС или передан чужой JSON | запросить `ssot_get(group="information-systems", entity=<код>)` и повторить `make ssot-import IS=<код> ENTITY_JSON=<файл\|->` |
 | `docs-check` → `WARN` без ошибки | в проекте нет `docs/` | ничего не делать: проверка пропускается с кодом 0 |
 | `install.sh --project` не перезаписал `Makefile` | файл существует и отличается от шаблона | это защита от чужого файла: сравните вручную или `--force` |
 | `selftest` → `SKIP` на проверках `P*` / `D5` | проверка требует данных проекта (полного паспорта в `is/`, `.opencode/Makefile`), а их нет: клон репозитория, глобальная установка, пустой проект | ничего не делать: это `SKIP` с причиной, а не `FAIL`. Полный набор проверок — в проекте, развёрнутом через `--project` и с паспортом |

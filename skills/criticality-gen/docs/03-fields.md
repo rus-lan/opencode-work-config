@@ -3,7 +3,7 @@ title: Справочник полей паспорта
 purpose: Дать правила заполнения девяти канонических полей YAML и frontmatter CRITICALITY.md.
 audience: [ai-agent, human]
 read_when: [заполняете criticality-passport.yaml, validate вернул ERROR по полю, выбираете значение enum]
-updated: 2026-11-12
+updated: 2026-11-24
 status: actual
 related: [02-methodology.md, 04-reassessment.md, 05-mapping.md, ../templates/criticality-passport.yaml]
 ---
@@ -120,6 +120,25 @@ dochub) и `CRITICALITY.md` (человекочитаемый).
 > а в `CRITICALITY.md` раздел 7 помечается `⚠️ расчёт не выполнен`. Такой паспорт
 > остаётся `draft` до подтверждения SRE — источник значения указывается в
 > разделе 1 и в истории оценок.
+
+### 4.1 Куда уходит уровень: `severity.type` и `severity.confirmation`
+
+В карточке ИС SSoT уровень живёт в блоке `severity`. Источник чтения — ответ
+MCP `ssot_get(group="information-systems", entity=<код>)`; его снимок пишет
+`ssot-import` в `INFORMATION.yaml → ssot_snapshot.base.severity`.
+
+| Поле | Значение | Провенанс |
+|------|----------|-----------|
+| `severity.type` | enum SSoT: `mission-critical`, `business-critical`, `business-operational` (маппинг — `levels.ssot_enum`; `Office productivity` → `business-operational`) | карточка SSoT через `ssot_get` |
+| `severity.confirmation` | ссылка на актуальный тред `#Criticality_assessment` = `catalog.yaml → approve_link`; обязательна при `method: target` | `approve_link` реестра |
+
+Запись — только через MCP-форму: `ssot-plan` → `ssot_entity_open` →
+`ssot_form_fields` → `ssot_ui_select`/`ssot_ui_fill` → `ssot_form_save`. MR
+создаёт SSoT; клон репозитория, ветка и commit/push не используются.
+
+Провенанс значения — идентификатор сущности плюс `version` из
+`ssot_get`/`ssot_form_save` (например `information-systems/<код>@<version>`), а
+не путь в `ssot/`; ссылка на MR — `mrUrl` из ответа `ssot_form_save`.
 
 ## 5. Поля frontmatter `CRITICALITY.md`
 

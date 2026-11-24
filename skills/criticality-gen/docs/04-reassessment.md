@@ -3,7 +3,7 @@ title: Runbook переоценки критичности
 purpose: Пошаговый runbook переоценки ИС — триггеры, одиннадцать шагов, чеклисты и правила для legacy-ИС.
 audience: [ai-agent, human]
 read_when: [пришло время переоценки, make due показал просрочку, первичное заполнение legacy-ИС]
-updated: 2026-11-12
+updated: 2026-11-24
 status: actual
 related: [01-process.md, 02-methodology.md, 05-mapping.md, ../templates/publication.md]
 ---
@@ -21,6 +21,7 @@ related: [01-process.md, 02-methodology.md, 05-mapping.md, ../templates/publicat
 - Переоценка запускается пятью триггерами; просроченный `due_date` — тоже повод, но не нарушение процесса.
 - Порядок: `make due` → `make reassess IS=<код>` (план) → `make reassess-apply IS=<код>` (файл + `review_date`) → пересчёт → правка паспорта → `make validate` → MR → пост → подтверждение SRE → `make index`.
 - `assigned_date` при переоценке не меняется; `review_date` и `approve_link` обновляются всегда. Источник истины для `review_date` и `assigned_date` — `catalog.yaml` (в паспорте копия).
+- SSoT при переоценке читается `ssot_get` (снимок — `make ssot-import` в `INFORMATION.yaml → ssot_snapshot`), а пишется только через MCP-форму (`severity.type`/`severity.confirmation`): MR создаёт SSoT; клона SSoT, ветки и push у скилла нет. Статусы — `mr_pending` → `mr_created` → `mr_verified`.
 - Исход «критичность не изменилась» требует тех же действий: MR, пост и подтверждение обязательны.
 - Даты в legacy-ИС не выдумываются: нет источника — `null` и статус `draft`.
 
@@ -34,7 +35,9 @@ make reassess IS=erm.mm               # 2. план переоценки (dry-ru
 make reassess-apply IS=erm.mm         # 3. файл переоценки + review_date в catalog.yaml
 # 4. правим criticality-passport.yaml + CRITICALITY.md + reassessment-*.md
 make validate                         # 5. проверить
-# 6. MR в dochub с меткой criticality → 7. пост в #Criticality_assessment
+# 6. MR в dochub с меткой criticality
+# 6b. SSoT: ssot_get → ssot-plan → MCP-форма severity → ssot-record → ssot-verify
+# 7. пост в #Criticality_assessment
 # 8. подтверждение SRE → 9. approve_link → 10. make index
 ```
 
@@ -94,12 +97,13 @@ python3 .opencode/skills/criticality-gen/scripts/criticality.py due --months 12 
 | 8 | Опубликовать в канале | `#Criticality_assessment` по [`templates/publication.md`](../templates/publication.md) | Пост с ссылкой на MR |
 | 9 | Дождаться подтверждения SRE | тред в канале | Подтверждение |
 | 10 | Зафиксировать подтверждение | `approve_link`, `status` | `status: confirmed` |
-| 11 | Обновить индекс и SSoT | `make index` + карточка ИС | INDEX.md и SSoT согласованы |
+| 11 | Обновить индекс и SSoT | `make index` + MCP-форма SSoT (`severity.*`) | INDEX.md обновлён, `ssot_status: mr_created` |
 
-Порядок этапов инструмента — `publish` (MR в dochub) → `ssot` (MR в SSoT со
-ссылкой на dochub-MR) → `handoff` (тред в `#Criticality_assessment` со ссылками
-на оба MR): канон — [`references/workflow.md`](../references/workflow.md).
-Таблица выше — ручные шаги процесса, она не заменяет канон.
+Порядок этапов инструмента — `publish` (MR в dochub) → `ssot` (правка
+`severity.type`/`severity.confirmation` через MCP-форму, MR создаёт SSoT) →
+`handoff` (тред в `#Criticality_assessment` со ссылками на оба MR): канон —
+[`references/workflow.md`](../references/workflow.md). Таблица выше — ручные шаги
+процесса, она не заменяет канон.
 
 ### Шаг 1. `make due`
 
@@ -216,8 +220,17 @@ make index
 ```
 
 Затем критичность переносится в карточку ИС SSoT по маппингу из
-[05-mapping.md](05-mapping.md). Пока перенос не сделан, SSoT и dochub
-расходятся — а дежурные и мониторинг читают именно SSoT.
+[05-mapping.md](05-mapping.md). Карточка читается ответом MCP `ssot_get`
+(снимок — `make ssot-import IS=<код> ENTITY_JSON=-` в `INFORMATION.yaml →
+ssot_snapshot`), цель и шаги формы считает `make ssot-plan IS=<код>`, а меняются
+только `severity.type` и `severity.confirmation` формы base через MCP
+(`ssot_entity_open` → `ssot_form_fields` → `ssot_ui_select`/`ssot_ui_fill` →
+`ssot_form_save`). MR создаёт SSoT; `mrUrl` и `version` фиксирует
+`make ssot-record IS=<код> MR_URL=<mrUrl>`, независимую проверку выполняет
+`ssot_verify_change` → `make ssot-verify IS=<код> VERIFY_JSON=-`. Клона SSoT,
+ветки и push у скилла нет. Пока перенос не сделан, SSoT и dochub расходятся — а
+дежурные и мониторинг читают именно SSoT; `catalog.yaml → ssot_status`
+показывает состояние (`mr_pending` → `mr_created` → `mr_verified`).
 
 ## 3. Что меняется при переоценке
 
@@ -246,7 +259,8 @@ make index
       фиксируется сам факт переоценки).
 - [ ] Пост в `#Criticality_assessment` опубликован: «критичность не изменилась».
 - [ ] `make index` выполнен.
-- [ ] В SSoT подтверждена прежняя критичность (или зафиксировано, что не менялась).
+- [ ] В SSoT через MCP-форму записаны `severity.type`/`severity.confirmation`
+      (или зафиксировано `ssot_status: no_change`), `ssot-verify` подтвердил значение.
 
 ## 5. Чеклист: критичность выросла
 
@@ -332,10 +346,10 @@ Legacy-ИС — система, которая уже в эксплуатаци�
    (или дата обновления страницы). Ссылка «Jira-задача по оценке критичности ИС»
    на странице может вести на неверифицированный тред — API RocketChat требует
    аутентификации.
-3. **Карточка ИС в SSoT** (`ssot/entities/information-systems/<is>/base.yaml`) —
-   низкая уверенность, вторичный источник: дата там может отражать последнюю
-   правку карточки, а не оценку критичности. Используется только если первых
-   двух источников нет, и обязательно помечается `⚠️`.
+3. **Карточка ИС в SSoT** (ответ `ssot_get`; снимок — `INFORMATION.yaml →
+   ssot_snapshot`) — низкая уверенность, вторичный источник: дата там может
+   отражать последнюю правку карточки, а не оценку критичности. Используется
+   только если первых двух источников нет, и обязательно помечается `⚠️`.
 
 Поставить сегодняшнюю дату значило бы объявить переоценку, которой не было.
 Статус `⚠️` в `CRITICALITY.md` показывает, что дата — административная, а не
@@ -356,7 +370,7 @@ Legacy-ИС — система, которая уже в эксплуатаци�
 Порядок действий для legacy-ИС:
 
 1. Взять критичность и атрибуты со страницы критичности Confluence, затем из
-   SSoT (`entities/information-systems/<is>/base.yaml`) как из вторичного
+   карточки ИС в SSoT (`ssot_get` → снимок `ssot_snapshot`) как из вторичного
    источника.
 2. Заполнить 9 полей паспорта; всё, что неизвестно, — `null`.
 3. В `CRITICALITY.md` проставить статусы: `✅` для подтверждённого источника,

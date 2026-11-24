@@ -5,7 +5,149 @@
 
 ## [Unreleased]
 
-_Изменений пока нет._
+### Исправлено
+
+- **`publish` падал с `NameError: _catalog`** при печати плана: в
+  `dochub_repo_url` передавалась несуществующая переменная вместо `catalog`.
+  `--dry-run` и `--apply` снова работают.
+- **`publish` создавал вторую ветку той же задачи.** Если `--branch` не задан и
+  на `origin` есть ровно одна ветка `feature/<task>*`
+  (например `feature/E001-31346-opercrm-criticality`), используется она
+  (`WARN`); несколько — `ERROR` со списком и требованием `--branch`; ни одной —
+  прежний `feature/<task>`.
+- **Описание MR писало «Было: НЕ ОЦЕНЕНО» при обновлении существующего
+  паспорта.** `had_passport` и старый уровень считались в рабочем дереве клона
+  (master) до checkout ветки MR. Теперь они читаются с целевой ветки
+  (`git show origin/<branch>:<path>`, фолбэк — локальная ветка) и
+  пересчитываются после checkout; одинаковый уровень печатается как
+  «уровень не изменился», без стрелки в никуда.
+
+### Добавлено
+
+- `handoff --thread <tmid>` (env `HANDOFF_THREAD` → `ROCKETCHAT_THREAD` →
+  `RC_THREAD`) — ответ в **существующий** тред Rocket.Chat вместо нового
+  топ-сообщения. REST шлёт `roomId` + `tmid`; `roomId` не резолвится — WARN и
+  фолбэк на `channel` + `tmid`. `tmid` также попадает в `.handoff-request.json`
+  для MCP-транспорта. `thread_link`/`approve_link` указывают на созданный ответ
+  (`message._id` из ответа API), а не на родителя.
+- `scaffold --date YYYY-MM-DD` — дата генерации для новых ИС.
+- **`handoff --report --thread-new` — тред отчёта.** Родитель (top-level) —
+  краткий итог: уровень, метод, статус, дата генерации, участники (TA/TL) и
+  основные ссылки (SSoT-карточка, MR в dochub, MR в SSoT) плюс строка
+  «Детализация — в ответах ниже». Три ответа в тред (`tmid` = id родителя):
+  входные значения с провенансом, расчёт (`E`, интервал, score) с
+  незаполненными входами, ссылки на артефакты. `thread_link`/`approve_link`
+  указывают на родителя, в реестр пишется `handoff_thread: true`; повторный
+  `--thread-new` идемпотентен (`--force-resend` — обойти). Новые флаги
+  `--dochub-mr-url` и `--ssot-mr-url` подставляют ссылки на MR в родителя.
+- **`handoff --report --update-parent`** — правка уже отправленного родителя
+  через `chat.update` (например, когда появился SSoT-MR): новый тред не
+  создаётся, `thread_link` не меняется.
+- **`publish` автономен «из коробки».** Без клона и без `--dochub` публикация
+  сама клонирует `criteria.external_refs.repos.dochub.url` в `<проект>/dochub`
+  (поддерживаются `https://` и `ssh://git@host:port/...`); отсутствие клона —
+  `WARN`, а не `ERROR`.
+- **`publish` нормализует enum перед записью паспорта.** Точное значение —
+  как есть; смысловое совпадение (без скобок/регистра/пунктуации) →
+  каноническое значение схемы dochub + `WARN`; нет совпадения — `ERROR` со
+  списком допустимых значений.
+- **`publish` предлагает Jira-ключ из git.** Если ключа нет в реестре и не
+  задан `--task`, ключ вида `E001-<N>` ищется в имени текущей ветки и в
+  последних коммитах: найден — `WARN` + использование, не найден — `ERROR` с
+  подсказкой (молчаливого отказа больше нет).
+- **`handoff --report` — публикация результатов оценки.** Отдельный текст-отчёт
+  (`_report_text_for_is`) из `criticality-passport.yaml`, `INFORMATION.yaml` и
+  `catalog.yaml`: итог, участники, входы с провенансом, расчёт (`E`, интервал,
+  score), незаполненные входы без `⛔`, ссылки и «Что дальше». Гейты MR/`⛔`/SSoT
+  не применяются, отправка — REST (с `--thread` — ответ в тред), `--dry-run`
+  печатает текст целиком. Пишет `handoff_mode: report` и
+  `handoff_status: published`; дедупликация различает режимы.
+
+### Изменено
+
+- `assigned_date` и `review_date` фиксируются **сразу** при появлении записи ИС
+  в `catalog.yaml` (`scaffold`), считаются от даты генерации (`generated_at`)
+  и попадают в каркас паспорта. Раньше до `finalize` они оставались пустыми, и
+  `publish` не включал их в документ dochub.
+- `publish` больше не теряет пустые даты: `_publish_transform` выводит
+  `assigned_date` из `generated_at`, а `review_date` — из `generated_at` +
+  `review_period_months` (или берёт значение из `catalog.yaml`).
+- Одно правило расчёта дат (`review_date_from_generation`) вместо трёх копий
+  формулы в `start`, `finalize` и `publish`.
+- Дедупликация `handoff` учитывает `tmid`: существующее топ-сообщение с тем же
+  текстом больше не считается «своим ответом в треде» (и наоборот).
+
+### Исправлено
+
+- `X-User-Id`, похожий на логин (`user@domain`, пробел), теперь распознаётся и
+  блокирует отправку с явной причиной — раньше такой `ROCKETCHAT_USER` давал
+  невнятный `401` «истёк токен».
+- **Дедлок `INFORMATION.yaml` на свежем проекте.** `prepare` без снимка SSoT не
+  создавал файл, а `ssot-import` отказывался писать снимок в несуществующий
+  файл — не работал ни один путь. Теперь `ssot-import` сам собирает каркас из
+  `templates/INFORMATION.yaml` и сразу пишет снимок; `next-step` при отсутствии
+  файла советует `ssot-import` (с подсказкой про MCP `ssot_get`), а не
+  `prepare-apply`.
+- **`prepare` стирал провенанс снимка SSoT.** После `prepare --apply` из
+  `ssot_snapshot` пропадали `source: mcp`, `commit`, `version`, `imported_at`.
+  Слияние пересобирает только секции карточки, метаданные переносятся как есть.
+- **Не-git репозиторий компонента блокировал прогон.** `git_repository` —
+  веб-страница (GitHub/GitLab `/tree/`, `/blob/`) вместо git-URL теперь даёт
+  SKIP + WARN «не git-репозиторий» и попадает в список пропущенных (`prepare` —
+  «Пропущено (не git-репозиторий)», `services` — §2 «Пропущенные сервисы»),
+  а не ошибку клонирования с ненулевым кодом.
+- **`links` требовал удалённый клон SSoT.** Команда падала без файла
+  `entities/information-systems/<код>/links.yaml`, хотя ссылки уже были в
+  `INFORMATION.yaml → ssot_snapshot.links`. Теперь источник — снимок карточки,
+  файл `entities/...` остался fallback для проектов без снимка.
+- **`confluence.ecom.tech` уходил в `external`.** Классификатор знал только
+  `space.samokat.ru`; теперь Confluence распознаётся по любому
+  `confluence.*`/`*.confluence.*` хосту.
+- **`verify-titles` падал на удалённой странице.** HTTP `404`/`410` теперь WARN
+  «страница недоступна, пропущена» — остальные страницы проверяются, кеш
+  пишется. Прочие ошибки (`5xx`/timeout) остаются ERROR, но собранные
+  заголовки сохраняются перед возвратом кода `1`.
+
+
+## 2.0.0 — 2026-11-24
+
+**Breaking change: SSoT только через MCP.** Локальный клон `ssot/`, ветки,
+коммиты, пуш и MR-описание по шаблону удалены: SSoT читается и правится
+исключительно через `ssot-mcp` (нужна SSO-сессия), MR создаёт
+`ssot_form_save`.
+
+### Удалено
+
+- клон `ssot/` как источник данных и git-операции над ним: `prepare` больше не
+  клонирует SSoT, `--no-clone` относится только к `apps/`;
+- команда `ssot` и её флаги `--apply`, `--push`, `--clone`, `--branch`,
+  `--task`, `--passport-mr-url`, `--update-mr` — устаревшие флаги дают явную
+  ошибку, а не игнорируются молча;
+- шаблон `templates/MR-ssot.md`: описание MR собирает SSoT-приложение, наши
+  данные — только `severity.type`/`severity.confirmation`;
+- `GITLAB_TOKEN` на SSoT-пути и `mr.passport_mr_url` как основание SSoT-MR.
+
+### Добавлено
+
+- `ssot-import --entity-json` — снимок ответа `ssot_get` в
+  `INFORMATION.yaml → ssot_snapshot` (+ `contacts` из `ssot_team`);
+- `ssot-plan` — `.ssot/<код>-apply-plan.json`, `status: changed|no_change|blocked`,
+  шаги MCP, гейты R18;
+- `ssot-record --mr-url` — `.ssot/<код>-MR.url`, `.ssot/<код>-MR.md` и поля
+  `ssot_*` в `INFORMATION.yaml`;
+- `ssot-verify --verify-json` — `ssot_snapshot.verified`;
+- `contacts --team-json` — источник `ssot_team` вместо `team.yaml`.
+
+### Изменено
+
+- канон: … → validate → publish (dochub MR) → ssot-import → ssot-plan →
+  MCP-форма (`ssot_entity_open` → `ssot_form_fields` → `ssot_ui_select`/
+  `ssot_ui_fill` → `ssot_form_save`) → ssot-record → MCP: `ssot_wait_version` →
+  ssot-verify → handoff. После handoff: `ssot_mr_approve(confirm: true)` →
+  `ssot_apply_changes(confirm: true)` → `ssot_wait_master`;
+- гейт R18 закрывает `publish`, `ssot-plan`, `ssot-record` и MCP
+  `ssot_form_save`;
+- MR-URL для треда берётся из `mrUrl` (`ssot_form_save`), а не из клона.
 
 ## [1.1.0] — 2026-11-19
 

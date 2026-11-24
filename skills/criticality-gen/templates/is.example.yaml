@@ -16,6 +16,7 @@ is:
   #     excluded: true
   #     reason: "нет владельца данных; вопрос на PdM"
 ssot:
-  # URL SSoT-репозитория; клонируется `make prepare-apply`.
+  # URL SSoT-репозитория; проверяется доступность (`git ls-remote` в
+  # `prepare`), клон не создаётся.
   # Схема обязательна: https://, ssh:// или git@host:path.
   url: ""

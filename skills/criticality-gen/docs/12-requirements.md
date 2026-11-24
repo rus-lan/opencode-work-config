@@ -3,7 +3,7 @@ title: Недостающие данные: файл требований и е�
 purpose: Объяснить, откуда берётся DATA-REQUIREMENTS.*, кто и как его заполняет, как работает enrich и что делать, если данных нет совсем.
 audience: [ai-agent, human]
 read_when: [make check вернул BLOCKED, нужно понять что заполнять и у кого спросить, enrich не принимает лист, данных нет совсем]
-updated: 2026-11-12
+updated: 2026-11-24
 status: actual
 related: [09-pipeline.md, 07-scripts.md, 10-templates.md, 08-criteria.md, ../INFORMATION.md]
 ---
@@ -75,7 +75,7 @@ related: [09-pipeline.md, 07-scripts.md, 10-templates.md, 08-criteria.md, ../INF
 | id | Что это | Зачем | Где взять | У кого | Как подтвердить |
 |----|---------|-------|-----------|--------|-----------------|
 | `peak_hour_load` | клиентов/час в пик, целое > 0 (`запросов/час`, если пик снят как RPS шлюза; единица — `findings[].unit`) | blocking экспресс-метода: множитель в `E = коэф. типа × коэф. влияния × клиентов/час`; без него `E = 0` и уровень не считается. Также заполняет `object_workload` | Grafana: папка E001 → подпапка ИС → панели трафика шлюза; вторично — страницы трафика в Confluence. Формула `peak_rps × 3600` | TL + SRE | `source: {type: grafana, ref: 'dashboard uid, panel, expr'}` + `status` |
-| `consumers_type` | тип клиентов, дословно из `enum_selection.consumers_type.values` (7 значений) | blocking экспресс-метода: задаёт коэффициент типа клиентов (`express_method.client_coefficients`) — первый множитель `E`. Также заполняет `object_consumers_type` | Confluence: страница ИС, раздел «Пользователи продукта»; вторично — SSoT `base.yaml` | PdM + TL | `source: {type: confluence, ref: '<page_id>, раздел'}` + `status: confirmed` |
+| `consumers_type` | тип клиентов, дословно из `enum_selection.consumers_type.values` (7 значений) | blocking экспресс-метода: задаёт коэффициент типа клиентов (`express_method.client_coefficients`) — первый множитель `E`. Также заполняет `object_consumers_type` | Confluence: страница ИС, раздел «Пользователи продукта»; вторично — карточка ИС в SSoT (`ssot_get`, секция `base`) | PdM + TL | `source: {type: confluence, ref: '<page_id>, раздел'}` + `status: confirmed` |
 | `outage_impact` | характер влияния при недоступности, дословно из `enum_selection.outage_impact.values` (6 значений) | blocking экспресс-метода: задаёт коэффициент влияния (`express_method.impact_coefficients`) — второй множитель `E` | Confluence: DR-страница (`catalog.yaml → dr_page_id`), раздел влияния; затем E2E; решение PdM при отсутствии цитаты | PdM + TL | `source: {type: confluence, ref: '<page_id>, раздел'}` + `status: confirmed` |
 | `object_sla` | допустимый простой в минутах, целое `>= 0` (`0` = простой недопустим) | blocking экспресс-метода: прибавляется к каждому `t = порог/E×60 + SLA`, сдвигая все четыре времени последствий | Confluence: Support-страница («SLA решения»), DR-страница (RTO); договор SLA. RTO в часах и `99.x %` ≠ минуты простоя | SRE | `source: {type: confluence, ref: '<page_id>, таблица'}` + `status: confirmed` или `derived` с формулой |
 | `axes_scores` | четыре целых 0..4 по осям legal/economic/reputational/client | blocking детального метода: max по осям — строка `impact_matrix` | экспертно: финансовая модель, юридическая оценка, ИБ/PR, клиентские метрики; **из документов не выводится** | TL + ИБ + финансы | `source: {type: manual, ref: '<роль: логин>'}` + `status: confirmed` |
@@ -159,7 +159,8 @@ detailed-вход (`switches_scenario: true`). Обратный переход �
 3. **Grafana** — измеренная нагрузка: папка продукта E001 → подпапка ИС →
    панели трафика шлюза.
 4. **SSoT** — только идентификация ИС: название, продукт, команда,
-   критичность, список компонентов и их репозиториев. Значений входов там нет.
+   критичность, список компонентов и их репозиториев. Карточка читается
+   `ssot_get` (доступ — `ssot_status: authorized`); значений входов там нет.
 
 Цитата из клона — это **основание**, а не значение: `source.type` принятого
 значения остаётся `confluence`, `grafana` или `manual`, а значение подтверждает
@@ -168,7 +169,7 @@ detailed-вход (`switches_scenario: true`). Обратный переход �
 | Поле | Где искать в первую очередь | Затем | Формула / правило | Кто подтверждает |
 |------|-----------------------------|-------|-------------------|------------------|
 | `peak_hour_load` | клоны: `docs/`, `openspec/` (заявленный трафик, назначение); измерение — Grafana: папка E001 → подпапка ИС → панели трафика шлюза | Confluence: страницы трафика/RPS | `peak_hour_load = peak_rps × 3600` | TL (+ SRE) |
-| `consumers_type` | клоны: `docs/`, `openspec/` (кто потребитель); затем Confluence: страница ИС, «Пользователи продукта» | SSoT `base.yaml` (title, description) | дословно из enum (7 значений) | PdM |
+| `consumers_type` | клоны: `docs/`, `openspec/` (кто потребитель); затем Confluence: страница ИС, «Пользователи продукта» | SSoT (`ssot_get`, секция `base`: title, description) | дословно из enum (7 значений) | PdM |
 | `outage_impact` | клоны: `docs/`, `openspec/` (что ломается); затем Confluence: DR-страница, раздел влияния | решение PdM | дословно из enum (6 значений) | PdM |
 | `object_sla` | клоны: нормативы в `docs/`, SLO-конфиг (`slo-kit.yaml`, `slo.yaml`, `alerts.yaml`, `sloth.yaml`); затем Confluence: Support/DR — SLA решения, допустимый простой | договор SLA | минуты, целое `>= 0` (`0` = простой недопустим) | SRE |
 | `time_to_impact` | клоны: сценарии отказа, кеш, репликация, очередь в `docs/`; затем Confluence: DR-сценарии | разбор инцидентов | одна корзина `time_buckets.order` | SRE |

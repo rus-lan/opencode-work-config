@@ -19,10 +19,9 @@ related: [failure-modes.md, commands.md]
 | Зависимость | Тип | Обязательна | Проверка | Что делать если нет |
 |-------------|-----|-------------|----------|---------------------|
 | `python3` ≥ 3.9 (stdlib) | cli | да | `python3 --version` | установить python3; без него не работает `scripts/criticality.py` — дальше идти нельзя |
-| `git` | cli | да | `git --version` | установить git; без него `prepare` не склонирует `ssot/` и `apps/` |
+| `git` | cli | да | `git --version` | установить git; без него `prepare` не склонирует `apps/` |
 | `make` | cli | нет | `make --version` | вызывать `python3 scripts/criticality.py <команда>` напрямую — все цели Makefile тонкие |
-| доступ к SSoT по ssh | access | да | `git ls-remote ssot.url HEAD` | запросить доступ к `git.ecom.tech:5022`; до получения работать нельзя — `INFORMATION.yaml` не из чего собрать |
-| `ssot/` (клон) | repo | да | `test -d ssot/entities` | `make prepare-apply` |
+| MCP `ssot-mcp` (read) | mcp | да | `ssot_status` → `authorized`, `ssot_get` отвечает | запустить сервер `ssot-mcp` и пройти SSO; до этого `INFORMATION.yaml` не из чего собрать — `ssot-import` нечего импортировать |
 | PyYAML | cli | нет | `python3 -c "import yaml"` | скрипт использует встроенный мини-парсер; предупредить, что сложный YAML может разобраться неполно — проверить `make check` |
 | MCP Confluence (read) | mcp | нет | инструмент `confluence_get_page` доступен | читать страницы вручную и заполнять `source: {type: confluence, ref: '<page_id>, раздел'}`; лимит 30 запросов на ключ, батчи ≤10 страниц |
 | MCP Grafana | mcp | нет | `grafana_search_dashboards`, `grafana_get_dashboard`, `grafana_query_prometheus` доступны | снять нагрузку вручную (дашборд → панель → `peak_rps × 3600`); без пика простой сценарий не считается — `BLOCKED`, вход blocking |
@@ -52,8 +51,8 @@ related: [failure-modes.md, commands.md]
 |-----|--------------|--------|
 | `cli` | исполняемый файл в `PATH` | `python3`, `git`, `make` |
 | `mcp` | MCP-сервер, доступный агенту | confluence, jira, gitlab |
-| `repo` | git-репозиторий, клон или доступ по ssh | `ssot/`, `apps/IS/COMPONENT` |
-| `access` | права/сеть/учётка | ssh-ключ к `git.ecom.tech:5022`, PAT GitLab |
+| `repo` | git-репозиторий, клон или доступ по ssh | `apps/IS/COMPONENT` |
+| `access` | права/сеть/учётка | SSO-сессия к SSoT (MCP), PAT GitLab |
 
 ## Отсутствующие MCP: деградация, а не отказ
 
@@ -92,7 +91,6 @@ try:
 except ImportError:
     print("PyYAML: нет — используется встроенный мини-парсер")
 PY
-[ -d ssot/entities ] || echo "MISSING ssot/ (make prepare-apply)"
 [ -d apps ] || echo "WARN apps/ отсутствует (prepare-apply создаст)"
 [ -f .opencode/skills/criticality-gen/criteria/criticality-criteria.yaml ] || echo "MISSING criteria/criticality-criteria.yaml (в каталоге скилла)"
 ```
@@ -104,18 +102,17 @@ PY
 
 ## Доступ к SSoT
 
-`is.yaml#ssot.url` в этом репозитории:
+SSoT читается и правится **только через MCP `ssot-mcp`**: клона, ssh-ключа и
+git-доступа к репозиторию SSoT скиллу не нужно.
+
+Проверка:
 
 ```text
-ssh://git@git.ecom.tech:5022/ecom/infrastructure/products-and-services/ssot/ecomtech/data-storage.git
+ssot_status          → authorized (сервер запущен, SSO-сессия активна)
+ssot_get(group="information-systems", entity="<код>")  → карточка ИС
+ssot_team(code="<team>")                                → ростер команды
 ```
 
-Проверка без клонирования:
-
-```bash
-git ls-remote "$(python3 -c 'import re,sys;print(re.search(r"url:\s*(\S+)",open("is.yaml").read()).group(1))')" HEAD
-```
-
-Ошибка `Permission denied (publickey)` означает отсутствие ssh-ключа или
-доступа к проекту — это `access`-блокер: скилл останавливается и передаёт
-человеку точную команду и адресата (владелец SSoT-репозитория / TL).
+`auth_required` или ошибка MCP — это `access`-блокер: скилл останавливается и
+передаёт человеку действие (перезапустить `ssot-mcp`, пройти SSO), а не
+подставляет данные «по памяти».

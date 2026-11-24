@@ -3,7 +3,7 @@ title: "Документация: паспорта критичности ИС E
 purpose: Индекс документации — карта документов, роли читателей и точка входа в процесс.
 audience: [ai-agent, human]
 read_when: [первое открытие docs/, выбор документа под задачу, проверка состава документации]
-updated: 2026-11-13
+updated: 2026-11-24
 status: actual
 related: [../SKILL.md, ../references/workflow.md, 09-pipeline.md]
 ---
@@ -35,7 +35,7 @@ related: [../SKILL.md, ../references/workflow.md, 09-pipeline.md]
 | [06-search-and-navigation.md](06-search-and-navigation.md) | Рецепты `grep`/`find`, Obsidian, правило трёх следов | Когда ищете «где посмотреть критичность ИС X» | все |
 | [07-scripts.md](07-scripts.md) | CLI reference: команды, флаги, коды возврата | Когда используете `scripts/criticality.py` или расширяете его | TL, SRE, разработчик репозитория |
 | [08-criteria.md](08-criteria.md) | Разбор файла критериев: `kind`, провенанс, порядок правки | Когда нужны сами правила расчёта или меняются критерии | TL, SRE, разработчик репозитория |
-| [09-pipeline.md](09-pipeline.md) | Конвейер `is.yaml` → `ssot/` → `INFORMATION.yaml` → гейт → артефакты | Когда готовите данные и разбираете `BLOCKED` | TL, SRE, разработчик репозитория |
+| [09-pipeline.md](09-pipeline.md) | Конвейер `is.yaml` → `ssot_get`/`ssot-import` → `INFORMATION.yaml` → гейт → артефакты | Когда готовите данные и разбираете `BLOCKED` | TL, SRE, разработчик репозитория |
 | [10-templates.md](10-templates.md) | Каталог `templates/`, движок шаблонов, правило «шаблон → артефакт» | Когда меняете шаблон или выясняете, откуда в паспорте значение | TL, SRE, разработчик репозитория |
 | [11-skill.md](11-skill.md) | Скилл `criticality-gen`: слои, установка, шаблоны скиллов | Когда ставите скилл или делаете скилл для другой области | TL, SRE, разработчик репозитория |
 | [12-requirements.md](12-requirements.md) | Недостающие данные: `DATA-REQUIREMENTS.*`, справочник по 7 входам, `enrich`, исключение ИС | Когда `make check` вернул `BLOCKED` и нужно понять, что заполнять и у кого спросить | TL, PdM, SRE, ИБ |

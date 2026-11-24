@@ -3,7 +3,7 @@ title: Пайплайн подготовки данных и генерации
 purpose: Описать конвейер «is.yaml → SSoT → INFORMATION.yaml → гейт → артефакты» и его отличия от INFORMATION.md.
 audience: [ai-agent, human]
 read_when: [готовите данные из SSoT, make check вернул BLOCKED, нужно понять откуда берётся поле паспорта]
-updated: 2026-11-18
+updated: 2026-11-24
 status: actual
 related: [08-criteria.md, 07-scripts.md, 10-templates.md, 05-mapping.md, rules.md]
 ---
@@ -12,16 +12,16 @@ related: [08-criteria.md, 07-scripts.md, 10-templates.md, 05-mapping.md, rules.m
 
 ## Когда читать
 
-- Читать, когда готовите данные: `make init` → `make prepare-apply` → `make check`.
-- Читать, когда нужно понять, какое поле паспорта из какого файла SSoT берётся.
+- Читать, когда готовите данные: `make init` → `make ssot-import` → `make prepare-apply` → `make check`.
+- Читать, когда нужно понять, какое поле паспорта из какого файла снимка SSoT берётся.
 - Читать, когда `make check` вернул `BLOCKED` и нужно найти недостающий вход.
 - Читать, когда сверяете фактическую реализацию с `INFORMATION.md`.
 
 ## Кратко
 
-- Конвейер, его фазы и гейты — один источник: `.opencode/skills/criticality-gen/references/workflow.md`; здесь описана только подготовка данных (`prepare` → `INFORMATION.yaml`).
-- Автоматические секции `INFORMATION.yaml` — проекция SSoT; ручные секции (`criteria_inputs`, `facts`, `conflicts`, `notes`) автоматика не перезаписывает.
-- `make prepare` — план без записи; `make prepare-apply` — запись файлов и git-операции; закрытые сервисы (`lifecycle: closed`) не клонируются.
+- Конвейер, его фазы и гейты — один источник: `.opencode/skills/criticality-gen/references/workflow.md`; здесь описана только подготовка данных (`ssot-import` → `prepare` → `INFORMATION.yaml`).
+- Автоматические секции `INFORMATION.yaml` — проекция снимка карточки ИС; ручные секции (`criteria_inputs`, `facts`, `conflicts`, `notes`) автоматика не перезаписывает.
+- `make ssot-import` — снимок карточки ИС из ответа MCP `ssot_get` в `INFORMATION.yaml`; `make prepare` — план без записи; `make prepare-apply` — запись файлов и git-операции по компонентам; закрытые сервисы (`lifecycle: closed`) не клонируются.
 - Гейт `make check` strict: при `BLOCKED` возвращает ненулевой код; `make check-diag` — код 0. Сценарий расчёта выбирается по данным: простой (4 входа) или сложный (все 7).
 - `make services-apply` собирает `SERVICE-FINDINGS.md` из документации клонов (`docs/`, `openspec/`); клоны только читаются.
 - `make start` — dry-run, `make start-apply` — запись; паспорт и `CRITICALITY.md` перезаписываются только с `FORCE=1`.
@@ -35,8 +35,11 @@ related: [08-criteria.md, 07-scripts.md, 10-templates.md, 05-mapping.md, rules.m
 ```text
 is.yaml  (что анализируем + ssot.url)
    │
-   ├─► prepare (ssot/, apps/)     git clone / git pull  (сеть — только с --apply)
-   │      ssot/entities/information-systems/<код ИС>/{base,components,duty,links,resources,roles}.yaml
+   ├─► ssot-import                снимок карточки ИС из MCP ssot_get
+   │      INFORMATION.yaml ← ssot_snapshot: base, components, duty, links,
+   │      resources, roles (+ contacts из ssot_team); сети и клона нет
+   │
+   ├─► prepare (apps/)            git clone / git pull  (сеть — только с --apply)
    │      apps/<код ИС>/<сервис>/            ← git clone / pull компонентов
    │                                          (lifecycle: closed — skip, не клонируется)
    │
@@ -112,12 +115,14 @@ is.yaml  (что анализируем + ssot.url)
    │      ссылка MR после пуша: .publish/<код>-MR.url в клоне и
    │      .dochub/<код>-MR.url в проекте (её читает start → actions.mr_link)
    │
-   └─► make ssot-apply            обогащение SSoT критичностью (severity)
-          entities/information-systems/<код ИС>/base.yaml — только severity
-          ветка feature/<task> + коммит в клоне ssot/, .ssot/<код>-MR.md
-          «Основание» MR — ссылка на dochub-MR из шага publish
-          расхождений нет → «изменений нет», ветка и коммит не создаются
-          пуш и MR — только --push по подтверждению человека
+   └─► make ssot-plan             ОБОГАЩЕНИЕ SSoT критичностью (severity)
+          план из снимка SSoT: целевые severity.type и severity.confirmation,
+          гейт R18 → .ssot/<код>-apply-plan.json + шаги MCP
+          MCP: ssot_entity_open → ssot_form_fields → ssot_ui_select /
+               ssot_ui_fill → ssot_form_save (MR создаёт SSoT, отдаёт mrUrl+version)
+          → make ssot-record MR_URL=<mrUrl> VERSION=<version> → .ssot/<код>-MR.url|md
+          → ssot_wait_version → make ssot-verify VERIFY_JSON=- → .ssot/<код>-verify.json
+          severity в SSoT уже совпадает → no_change, MR не создаётся
 
    └─► make finalize              ФИНАЛИЗАЦИЯ (approve_link = thread_link при handoff_status: published)
           catalog.yaml → systems[<код>]: approve_link, assigned_date,
@@ -130,14 +135,16 @@ is.yaml  (что анализируем + ssot.url)
 Канонический порядок — единственный правильный:
 
 ```text
-prepare  →  check (первичный гейт)  →  collect (план сбора)
-         →  research (сбор кандидатов)  →  сбор: SSoT → Confluence → Grafana
-         →  services (клоны сервисов + docs/ и openspec/ → SERVICE-FINDINGS.md)
-         →  check (определение сценария + гейт)
-         →  при BLOCKED: ask (вопросы)  →  ask-answers  →  enrich-apply  →  check
-         →  score (расчёт без записи)  →  start-apply (артефакты)
-         →  validate (+ verify-titles)  →  index
-         →  publish  →  ssot  →  handoff  →  finalize (после подтверждения SRE)
+init  →  ssot-import (снимок карточки ИС из MCP ssot_get)
+      →  prepare (компоненты)  →  check (первичный гейт)  →  collect (план сбора)
+      →  research (сбор кандидатов)  →  сбор: SSoT → Confluence → Grafana
+      →  services (клоны сервисов + docs/ и openspec/ → SERVICE-FINDINGS.md)
+      →  check (определение сценария + гейт)
+      →  при BLOCKED: ask (вопросы)  →  ask-answers  →  enrich-apply  →  check
+      →  score (расчёт без записи)  →  start-apply (артефакты)
+      →  validate (+ verify-titles)  →  index
+      →  publish (dochub-MR)  →  ssot-plan  →  MCP ssot_form_save  →  ssot-record
+      →  ssot-verify  →  handoff  →  finalize (после подтверждения SRE)
 ```
 
 `make verify` — единая точка проверки **всех** результатов: `criteria-check`,
@@ -154,8 +161,9 @@ prepare  →  check (первичный гейт)  →  collect (план сбо
 и его отсутствие не блокирует паспорт.
 
 Термины разграничены: `publish` — MR с паспортом в **dochub**; `ssot` — MR с
-блоком `severity` в **SSoT-репозитории** (ссылается на dochub-MR); `handoff` —
-тред согласования в **`#Criticality_assessment`** со ссылками на оба MR.
+блоком `severity` в **SSoT**, его создаёт MCP-форма (`ssot_form_save` возвращает
+`mrUrl` и `version`); `handoff` — тред согласования в
+**`#Criticality_assessment`** со ссылками на оба MR.
 «Публикация в `#Criticality_assessment`» — это `handoff`, а не `publish`.
 `handoff` — последний этап: `make handoff SEND=auto` собирает текст из текущего
 состояния, печатает его целиком и отправляет ОДНИМ сообщением только после
@@ -174,8 +182,8 @@ prepare  →  check (первичный гейт)  →  collect (план сбо
 3. **оценка критичности** — расчёт (`check` → `start-apply`);
 4. **проверка валидности ВСЕХ результатов** — `make validate` без ERROR и
    `criteria_fingerprint` артефактов = текущим критериям;
-5. **клонирование репозиториев и MR во внешних системах** — `publish-apply`
-   (dochub), затем `ssot-apply` (SSoT);
+5. **внешние изменения** — `publish-apply` (MR в dochub), затем `ssot-plan` →
+   MCP `ssot_form_save` (MR создаёт SSoT) → `ssot-record` → `ssot-verify`;
 6. **тред для публикации** — `handoff` в `#Criticality_assessment`.
 
 Формировать MR до зелёной валидации **запрещено** (`references/rules.md`, R18):
@@ -186,9 +194,9 @@ prepare  →  check (первичный гейт)  →  collect (план сбо
 |------|-----|---------------|-------|
 | Полнота входов | `make check`, `start` | blocking-входы выбранного сценария закрыты, значения в допустимых множествах | `BLOCKED` + `DATA-REQUIREMENTS.*`, расчёт не выполняется |
 | Валидация | `make validate` | 0 ERROR по паспортам и реестру | код ≠ 0, `Результат: FAIL` |
-| Фингерпринт критериев | `make validate` (WARN), `publish`/`ssot` (отказ) | `criteria_fingerprint` в `CRITICALITY.md` = текущим критериям | `ERROR: … criteria_fingerprint не совпадает … make start-apply IS=<код> FORCE=1` |
-| Внешние изменения | `publish`, `publish-apply`, `ssot`, `ssot-apply` | зелёный `validate` + совпавший фингерпринт + закрытые blocking-входы | код 1, причина и следующий шаг в выводе; обход — только `FORCE=1` (`--force`) с WARN и записью в `is/<код>/.gate-overrides.log` |
-| Публикация в тред | `handoff` | в тексте сообщения нет `⛔ не заполнено`, `validate` без ERROR, `thread_link` ещё пуст | код 1 с причиной: список незаполненных полей / ERROR validate / «уже опубликовано»; при `⛔` статус пакета остаётся `pending_manual` |
+| Фингерпринт критериев | `make validate` (WARN), `publish`/`ssot-plan` (отказ) | `criteria_fingerprint` в `CRITICALITY.md` = текущим критериям | `ERROR: … criteria_fingerprint не совпадает … make start-apply IS=<код> FORCE=1` |
+| Внешние изменения | `publish`, `publish-apply`, `ssot-plan`, `ssot-record` | зелёный `validate` + совпавший фингерпринт + закрытые blocking-входы | код 1, причина и следующий шаг в выводе; обход — только `FORCE=1` (`--force`) с WARN и записью в `is/<код>/.gate-overrides.log` |
+| Публикация в тред | `handoff` | в тексте сообщения нет `⛔ не заполнено`, `validate` без ERROR, SSoT-MR записан и подтверждён `ssot-verify` (либо `ssot_status: no_change`), `thread_link` ещё пуст | код 1 с причиной: список незаполненных полей / ERROR validate / SSoT-MR не подтверждён / «уже опубликовано»; при `⛔` статус пакета остаётся `pending_manual` |
 
 Подсказка `next_step` (в `make help`, в `make next-step [IS=<код>]` и после
 каждой команды) знает тот же порядок: `validate` → проверка фингерпринта →
@@ -202,8 +210,9 @@ prepare  →  check (первичный гейт)  →  collect (план сбо
 `enrich`, затем гейт повторяется. Поэтому `services` не может стоять раньше
 `сбор`: клоны сервисов — такой же источник оснований, как Confluence и Grafana,
 и их цитаты должны попасть в лист требований до `enrich`. Финальные этапы
-(`publish` → `ssot` → `handoff`) упорядочены по зависимостям MR: SSoT-MR в
-«Основании» ссылается на dochub-MR, а тред — на оба MR.
+(`publish` → `ssot` → `handoff`) упорядочены по зависимостям: SSoT обогащается
+после публикации паспорта (MR создаёт MCP-форма), а тред ссылается на оба MR —
+dochub и SSoT.
 
 Правило гейта (из `.opencode/skills/criticality-gen/criteria/criticality-criteria.yaml`, `inputs.gate`): если
 хотя бы один blocking-вход выбранного сценария недоступен, расчёт **не
@@ -221,13 +230,13 @@ prepare  →  check (первичный гейт)  →  collect (план сбо
 
 | Шаг | Команда | Что читает | Что пишет | Идемпотентность |
 |-----|---------|------------|-----------|-----------------|
-| 0. Конфиг | `make init` | `is.example.yaml` | `is.yaml`, `.gitignore` | Не перезаписывает существующие файлы (`is.yaml` — только с `FORCE=1`); `.gitignore` дополняется отсутствующими записями (`/ssot/`, `/apps/`, `/dochub/`, бэкапы) |
-| 1. SSoT | `make prepare-apply` | `is.yaml` → `ssot.url` | `ssot/` (clone) / обновляет (`git fetch --prune` + `pull --ff-only`) | `git fetch --prune` + `git pull --ff-only`; повторный прогон без изменений в remote ничего не меняет |
-| 2. Данные ИС | `make prepare-apply` | `ssot/entities/information-systems/<код ИС>/*.yaml`, `catalog.yaml`, `is.yaml` | `is/<код ИС>/INFORMATION.yaml` | Да: файл пишется только если нормализованный текст изменился (`unchanged` иначе) |
+| 0. Конфиг | `make init` | `is.example.yaml` | `is.yaml`, `.gitignore` | Не перезаписывает существующие файлы (`is.yaml` — только с `FORCE=1`); `.gitignore` дополняется отсутствующими записями (`/apps/`, `/dochub/`, `/.dochub/`, бэкапы) |
+| 1. Снимок SSoT | `make ssot-import IS=<код> ENTITY_JSON=-` | ответ MCP `ssot_get` (JSON карточки ИС), при `TEAM_JSON=` — ответ `ssot_team` | `INFORMATION.yaml → ssot_snapshot` (base, components, duty, links, resources, roles) + `contacts` | Да: повторный импорт тех же данных — no-op (`imported_at` сохраняется) |
+| 2. Данные ИС | `make prepare-apply` | `INFORMATION.yaml → ssot_snapshot`, `catalog.yaml`, `is.yaml` | `is/<код ИС>/INFORMATION.yaml` | Да: файл пишется только если нормализованный текст изменился (`unchanged` иначе) |
 | 3. Компоненты | `make prepare-apply` | `components.yaml` → `gitRepository`, `lifecycle` | `apps/<код ИС>/<component_name>/`; закрытые (`lifecycle: closed`) не клонируются | Да: существующий репозиторий → `pull --ff-only`, не пересоздаётся; закрытый компонент печатается как `skip (lifecycle: closed)` |
 | 4. Гейт | `make check` | `is.yaml`, `INFORMATION.yaml`, `criteria/` | `DATA-REQUIREMENTS.md` + `.yaml` для каждой `BLOCKED` ИС | Да: дата листа из `catalog.yaml`, не `now()` |
-| 4a. План сбора | `make collect` / `make collect-apply IS=<код>` | `INFORMATION.yaml`, `catalog.yaml`, SSoT `links.yaml`/`components.yaml`, `criteria/` | `RESEARCH-PLAN.md` для каждой `BLOCKED` ИС | Да: дата плана из `--date`/`catalog.yaml`, не `now()` |
-| 4b. Карта обхода | `make links` / `make links-apply IS=<код>` | SSoT `links.yaml`, `catalog.yaml` (`*_page_id`), `INFORMATION.yaml#components[]`, SSoT `components.yaml`, `criteria/` | `is/<код ИС>/LINK-MAP.md` (контракт обхода) + `LINK-MAP.yaml` (карта: `nodes[]` с `kind`/`ref`/`origin`/`expand`/`candidate_for`/`status`) | Да: дата из `--date`/`catalog.review_date`, `now()` нет; дедупликация по `(вид, ключ адреса, subject)`; повторный `--apply` — `unchanged`; расхождение без `--force` — `CONFLICT` и код 1 |
+| 4a. План сбора | `make collect` / `make collect-apply IS=<код>` | `INFORMATION.yaml`, `catalog.yaml`, снимок SSoT (`ssot_snapshot.links`, `ssot_snapshot.components`), `criteria/` | `RESEARCH-PLAN.md` для каждой `BLOCKED` ИС | Да: дата плана из `--date`/`catalog.yaml`, не `now()` |
+| 4b. Карта обхода | `make links` / `make links-apply IS=<код>` | снимок SSoT (`ssot_snapshot.links`), `catalog.yaml` (`*_page_id`), `INFORMATION.yaml#components[]` (`ssot_snapshot.components`), `criteria/` | `is/<код ИС>/LINK-MAP.md` (контракт обхода) + `LINK-MAP.yaml` (карта: `nodes[]` с `kind`/`ref`/`origin`/`expand`/`candidate_for`/`status`) | Да: дата из `--date`/`catalog.review_date`, `now()` нет; дедупликация по `(вид, ключ адреса, subject)`; повторный `--apply` — `unchanged`; расхождение без `--force` — `CONFLICT` и код 1 |
 | 4c. Приём источников | обход по `LINK-MAP.md` (MCP-агент) → `make sources` / `make sources-apply IS=<код>` | `is/<код ИС>/SOURCES-FINDINGS.yaml`, `LINK-MAP.yaml`, `INFORMATION.yaml`, `criteria/` | `INFORMATION.yaml#criteria_inputs` (`status: confirmed`, с бэкапом) + статусы узлов `LINK-MAP.yaml` | Да при тех же фактах; проверки те же, что у гейта/`enrich`; любое отклонение — код 1 (принятые при этом записываются); в dry-run файлы не меняются |
 | 4d. Сбор | MCP Confluence + MCP Grafana (по плану и карте) | дерево страниц ИС, панели трафика папки E001 | `SOURCES-FINDINGS.yaml` (заполняет агент), `DATA-REQUIREMENTS.yaml` (человек) | — (внешние системы только читаются) |
 | 4e. Код сервисов | `make services` / `make services-apply IS=<код>` | `INFORMATION.yaml#components[]` (`git_repository`, `lifecycle`), клоны `apps/<код ИС>/<сервис>/` (`docs/`, `openspec/`, SLO-конфиги) | `apps/<код ИС>/<сервис>/` (clone/pull) + `is/<код ИС>/SERVICE-FINDINGS.md` | Да: дата отчёта из `--date`/`catalog.review_date`, не `now()`; закрытые сервисы пропускаются; `NO_CLONE=1` (`--no-clone`) не вызывает git — отсутствующие клоны идут в §2 отчёта |
@@ -235,26 +244,27 @@ prepare  →  check (первичный гейт)  →  collect (план сбо
 | 5. Генерация | `make start` / `make start-apply` | `INFORMATION.yaml`, `criteria/`, `.opencode/skills/criticality-gen/templates/`, `catalog.yaml` | артефакты ИС | Да при одинаковых входах и `--date`: побайтово одинаковый результат; паспорт и `CRITICALITY.md` без `--force` не перезаписываются |
 | 6. Валидация | `make validate` | `catalog.yaml`, паспорта, `CRITICALITY.md` | ничего (stdout) | Да; просрочка считается по `due_date = review_date + период переоценки`, где `review_date` **из реестра** (паспорт — копия), поэтому дата генерации её не маскирует |
 | 7. Публикация | `make publish` / `make publish-apply IS=<код> TASK=<key>` | `is/<код ИС>/criticality-passport.yaml`, схема клона dochub (`_metamodel_/`), `<папка ИС>/system.yaml`, `criteria/` | в клоне dochub: `architecture/app/<контур>/<сущность>/criticality_passport.yaml`, импорт в `_root.yaml`, ветка `feature/<task>` + коммит, `.publish/<код>-MR.md` | Да при том же входе: паспорт и `_root.yaml` рендерятся детерминированно; повторный запуск упирается в существующую ветку и просит `--branch`; `.publish/` грязью не считается |
-| 8. Обогащение SSoT | `make ssot` / `make ssot-apply IS=<код> TASK=<key>` | `is/<код ИС>/criticality-passport.yaml`, `catalog.yaml` (`criticality_ssot`, `approve_link`), `criteria/levels.ssot_enum`, клон `ssot/`, dochub-MR из шага 7 | в клоне SSoT: `entities/information-systems/<код>/base.yaml` (только блок `severity`), ветка `feature/<task>` + коммит, `.ssot/<код>-MR.md`; в `catalog.yaml` → `systems.<код>.ssot_status` (`no_change` / `mr_pending` / `mr_created`) | Да при том же входе: точечная правка сохраняет остальное содержимое файла байт в байт; расхождений нет — `изменений нет`, ветка и коммит не создаются, `ssot_status: no_change` (в публикации — «не требуется», а не `⛔`); `.ssot/` грязью не считается |
+| 8. Обогащение SSoT | `make ssot-plan IS=<код>` → MCP-форма → `make ssot-record IS=<код> MR_URL=<mrUrl> VERSION=<version>` → `make ssot-verify IS=<код> VERIFY_JSON=-` | `is/<код ИС>/criticality-passport.yaml`, `catalog.yaml` (`criticality_ssot`, `approve_link`), `criteria/levels.ssot_enum`, `INFORMATION.yaml → ssot_snapshot` (текущий `severity`), ответы MCP `ssot_form_save` / `ssot_verify_change` | `.ssot/<код>-apply-plan.json` (план и шаги MCP), MR SSoT с изменёнными `severity.type`/`severity.confirmation` (MR создаёт SSoT), `.ssot/<код>-MR.url`, `.ssot/<код>-MR.md`, `.ssot/<код>-verify.json`; в `INFORMATION.yaml` — `ssot_status`, `ssot_mr_url`, `ssot_version`, `ssot_can_apply`, `ssot_recorded_at`, `ssot_snapshot.verified`; в `catalog.yaml` → `systems.<код>.ssot_status` (`no_change` / `mr_pending` / `mr_created` / `mr_verified` / `mr_unverified`) | Да: повторный `ssot-record` с тем же `mrUrl`/`version` — no-op; `ssot-plan` при совпавшем `severity` пишет `no_change` и MR не создаётся (в публикации — «не требуется», а не `⛔`); `ssot-verify` перезаписывает `.ssot/<код>-verify.json` |
 | 9. Индекс | `make index` | `catalog.yaml` + паспорта | `INDEX.md` (блок между маркерами) | Да при той же `--date`; `review_date` — из реестра |
 | 9a. Тред | `make handoff IS=<код> SEND=auto` / `make handoff-result IS=<код> MESSAGE_URL=<url>` | `is/<код>/actions/rocketchat-message.md` (тот же рендер `publication.md`), паспорт, `catalog.yaml`, `.dochub/`/`.ssot/` (ссылки на MR) | `catalog.yaml → systems.<код>`: `handoff_mode`, `handoff_status`, `thread_link`, `approve_link` (= `thread_link`), `published_at`, `handoff_error`, `handoff_deadline`, `fallback_reason`, `transport_used`; `is/<код>/.handoff-request.json` при транспорте MCP | Да: повторная отправка при заполненном `thread_link` запрещена (`--force-resend` — осознанный обход); `approve_link` = тред согласования, подтверждение — мерж MR |
 
 `make prepare` — это **dry-run**: печатает план, git-команды и итоговую таблицу,
 ничего не пишет и не ходит в сеть. `make prepare-apply` выполняет то же самое с
-записью. Флаг `--no-clone` (`NO_CLONE=1`) полностью отключает git-операции —
-полезно на машине без доступа к `git.ecom.tech` и в тестах.
+записью. Флаг `--no-clone` (`NO_CLONE=1`) полностью отключает git-операции по
+компонентам — полезно на машине без доступа к `git.ecom.tech` и в тестах.
 
-**`prepare-apply` без SSoT не пишет и падает.** Если `ssot/` отсутствует или
-пуст, команда печатает
-`ERROR: prepare: нет клона SSoT (ssot/) — данные ИС не обновлены; выполните make prepare-apply после клонирования`
+**`prepare-apply` без снимка SSoT не пишет и падает.** Если
+`INFORMATION.yaml → ssot_snapshot` пуст, команда печатает
+`ERROR: prepare: нет данных SSoT — данные ИС не обновлены; импортируйте снимок: criticality.py ssot-import --is <код> --entity-json -`
 и возвращает ненулевой код; `INFORMATION.yaml` не изменяется (ни один файл, ни
-`components`, ни `resources`). Раньше в этом состоянии автоматические секции
-молча превращались в пустые — это была потеря данных.
+`components`, ни `resources`). Снимок приносит только MCP (`ssot_get`); клона
+SSoT нет. Раньше в этом состоянии автоматические секции молча превращались в
+пустые — это была потеря данных.
 
-**Секция, отсутствующая в SSoT, сохраняется.** Если в SSoT нет файла/ключа для
-секции (`components.yaml`, `resources.yaml`, `duty.yaml`, `links.yaml`,
-`roles.yaml`, `base.yaml`), `prepare` оставляет в `INFORMATION.yaml` прежнюю
-версию секции и печатает
+**Секция, отсутствующая в снимке, сохраняется.** Если в снимке SSoT нет
+файла/ключа для секции (`components.yaml`, `resources.yaml`, `duty.yaml`,
+`links.yaml`, `roles.yaml`, `base.yaml`), `prepare` оставляет в
+`INFORMATION.yaml` прежнюю версию секции и печатает
 `WARN: секция <имя> отсутствует в SSoT — сохранена прежняя версия (N записей)`.
 Очистить такие секции можно только осознанно — `--allow-empty-sections`
 (тогда печатается число удалённых записей). Dry-run печатает те же сведения:
@@ -270,15 +280,15 @@ prepare  →  check (первичный гейт)  →  collect (план сбо
 
 | Флаг | Смысл |
 |------|-------|
-| `--dry-run` (по умолчанию) | ничего не пишет, git не вызывает; печатает, какие секции были бы сохранены из-за отсутствия в SSoT |
-| `--apply` | пишет `INFORMATION.yaml`, выполняет `git clone` / `git fetch --prune` + `git pull --ff-only`; компоненты с `lifecycle: closed` не клонируются (печатается `skip (lifecycle: closed)`) |
-| `--no-clone` | не выполнять никаких git-операций (ни `ssot/`, ни `apps/`) |
+| `--dry-run` (по умолчанию) | ничего не пишет, git не вызывает; печатает, какие секции были бы сохранены из-за отсутствия в снимке SSoT |
+| `--apply` | пишет `INFORMATION.yaml`, для компонентов выполняет `git clone` / `git fetch --prune` + `git pull --ff-only`; компоненты с `lifecycle: closed` не клонируются (печатается `skip (lifecycle: closed)`) |
+| `--no-clone` | не выполнять git-операции по компонентам (`apps/`) |
 | `--is <код>` | обработать одну ИС, например `--is erm.mm` |
 | `--force-overwrite` | перезаписать `INFORMATION.yaml`, даже если он не разобран (ручные секции будут потеряны — только осознанно) |
-| `--allow-empty-sections` | разрешить очищать автоматические секции, отсутствующие в SSoT (по умолчанию сохраняется прежняя версия); печатает число удалённых записей |
+| `--allow-empty-sections` | разрешить очищать автоматические секции, отсутствующие в снимке SSoT (по умолчанию сохраняется прежняя версия); печатает число удалённых записей |
 | `--no-backup` | не создавать `INFORMATION.yaml.bak-<дата>` перед записью |
 
-Перед обновлением существующего клона (и `ssot/`, и компонентов в `apps/`)
+Перед обновлением существующего клона компонента (`apps/`)
 выполняется `git fetch --prune`, затем `git pull --ff-only`. Ветка не
 переключается: `checkout`/`reset`/`clean` запрещены git-allowlist'ом скилла
 (`clone`, `pull`, `fetch`, `rev-parse`, `log`, `status`, `show`, `diff`,
@@ -469,7 +479,7 @@ action-пакета (`pending_manual` → `requested`) и добавляют в 
 | Выход | `SERVICE-FINDINGS.md`: §1 сервисы (репозиторий, ветка, `docs/`, `openspec/`, SLO-конфиг), §2 пропущенные по `lifecycle`, §3 назначение и потребители, §4 нормативы, §5 потоки, §6 «вход → основание», §7 «не найдено», §8 ограничение |
 | Гейт | каждый компонент с `git_repository` попал в таблицу сервисов, в «не найдено» или в «пропущенные»; ошибка клонирования зафиксирована; ничего не собрано и не запущено |
 
-**Порядок источников:** `docs/`/`openspec/` клона → Confluence → SSoT.
+**Порядок источников:** `docs/`/`openspec/` клона → Confluence → снимок SSoT.
 Документация клона — основная по назначению, потребителям и заявленным
 нормативам; Confluence нужен, когда в клоне пусто или требуется подтверждение.
 Цитата из клона — основание, а не подтверждённое значение: `SERVICE-FINDINGS.md`
@@ -506,7 +516,7 @@ allowlist (`clone`, `pull`, `fetch`, `rev-parse`, `log`, `status`, `show`,
 |-----------------|----------------|
 | что это и зачем нужно | `inputs.required` критериев (`title`, `role`, `method`) |
 | какие значения допустимы | `enum_selection` / `time_buckets` — enum раскрывается **дословно**, всеми значениями |
-| что уже найдено и откуда | `is/<код ИС>/CANDIDATES.yaml` (`strong`) → §6 `SERVICE-FINDINGS.md` («из кода», `weak`) → SSoT `base.yaml`/`links.yaml` (`weak`) |
+| что уже найдено и откуда | `is/<код ИС>/CANDIDATES.yaml` (`strong`) → §6 `SERVICE-FINDINGS.md` («из кода», `weak`) → снимок SSoT (`ssot_snapshot.base`, `ssot_snapshot.links`, `weak`) |
 | что ответить | варианты: взять кандидата, ввести своё значение, указать ссылку на страницу, ввести произвольный текст, отказаться от данных (`waive`, R17; у advisory — оставить пустым), исключить ИС (`--reason`) |
 
 Кандидат из кода — **основание**, а не значение: если цитата не содержит
@@ -534,7 +544,7 @@ make check (первичный гейт)
    │                        │
    │                        ▼
    │                  make links-apply     LINK-MAP.md + LINK-MAP.yaml
-   │                        │  карта ссылок: SSoT links.yaml, catalog, компоненты
+   │                        │  карта ссылок: снимок SSoT (links), catalog, компоненты
    │                        ▼
    │                  обход по LINK-MAP.md  MCP Confluence + MCP Grafana
    │                        │  агент → SOURCES-FINDINGS.yaml (findings + not_found)
@@ -666,9 +676,14 @@ systems:
 **Предусловия** (любое нарушение — код 1, до любой отправки):
 
 1. в тексте нет `⛔ не заполнено` в обязательных полях
-   (`_publication_missing_fields`: TA, MR паспорта, ссылка на SSOT);
-2. `validate` по этой ИС без ERROR (тот же гейт, что у `publish`/`ssot`);
-3. сообщение ещё не опубликовано: `thread_link` пуст. Повтор запрещён
+   (`_publication_missing_fields`: TA, MR паспорта, ссылка на SSOT); строка
+   `не требуется: …` (при `ssot_status: no_change`) — заполненное поле, не дыра;
+2. `validate` по этой ИС без ERROR (тот же гейт, что у `publish`/`ssot-plan`);
+3. SSoT-MR записан и подтверждён: `.ssot/<код>-MR.url` есть, а
+   `ssot_snapshot.verified.matched: true` после `ssot-verify` (либо
+   `ssot_status: no_change`). Иначе `ERROR: handoff … заблокирован — SSoT-MR не
+   подтверждён` и подсказка `make ssot-verify IS=<код> VERIFY_JSON=-`;
+4. сообщение ещё не опубликовано: `thread_link` пуст. Повтор запрещён
    (идемпотентность), `--force-resend` — осознанный обход.
 
 **Два транспорта.**
@@ -786,8 +801,7 @@ REST тоже недоступен (нет токена/`X-User-Id`, 401/403/404
 ├── Makefile                    # фасад: цели в .opencode/Makefile
 ├── is.yaml                     # вход: список ИС + ssot.url (gitignored)
 ├── is.example.yaml             # шаблон is.yaml (в репозитории)
-├── .gitignore                  # создаётся make init: ssot/, apps/, dochub/, .dochub/, бэкапы
-├── ssot/                       # клон SSoT-репозитория (gitignored, создаётся prepare-apply)
+├── .gitignore                  # создаётся make init: apps/, dochub/, .dochub/, бэкапы
 ├── apps/                       # клоны компонентов ИС (gitignored; prepare-apply / services-apply)
 │   └── <код ИС>/<сервис>/      # только чтение: сборка и запуск запрещены
 ├── .opencode/                  # инструмент: переносится целиком, данные не содержит
@@ -799,7 +813,7 @@ REST тоже недоступен (нет токена/`X-User-Id`, 401/403/404
 │       ├── install.sh          # установка в другой проект
 │       ├── references/         # workflow, data-sources, rules, artifacts, dependencies, failure-modes, checklist
 │       ├── scripts/
-│       │   └── criticality.py  # CLI: init/prepare/validate/index/due/scaffold/reassess/show/score/check/requirements/collect/links/sources/services/enrich/start
+│       │   └── criticality.py  # CLI: init/prepare/validate/index/due/scaffold/reassess/show/score/check/requirements/collect/links/sources/services/enrich/start/publish/ssot-import/ssot-plan/ssot-record/ssot-verify
 │       ├── criteria/
 │       │   └── criticality-criteria.yaml
 │       └── templates/
@@ -821,7 +835,7 @@ REST тоже недоступен (нет токена/`X-User-Id`, 401/403/404
 └── is/
     └── <код ИС>/              # например is/erm.mm/, is/cc-exchanger.smkt/
         ├── README.md           # make scaffold: ссылки на Confluence и GitLab ИС
-        ├── INFORMATION.yaml    # данные ИС из SSoT + ручные входы критериев и facts
+        ├── INFORMATION.yaml    # снимок карточки ИС (ssot_snapshot) + ручные входы критериев и facts
         ├── criticality-passport.yaml
         ├── CRITICALITY.md
         ├── GENERATION.md       # после первого успешного make start
@@ -842,7 +856,7 @@ REST тоже недоступен (нет токена/`X-User-Id`, 401/403/404
 |------|-------|--------|
 | `is/<код ИС>/INFORMATION.yaml` | **да, коммитится** | ручной слой данных с провенансом (`criteria_inputs`, `facts`, `conflicts`, `notes`); потеря файла = потеря данных |
 | `is/<код ИС>/` (остальное) | да | паспорт, `CRITICALITY.md`, `GENERATION.md`, action-пакеты, `DATA-REQUIREMENTS.*` — артефакты оценки |
-| `ssot/` | нет (gitignored) | клон внешнего SSoT-репозитория, воспроизводится `prepare --apply` |
+| `.ssot/` | да | локальные артефакты этапа SSoT: план, ссылка на MR, описание MR, результат проверки (`ssot-plan`/`ssot-record`/`ssot-verify`) |
 | `apps/` | нет (gitignored) | клоны компонентов ИС, воспроизводятся `prepare --apply` / `services --apply`; только чтение |
 | `is.yaml` | нет (gitignored) | локальный конфиг (список ИС + `ssot.url`); шаблон — `is.example.yaml` |
 
@@ -926,8 +940,9 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
 
 ## 4. `INFORMATION.yaml`: что внутри
 
-Файл — единственный слой данных между SSoT и паспортом. Он собирается
-`prepare` и **дополняется руками**; больше ниоткуда паспорт числа не берёт.
+Файл — единственный слой данных между SSoT и паспортом. Снимок карточки ИС пишет
+`ssot-import`, автоматические секции собирает `prepare`, вручную файл
+**дополняется**; больше ниоткуда паспорт числа не берёт.
 
 | Секция | Кто пишет | Что содержит |
 |--------|-----------|--------------|
@@ -940,7 +955,9 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
 | `duties` | prepare | дежурные (из `duty.yaml`) |
 | `links` | prepare | навигационные ссылки (из `links.yaml`) |
 | `roles` | prepare | ролевая модель (из `roles.yaml`) |
-| `ssot_snapshot` | prepare | дословно распарсенные файлы SSoT — для провенанса и разбора расхождений |
+| `ssot_snapshot` | `ssot-import` | снимок карточки ИС из ответа MCP `ssot_get`: `base` (в нём `severity`), `components`, `duty`, `links`, `resources`, `roles`, `source: mcp`, `commit`, `version`, `imported_at`, `verified {matched, ref, commit, actual, checked_at}` |
+| `ssot_status` | `ssot-plan` / `ssot-record` / `ssot-verify` | статус этапа SSoT: `no_change` (severity уже совпадает), `mr_pending` (план есть, MR ещё не создан), `mr_created` (`mrUrl` записан `ssot-record`), `mr_verified` / `mr_unverified` (по `ssot-verify`) |
+| `ssot_mr_url`, `ssot_version`, `ssot_can_apply`, `ssot_recorded_at` | `ssot-record` | факты созданного MR: ссылка и версия из `ssot_form_save`, признак `canApply`, метка записи |
 | `criteria_inputs` | **руками** | значения входов критериев + `source` + `status` |
 | `facts` | **руками** | обогащение паспорта: `impact_chain`, `e2e_processes`, `dependencies` (upstream/downstream), `data_classification`, `risks`, `support`, `adr`, `decision_log` |
 | `conflicts` | **руками** | зафиксированные расхождения `{ field, values, chosen, rule, status }` |
@@ -948,8 +965,9 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
 
 Правила:
 
-1. **Автоматические секции авторитетны.** `identity` берётся из SSoT; если
-   значение в SSoT неверное — правьте SSoT, а не `INFORMATION.yaml`. Ручная
+1. **Автоматические секции авторитетны.** `identity` берётся из снимка SSoT; если
+   значение в SSoT неверное — правьте карточку в SSoT (MCP-форма:
+   `ssot_entity_open` → `ssot_form_save`), а не `INFORMATION.yaml`. Ручная
    правка автоматической секции будет затёрта следующим `prepare-apply`.
 2. **Ручные секции неприкосновенны.** `criteria_inputs`, `facts`, `conflicts`, `notes`
    переживают любой `prepare-apply`: `prepare` читает существующий файл и
@@ -986,7 +1004,7 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
 
 | `type` | Что означает | Пример `ref` |
 |--------|--------------|--------------|
-| `ssot` | файл SSoT-репозитория | `ssot/entities/information-systems/erm.mm/base.yaml#criticality` |
+| `ssot` | файл карточки ИС в снимке SSoT | `entities/information-systems/erm.mm/base.yaml#severity.type` |
 | `is_yaml_override` | переопределение из локального `is.yaml` | `is.yaml#is.erm.mm` |
 | `catalog` | поле реестра этого репозитория | `catalog.yaml#systems.erm.mm` |
 | `confluence` | страница Confluence: `page_id` и раздел | `https://space.samokat.ru/pages/viewpage.action?pageId=3925149771` |
@@ -994,7 +1012,7 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
 | `jira` | задача | `E001-1234` |
 | `grafana` | дашборд, панель, точный запрос | `dashboard uid=ermmm_20250813_2, panel 64, expr: sum(rate(...[5m]))` |
 | `attachment` | вложение Confluence (таблица, выгрузка, калькулятор) | `docs/reference/calculator/калькулятор критичности упрощенный.xlsx` |
-| `ssot_links` | ссылка из карточки ИС в SSoT (`links.yaml`) | `ssot/entities/information-systems/erm.mm/links.yaml` |
+| `ssot_links` | ссылка из карточки ИС в снимке SSoT (`links.yaml`) | `entities/information-systems/erm.mm/links.yaml` |
 | `manual` | ручное значение, подтверждённое человеком | `manual` + `status: confirmed` |
 
 Порядок и состав списка — канон [4567212024](https://space.samokat.ru/pages/viewpage.action?pageId=4567212024);
@@ -1013,13 +1031,14 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
 (`references/rules.md`). Пересказ источника, «по аналогии с другой ИС» и
 «обычно так» решением владельца не являются — это R1-нарушение.
 
-### 4.3. Маппинг SSoT → `INFORMATION.yaml`
+### 4.3. Маппинг снимка SSoT → `INFORMATION.yaml`
 
-Автоматические секции собираются детерминированно: одно и то же поле SSoT
-всегда попадает в одно и то же поле `INFORMATION.yaml`, а провенанс
-записывается рядом (`{ type, ref }` или `*_source`).
+Автоматические секции собираются детерминированно: одно и то же поле снимка
+SSoT (`INFORMATION.yaml → ssot_snapshot`) всегда попадает в одно и то же поле
+`INFORMATION.yaml`, а провенанс записывается рядом (`{ type, ref }` или
+`*_source`).
 
-| Поле `INFORMATION.yaml` | Источник SSoT | Провенанс |
+| Поле `INFORMATION.yaml` | Источник в снимке SSoT | Провенанс |
 |-------------------------|---------------|-----------|
 | `identity.name` | `base.yaml → title` | `name_source: {type: ssot, ref: "…/base.yaml#title"}` |
 | `identity.product` | `base.yaml → other.product` (или `is.yaml → is.<код>.product`) | `product_source: {type: ssot\|is_yaml_override, ref: "…/base.yaml#other.product" \| "is.yaml#is.<код>.product"}` |
@@ -1083,11 +1102,11 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
 | Ситуация | Поведение |
 |----------|-----------|
 | Нет `is.yaml` | `ERROR: нет is.yaml — выполните make init`, код возврата 1 |
-| Нет `ssot/` (dry-run) | `ERROR: нет ssot/` + точная команда `git clone <ssot.url> ssot`, код 1 |
-| Нет `ssot/` (с `--apply`) | `prepare` клонирует `ssot.url` сам |
-| Нет `ssot/` (с `--no-clone`) | `WARN`, работа только с `catalog.yaml`; `INFORMATION.yaml` собирается с пустым `ssot_snapshot` и полным `meta.missing_sources` |
-| Нет части файлов SSoT | не падение: отсутствующие refs пишутся в `meta.missing_sources`, счётчик в отчёте показывает `n/6` |
-| Файл SSoT не разобран | `WARN <ref>: <ошибка>` в консоль и в итоговую таблицу (счётчик `unreadable`), ref и текст ошибки — в `meta.unreadable_sources`; прогон продолжается |
+| Нет снимка SSoT (`ssot_snapshot` пуст) | `ERROR: prepare: нет данных SSoT — данные ИС не обновлены; импортируйте снимок: criticality.py ssot-import --is <код> --entity-json -`, код 1; `INFORMATION.yaml` не изменяется (dry-run печатает то же, файлы не пишутся) |
+| Снимок SSoT не импортирован у одной ИС | в отчёте `ERROR (нет в SSoT)`, `0/6` секций; файл этой ИС не обновляется, остальные обрабатываются; снимок приносит MCP `ssot_get` → `make ssot-import` |
+| Кода ИС нет в снимке | `ERROR: нет данных SSoT — ИС <код> не импортирована`, код 1: пустой скелет маскировал бы опечатку в коде |
+| Нет части секций снимка SSoT | не падение: отсутствующие refs пишутся в `meta.missing_sources`, счётчик в отчёте показывает `n/6` |
+| Секция снимка не разобрана | `WARN <ref>: <ошибка>` в консоль и в итоговую таблицу (счётчик `unreadable`), ref и текст ошибки — в `meta.unreadable_sources`; прогон продолжается |
 | Нет `catalog.yaml` | `WARN`; `arch_code` остаётся `null` |
 | Компонент без `gitRepository` | `clone_status: not_cloned`, `cloned_to` заполнен, ошибки нет |
 | Каталог компонента занят не-git-папкой | `clone_status: error` + запись в отчёте, прогон не прерывается |
@@ -1097,7 +1116,7 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
 | Нет blocking-входа выбранного сценария | `make check` → `BLOCKED` и ненулевой код (CLI → 1, make → 2); создаются `DATA-REQUIREMENTS.md`/`.yaml`; `make start` → `BLOCKED`, артефакты не пишутся |
 | Неполный сложный сценарий | `BLOCKED` без фолбэка на простой: перечень недостающих входов сложного набора |
 | Нет `RESEARCH-PLAN.md` при `BLOCKED` | `make collect-apply IS=<код>` создаёт план; ИС без папки и `SKIPPED` план не получают |
-| Нет `LINK-MAP.yaml` при `links.yaml` в SSoT | `make links-apply IS=<код>` создаёт карту; расхождение с существующей картой без `--force` — `CONFLICT` и код 1, файлы не меняются |
+| Нет `LINK-MAP.yaml` при `links` в снимке SSoT | `make links-apply IS=<код>` создаёт карту; расхождение с существующей картой без `--force` — `CONFLICT` и код 1, файлы не меняются |
 | Нет `SOURCES-FINDINGS.yaml` для `make sources` | `ERROR: нет SOURCES-FINDINGS.yaml — сначала выполните обход по LINK-MAP.md`, код 1; файлы не меняются |
 | Факт в `SOURCES-FINDINGS.yaml` отклонён | `sources` печатает причину (вход не из `criteria.inputs.required`, значение вне множества, `source.type` вне провенанса, пустой `evidence`, `node` не из карты), код 1; принятые факты при `--apply` записываются |
 | Нет `SERVICE-FINDINGS.md` | `make services-apply IS=<код>` создаёт отчёт; ИС без папки и `SKIPPED` отчёт не получают |
@@ -1114,9 +1133,9 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
 
 | Пункт `INFORMATION.md` | Реализация |
 |------------------------|------------|
-| 1. Клонировать `ssot` по `ssot.url`, если есть — `pull` на master | `prepare --apply`: `git clone <url> ssot` либо `git -C ssot fetch --prune` + `git pull --ff-only` в текущей ветке (ветка не переключается: `checkout` запрещён allowlist'ом); если pull невозможен — `WARN` |
+| 1. Снимок карточки ИС из SSoT | `make ssot-import IS=<код> ENTITY_JSON=-`: ответ MCP `ssot_get` → `INFORMATION.yaml → ssot_snapshot`; клон и сеть не нужны; повторный импорт тех же данных — no-op |
 | 2. Создать структуру `is/<код ИС>/` по списку из `is:` | `prepare --apply` создаёт `is/<код ИС>/` — каноническая раскладка (совпадает со спецификацией `is/<код ИС>/`); `is/<контур>/<name_is>/` поддержана как legacy с WARN (см. §3.2) |
-| 3. В каждой папке ИС — `INFORMATION.yaml` со всеми данными из SSoT и переопределениями | `prepare --apply` собирает `INFORMATION.yaml` из шести файлов SSoT; `product`/`teamName` из `is.yaml` переопределяют SSoT и помечаются `*_source: override`. Неразобранный файл не перезаписывается (`--force-overwrite`) |
+| 3. В каждой папке ИС — `INFORMATION.yaml` со всеми данными из SSoT и переопределениями | `prepare --apply` собирает `INFORMATION.yaml` из снимка (`ssot_snapshot`: шесть секций); `product`/`teamName` из `is.yaml` переопределяют снимок и помечаются `*_source: override`. Неразобранный файл не перезаписывается (`--force-overwrite`) |
 | 4. `apps/<код ИС>/<component_name>` — клоны компонентов из `components.yaml` | `prepare --apply` клонирует по полю `gitRepository` в `apps/<код ИС>/<component_name>`; существующий репозиторий обновляется `fetch --prune` + `pull --ff-only`; компонент с `lifecycle: closed` пропускается (`skip (lifecycle: closed)`) |
 | 5. Проверка достаточности данных для расчёта | `make check` — единая функция `evaluate_gate`: читает `inputs.required` (с `method`/`blocking`), `status` и **значения** входов, выбирает метод |
 | 6. Если хотя бы один критерий недоступен — последующие команды возвращают ошибку | `check` strict по умолчанию → `BLOCKED` и код 1 (make → 2); `--diagnostic` — только для отладки (код 0); `score --is` → `incomplete` + код 1; `start` → `BLOCKED` и артефакты не пишутся |
@@ -1124,7 +1143,7 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
 | `/criticality_gen check` стартует подготовку данных | `make check-prepare` = `prepare --apply` + гейт (с `--no-clone` при `NO_CLONE=1`). `make check` — только гейт (read-only), `make check-diag` — гейт в диагностическом режиме |
 | `/criticality_gen start` рендерит файлы в папке ИС `is/<код ИС>/` | `make start` (dry-run) / `make start-apply` (запись): паспорт, `CRITICALITY.md`, `GENERATION.md`, action-пакеты — в `is/<код ИС>/` (см. `INFORMATION.md` §«Артефакты») |
 | Флаги `--create-task`, `--create-confluence`, `--create-message` | Внешние системы по умолчанию не трогаются: готовятся action-пакеты для ручного выполнения. Флаг меняет статус пакета на `requested` и попадает в отчёт как «выполнить агенту через MCP» |
-| SSoT: `entities/information-systems/<is>/{base,components,duty,links,resources,roles}.yaml` | Прочитаны все шесть; отсутствующие фиксируются в `meta.missing_sources` |
+| SSoT: снимок карточки ИС (`ssot_get`) → `ssot_snapshot.{base,components,duty,links,resources,roles}` | Прочитаны все шесть секций снимка; отсутствующие фиксируются в `meta.missing_sources` |
 | SSoT: `products/<product>/{base,links}.yaml`, `teams/<team>/team.yaml`, `schemas/` | Пока не читаются: продукт и команда берутся из `base.yaml` ИС и переопределений `is.yaml`. Подключение — при необходимости обогащения паспорта |
 | Команды вызываются как `/criticality_gen ...` | В репозитории — `python3 .opencode/skills/criticality-gen/scripts/criticality.py <команда>` и цели `make`; скилл-обёртка — отдельный слой |
 
@@ -1144,8 +1163,9 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
    `teamName`. Любой другой ключ в `is.yaml` → `ERROR` (чтобы опечатка не
    терялась молча).
 4. **`ssot_snapshot`.** `INFORMATION.md` не описывает хранение исходных данных;
-   здесь они сохраняются дословно, чтобы любое поле паспорта можно было
-   проследить до источника.
+   здесь снимок карточки ИС (ответ MCP `ssot_get`) сохраняется в
+   `INFORMATION.yaml → ssot_snapshot` дословно, чтобы любое поле паспорта можно
+   было проследить до источника.
 
 ## 7. Типовой сценарий
 
@@ -1156,13 +1176,15 @@ WARN: erm.mm: используется legacy-раскладка is/mm/erm/ (к�
 Что специфично для подготовки данных:
 
 - `make init` создаёт каркас (`is.yaml`, `catalog.yaml`, `INDEX.md`, `is/`) и
-  `.gitignore` с записями `/ssot/`, `/apps/`, `/dochub/` и бэкапами: клоны не
+  `.gitignore` с записями `/apps/`, `/dochub/`, `/.dochub/` и бэкапами: клоны не
   попадают в `git add -A` (существующий `.gitignore` только дополняется);
   список ИС и `ssot.url` заполняются в `is.yaml`.
-- `make prepare-apply` пишет только автоматические секции `INFORMATION.yaml`;
-  ручные (`criteria_inputs`, `facts`, `conflicts`, `notes`) переносятся дословно.
+- `make ssot-import` пишет снимок карточки ИС (ответ MCP `ssot_get`) в
+  `INFORMATION.yaml → ssot_snapshot`; `make prepare-apply` пишет только
+  автоматические секции, ручные (`criteria_inputs`, `facts`, `conflicts`,
+  `notes`) переносятся дословно.
 - `is/<код ИС>/INFORMATION.yaml` — версионируемый ручной слой: он коммитится в
-  git; `ssot/`, `apps/`, `is.yaml` — нет.
+  git; `apps/`, `is.yaml` — нет.
 
 ## 8. Связанные документы
 

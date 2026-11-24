@@ -3,7 +3,7 @@ title: Процесс оценки критичности ИС (D6.1.1)
 purpose: Описать процесс D6.1.1 — зачем оценивать критичность, кто участвует, какие шаги и триггеры обязательны.
 audience: [ai-agent, human]
 read_when: [первая работа с репозиторием, вопрос «зачем нужен паспорт», поиск ответственного за оценку]
-updated: 2026-11-12
+updated: 2026-11-24
 status: actual
 related: [02-methodology.md, 04-reassessment.md, 05-mapping.md]
 ---
@@ -20,7 +20,7 @@ related: [02-methodology.md, 04-reassessment.md, 05-mapping.md]
 
 - Оценка критичности обязательна: без заполненного и подтверждённого паспорта ИС не переводится в development.
 - Процесс даёт два результата: уровень в dochub (5 значений) и уровень в карточке SSoT (3 значения).
-- Первичная оценка — 5 шагов: данные → бизнес-скоринг → ИБ (CIA) → фиксация в паспорте и MR → подтверждение SRE.
+- Первичная оценка — 5 шагов: данные → бизнес-скоринг → ИБ (CIA) → фиксация в паспорте и dochub-MR → обогащение карточки SSoT через MCP и подтверждение SRE.
 - Календарного срока переоценки процесс D6.1.1 не задаёт; 12 месяцев — конвенция этого репозитория.
 - Спорные оценки разрешает системный архитектор продукта.
 
@@ -68,7 +68,7 @@ related: [02-methodology.md, 04-reassessment.md, 05-mapping.md]
 | **TL** (технический лидер ИС) | Собирает данные, считает последствия, готовит паспорт и MR | Раздел «последствия» и E2E-процессы |
 | **PdM** (продукт) | Подтверждает тип клиентов, влияние при простое, перечень E2E-процессов | Продуктовые поля паспорта |
 | **Инженер SRE** | Проверяет SLA/RTO/RPO, CIA и уровень защищённости, подтверждает итог в треде | Итоговая критичность (подтверждение) |
-| **Интеграция SSoT-Dochub** | Переносит подтверждённую критичность в карточку ИС SSoT | Соответствие dochub ↔ SSoT |
+| **Интеграция SSoT-Dochub** | Переносит подтверждённую критичность в карточку ИС SSoT через MCP-форму (`ssot_entity_open` → `ssot_form_save`); MR создаёт SSoT | Соответствие dochub ↔ SSoT |
 | **Системный архитектор продукта** | Разрешает спорные случаи, следит за консистентностью между ИС | Спорные оценки |
 
 Текущий системный архитектор продукта E001 — Рожков Руслан Александрович.
@@ -81,10 +81,32 @@ related: [02-methodology.md, 04-reassessment.md, 05-mapping.md]
 | 2 | Экспресс-оценка последствий: скоринг 0–4 по 4 осям, один сценарий отказа | TL | PdM | Оценка по бизнес-матрице |
 | 3 | Оценка ИБ: CIA, `V = 6·(F(C)+F(I)+F(A))`, уровень защищённости | SRE | ИБ | Уровень защищённости |
 | 4 | Зафиксировать: `criticality-passport.yaml` + `CRITICALITY.md` + MR в dochub с меткой `criticality` | TL | — | MR в `architecture/app` |
-| 5 | Подтвердить и опубликовать: пост в `#Criticality_assessment`, подтверждение SRE, `approve_link`, перенос в SSoT | SRE | Интеграция SSoT-Dochub | `status: confirmed` |
+| 5 | Подтвердить и опубликовать: пост в `#Criticality_assessment`, подтверждение SRE, `approve_link`, обогащение карточки SSoT через MCP (см. «Фаза SSoT») | SRE | Интеграция SSoT-Dochub | `status: confirmed` |
 
 Детали расчёта — [02-methodology.md](02-methodology.md). Детали заполнения
 полей — [03-fields.md](03-fields.md). Детали переоценки — [04-reassessment.md](04-reassessment.md).
+
+### Фаза SSoT — только через MCP
+
+Перенос уровня в карточку ИС SSoT идёт после dochub-MR и не требует клона
+репозитория, ветки и коммита: карточку читает MCP, MR создаёт сама SSoT-форма.
+
+1. `ssot_get` / `ssot_team` → `criticality.py ssot-import` — снимок карточки и
+   контакты команды в `INFORMATION.yaml` (`ssot_snapshot`, `contacts`).
+2. `criticality.py ssot-plan` — целевые `severity.type`/`severity.confirmation`
+   и шаги MCP; гейт валидации R18.
+3. MCP-форма: `ssot_entity_open` → `ssot_form_fields` →
+   `ssot_ui_select`/`ssot_ui_fill` → `ssot_form_save` (возвращает `mrUrl` и
+   `version`).
+4. `ssot-record --mr-url … --version …` → `ssot_wait_version` →
+   `ssot-verify --verify-json -` — факты MR и проверка значения на ветке MR.
+5. `handoff` — тред `#Criticality_assessment`; затем
+   `ssot_mr_approve(confirm:true)` → `ssot_apply_changes(confirm:true)` →
+   `ssot_wait_master`.
+
+Наши данные в SSoT — только `severity.type` (enum `levels.ssot_enum`) и
+`severity.confirmation` (= `approve_link`). Клон репозитория SSoT, ветка
+`feature/<task>`, commit/push и токен GitLab не используются.
 
 ## 7. Jira-метки
 

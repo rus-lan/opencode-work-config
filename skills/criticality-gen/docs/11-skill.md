@@ -3,7 +3,7 @@ title: Скилл criticality-gen
 purpose: Описать слои скилла, два корня (инструмент в .opencode/ и данные проекта), установку в другой проект и шаблоны скиллов для других предметных областей.
 audience: [ai-agent, human]
 read_when: [ставите или обновляете скилл, выносите инструмент в другой проект, делаете скилл для другой области, скилл не виден в opencode]
-updated: 2026-11-13
+updated: 2026-11-24
 status: actual
 related: [../SKILL.md, ../commands/criticality_gen.md, 10-templates.md, 09-pipeline.md]
 ---
@@ -39,7 +39,7 @@ related: [../SKILL.md, ../commands/criticality_gen.md, 10-templates.md, 09-pipel
 | Слой | Файл | Отвечает за | Кто меняет |
 |------|------|-------------|------------|
 | Скилл (LLM) | `.opencode/skills/criticality-gen/SKILL.md` + `references/` | выбор команды, объяснение результата, остановка при нехватке данных | разработчик скилла |
-| Скрипт | `.opencode/skills/criticality-gen/scripts/criticality.py` | детерминизм: парсинг SSoT, гейт, расчёт, рендер | разработчик инструмента |
+| Скрипт | `.opencode/skills/criticality-gen/scripts/criticality.py` | детерминизм: парсинг снимка SSoT, гейт, расчёт, рендер | разработчик инструмента |
 | Критерии | `.opencode/skills/criticality-gen/criteria/criticality-criteria.yaml` | правила расчёта: матрицы, enum, `inputs.required`, `kind` | владелец методики (MR) |
 | Шаблоны | `.opencode/skills/criticality-gen/templates/*` | тексты артефактов и action-пакетов | разработчик инструмента |
 
@@ -102,8 +102,8 @@ related: [../SKILL.md, ../commands/criticality_gen.md, 10-templates.md, 09-pipel
 | 6 `actions` | `references/workflow.md` § «Фаза 6», `rules.md` R9 | `make start-apply ... TASK=1 CONFLUENCE=1 MESSAGE=1` |
 | 7 `verify` | `references/workflow.md` § «Фаза 7», `references/checklist.md` | `make validate`, `make docs-check`, `make criteria-check`, `make selftest` |
 | 8 `publish` | `references/workflow.md` § «Фаза 8», `references/commands.md` § «publish» | `make publish IS=<код> TASK=<key>` → `make publish-apply IS=<код> TASK=<key>` |
-| 9 `ssot` | `references/workflow.md` § «Фаза 9», `references/checklist.md` | `make ssot IS=<код> TASK=<key>` → `make ssot-apply IS=<код> TASK=<key>` |
-| 10 `handoff` | `references/workflow.md` § «Фаза 10», `references/checklist.md` | вручную: тред в `#Criticality_assessment` со ссылками на dochub-MR и SSoT-MR, подтверждение SRE |
+| 9 `ssot` | `references/workflow.md` § «Фаза 9», `references/checklist.md` | `make ssot-import IS=<код> ENTITY_JSON=<файл\|->` → `make ssot-plan IS=<код>` → MCP-форма → `make ssot-record IS=<код> MR_URL=<mrUrl>` → `make ssot-verify IS=<код> VERIFY_JSON=<файл\|->` |
+| 10 `handoff` | `references/workflow.md` § «Фаза 10», `references/checklist.md` | вручную: тред в `#Criticality_assessment` со ссылками на dochub-MR и SSoT-MR, подтверждение SRE; апрув и применение MR — `ssot_mr_approve`/`ssot_apply_changes` с `confirm:true` |
 
 Этап 2c `services` встроен в фазу 2: `make services IS=<код>` показывает план
 (какие репозитории клонировать, где `docs/` и `openspec/`), `make
@@ -124,12 +124,15 @@ services-apply IS=<код>` пишет `is/<код ИС>/SERVICE-FINDINGS.md` с
 `criteria` (`make criteria` / `make criteria-check`), `help` (`make help` —
 подкоманды, воркфлоу, артефакты и текущее состояние ИС) и `info` (`make info` —
 критерии с пояснениями дословно из файла критериев, `SECTION=<имя>` и `JSON=1`).
-Этап `ssot` (`make ssot IS=<код> TASK=<key>`, запись — `ssot-apply`) идёт после
-`publish` (dochub-MR) и правит только блок `severity` в
-`entities/information-systems/<код>/base.yaml` клона SSoT, создаёт ветку
-`feature/<task>` и описание MR по шаблону `MR-ssot.md` со ссылкой на dochub-MR;
-расхождений нет — `изменений нет`, ветка и коммит не создаются. Тред в
-`#Criticality_assessment` — это `handoff`, а не `publish`.
+Этап `ssot` (`ssot-import` → `ssot-plan` → MCP-форма → `ssot-record` →
+`ssot-verify`) идёт после `publish` (dochub-MR). Клона, ветки и коммита нет:
+карточку читает MCP `ssot_get`/`ssot_team` (снимок пишет `ssot-import`), целевые
+значения считает `ssot-plan` (только `severity.type` и `severity.confirmation`
+формы base), MR создаёт `ssot_form_save`, `mrUrl`/`version` фиксирует
+`ssot-record`, независимую проверку даёт `ssot_verify_change` → `ssot-verify`.
+`severity` уже совпадает — `status: no_change`, MR не создаётся. Тред в
+`#Criticality_assessment` — это `handoff`, а не `publish`; апрув и применение
+MR — `ssot_mr_approve`/`ssot_apply_changes` с `confirm:true` у человека.
 После каждой команды конвейера скрипт печатает подсказку
 `Следующий шаг: <команда> — <причина>` (отключается `--no-next`).
 
@@ -165,9 +168,10 @@ services-apply IS=<код>` пишет `is/<код ИС>/SERVICE-FINDINGS.md` с
    `RESEARCH-PLAN.md`, `SERVICE-FINDINGS.md`) — R11.
 5. Клоны только читаются — R12, R14.
 6. Закрытые сервисы не анализируются — R15.
-7. SSoT обогащается точечно: только блок `severity` в `base.yaml`, `type` — из
-   `levels.ssot_enum`, `confirmation` — из `approve_link`; MR — строго по
-   шаблону `MR-ssot.md`, пустая переменная шаблона — ошибка.
+7. SSoT обогащается точечно и только через MCP: `type` — из
+   `levels.ssot_enum`, `confirmation` — из `approve_link`; MR создаёт
+   `ssot_form_save`, клона, ветки и push нет, апрув/применение — только человек
+   с `confirm:true`.
 8. Язык — только русский: артефакты, вопросы и ошибки — на русском, ответы
    пользователя принимаются только на русском, латиница — только идентификаторы
    — R16.
@@ -269,7 +273,7 @@ cd <target> && make paths && make validate
 | `.opencode/skills/criticality-gen/criteria/criticality-criteria.yaml` под конкретную ИС | файл критериев — общая методика; правка под ИС ломает сопоставимость и `criteria-check` |
 | `.opencode/skills/criticality-gen/templates/*` под конкретную ИС | шаблоны принадлежат инструменту, а не проекту: правка под одну ИС ломает остальные и теряется при обновлении инструмента |
 | Сгенерированные артефакты (`criticality-passport.yaml`, `CRITICALITY.md`, `GENERATION.md`, `actions/*`) | перезаписываются следующим `start`; менять нужно источник (R2) |
-| `ssot/` и `apps/` | это клоны; источник правды — SSoT-репозиторий и репозитории компонентов. В `apps/` разрешён только `git`: ничего не собирают, не тестируют и не запускают (R12). В `ssot/` пишет только `make ssot-apply` — ветка `feature/<task>` и исключительно блок `severity` |
+| `apps/` и `.ssot/` | `apps/` — клоны компонентов: источник правды — их репозитории, разрешён только `git` (R12). `.ssot/` — служебные артефакты SSoT (`apply-plan.json`, `MR.url`/`.md`, `verify.json`): пишут только `ssot-plan`/`ssot-record`/`ssot-verify`, руками не правят |
 | `.opencode/skills/criticality-gen/meta-templates/*.template` под один скилл | шаблон общий; специфика — в `.opencode/skills/<name>/` |
 | Числа и уровни в тексте скилла | скилл не считает; числа берутся из расчёта и критериев |
 
@@ -288,7 +292,7 @@ cd <target> && make paths && make validate
 
 ## 9. Связанные документы
 
-- [09-pipeline.md](09-pipeline.md) — конвейер `is.yaml` → `ssot/` → `INFORMATION.yaml` → `check` → `start` → `validate` → `publish` → `ssot` → `handoff`.
+- [09-pipeline.md](09-pipeline.md) — конвейер `is.yaml` → `ssot-import` → `INFORMATION.yaml` → `check` → `start` → `validate` → `publish` → `ssot-plan`/`ssot-record`/`ssot-verify` → `handoff`.
 - [10-templates.md](10-templates.md) — каталог `.opencode/skills/criticality-gen/templates/`, движок и правило «шаблон → артефакт».
 - [07-scripts.md](07-scripts.md) — CLI-справочник `.opencode/skills/criticality-gen/scripts/criticality.py`.
 - [08-criteria.md](08-criteria.md) — правила расчёта и `kind`.

@@ -17,8 +17,8 @@ related: [rules.md, workflow.md]
 
 - [ ] Каркас проекта создан: `make init` (в пустом проекте — `is.yaml`, `catalog.yaml`, `INDEX.md`, `is/`).
 - [ ] Новая ИС заведена через `make scaffold IS=<код>` (папка `is/<код>/` и запись в `catalog.yaml`); существующая ИС не дублируется.
-- [ ] `is.yaml` заполнен: список ИС и `ssot.url`; переопределения `product` / `teamName` — только там, где нужно.
-- [ ] SSoT доступен: `ssot/entities/information-systems/` читается, `git ls-remote` не даёт `Permission denied`.
+- [ ] `is.yaml` заполнен: список ИС; переопределения `product` / `teamName` — только там, где нужно (клон SSoT не нужен — данные из `ssot_get`).
+- [ ] SSoT доступен: MCP `ssot-mcp` отвечает, `ssot_status` = `authorized` (сервер запущен, SSO-сессия активна).
 - [ ] Зависимости проверены: [dependencies.md](dependencies.md) — ни одной строки `MISSING`.
 - [ ] `make criteria-check` → `OK`; файл критериев не правился под конкретную ИС.
 - [ ] `make docs-check` → `OK`: таблицы методики совпадают с критериями (нет `docs/02-methodology.md` — `WARN` и пропуск, код 0; это не блокер переносимого скилла).
@@ -64,15 +64,16 @@ related: [rules.md, workflow.md]
 - [ ] `INDEX.md` перегенерирован (`make index`), если менялся состав ИС или уровни.
 - [ ] `make publish IS=<код> TASK=<key>` просмотрен (этап 8, **первым**): путь `architecture/app/<контур>/<сущность>/criticality_passport.yaml`, ключ `sber.ecom.<контур>.criticality_passport.<сущность>`, уровень в верхнем регистре совпадают с ожиданием; `_root.yaml` — импорт добавляется один раз.
 - [ ] `make publish-apply IS=<код> TASK=<key>` выполнен: ветка `feature/<task>` (или `feature/<task>-<контур>`) от `origin/master`, коммит `<task>: feat(criticality): паспорт критичности <код> — <уровень>` из ровно двух файлов, описание MR в `.publish/<код>-MR.md`.
-- [ ] `make ssot IS=<код> TASK=<key>` просмотрен (этап 9, **после** `publish`): меняется только блок `severity` (`type` из `levels.ssot_enum`, `method: target`, `confirmation` = `approve_link` из реестра), остальное содержимое `base.yaml` — байт в байт; описание MR собрано по `templates/MR-ssot.md` без пустых полей, в «Основании» — ссылка на dochub-MR.
-- [ ] `make ssot-apply IS=<код> TASK=<key>` выполнен: ветка `feature/<task>` от `origin/master`, коммит `<task>: feat(ssot): критичность <код> — <type>` из ровно одного файла `entities/information-systems/<код>/base.yaml`, описание MR в `.ssot/<код>-MR.md`. Повторный запуск на обогащённой ИС печатает `изменений нет`.
-- [ ] Пуш и создание MR не выполнены самовольно: `--push` / `PUSH=1` — только по явному подтверждению человека; реальные клоны `dochub/` и `ssot/` не правились вручную (SSoT-клон только читается, кроме `make ssot-apply`).
+- [ ] `make ssot-plan IS=<код>` просмотрен (этап 9, **после** `publish`): в `.ssot/<код>-apply-plan.json` меняются только `severity.type` (из `levels.ssot_enum`) и `severity.confirmation` (= `approve_link`), `status` — `changed`/`no_change`/`blocked`, перечислены шаги MCP.
+- [ ] MCP-форма выполнена: `ssot_entity_open` → `ssot_form_fields` → `ssot_ui_select`/`ssot_ui_fill` → `ssot_form_save`; ответ содержит `mrUrl`.
+- [ ] `make ssot-record IS=<код> MR_URL=<mrUrl>` выполнен: `.ssot/<код>-MR.url` и `.ssot/<код>-MR.md` на месте, поля `ssot_mr_url`/`ssot_version`/`ssot_status` записаны в `INFORMATION.yaml`. Повторный `ssot-plan` на применённой ИС печатает `status: no_change`.
+- [ ] Применение MR подтверждено человеком: `ssot_mr_approve(confirm: true)` → `ssot_apply_changes(confirm: true)` → `ssot_wait_master`; `make ssot-verify` записал `ssot_snapshot.verified.matched: true`.
 - [ ] Для ИС с зелёным гейтом `DATA-REQUIREMENTS.md`/`.yaml` отсутствуют (лист удаляется, когда незакрытых входов нет).
 
 ## После сдачи
 
 - [ ] MR с `criticality_passport.yaml` открыт в dochub и смержен; ссылка на MR вписана в action-пакет и `GENERATION.md`. Ветку и коммит создал `make publish-apply`; пуш и MR — по подтверждению.
-- [ ] SSoT-MR (только `severity` в `base.yaml`) открыт и смержен до публикации в `#Criticality_assessment`; ветку и коммит создал `make ssot-apply`, пуш и MR — по подтверждению. `severity.type` в SSoT совпадает с уровнем паспорта, `severity.confirmation` — с `approve_link`.
+- [ ] SSoT-MR (только `severity.type`/`severity.confirmation`) создан через `ssot_form_save`, смержен и применён до публикации в `#Criticality_assessment`. `severity.type` в SSoT совпадает с уровнем паспорта, `severity.confirmation` — с `approve_link` (`ssot-verify` подтвердил).
 - [ ] SRE подтвердил оценку; `approve_link` заполнен, `review_date` назначен.
 - [ ] Карточка SSoT обновлена: `criticality_ssot` совпадает с паспортом, расхождений нет.
 - [ ] Jira-задача на переоценку создана (или создана вручную по action-пакету), ключ вписан.

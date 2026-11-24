@@ -65,8 +65,8 @@ action-пакет `actions/rocketchat-message.md` остаётся в стату
 рендерится (буллета нет, `⛔` не появляется).
 
 Исключение — SSoT-MR не требуется: `catalog.yaml → systems.<код>.ssot_status:
-no_change` (severity в SSoT уже соответствует расчёту, `make ssot` изменений не
-нашёл). Тогда вместо ссылки печатается «не требуется: severity уже соответствует
+no_change` (severity в SSoT уже соответствует расчёту, `make ssot-plan` изменений
+не нашёл). Тогда вместо ссылки печатается «не требуется: severity уже соответствует
 (…)», и гейт считает это поле заполненным, а не блокером.
 
 Ссылка на задачу Jira собирается из `catalog.yaml → jira_task` по шаблону
@@ -91,6 +91,8 @@ no_change` (severity в SSoT уже соответствует расчёту, `
    `criticality`, `criticality_ssot`, `status: confirmed` и прогоняются
    `start-apply` → `validate` → `index` → `verify`. Если `validate` даёт ERROR,
    записанные поля откатываются.
-3. Обогащение SSoT делает `make ssot` / `make ssot-apply` (только блок
-   `severity`, уровень — по маппингу `levels.ssot` из
+3. Обогащение SSoT: `make ssot-plan` → MCP-форма (`ssot_entity_open` →
+   `ssot_form_fields` → `ssot_ui_select`/`ssot_ui_fill` → `ssot_form_save`) →
+   `make ssot-record` → `make ssot-verify` (только поля `severity.type` и
+   `severity.confirmation`, уровень — по маппингу `levels.dochub_to_ssot` из
    `criteria/criticality-criteria.yaml`); вручную карточку ИС не правят.
