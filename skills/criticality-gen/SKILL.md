@@ -1,7 +1,7 @@
 ---
 name: criticality-gen
 title: criticality-gen — оценка и переоценка критичности ИС
-version: 2.2.1
+version: 2.2.2
 description: |
   Генерация и переоценка паспортов критичности ИС по процессу D6.1.1 — из is.yaml
   через карточку ИС в SSoT (MCP `ssot_get` → `ssot-import`, снимок в
@@ -385,7 +385,10 @@ make check                                 # повторить гейт
   (входы с провенансом, расчёт, артефакты); `thread_link`/`approve_link` = родитель,
   `handoff_thread: true`, повтор идемпотентен. Появившийся позже SSoT-MR
   подставляется в родителя через `--update-parent --ssot-mr-url <URL>`
-  (`chat.update`), без второго треда.
+  (`chat.update`), без второго треда. Ранее опубликованное произвольное
+  сообщение правится `--update-message <id>` (тот же `chat.update`, но
+  `thread_link` не меняется). В отчёте участники — только TA и TL в формате
+  `@<логин>@ecom.tech`.
 - **Не разрешает расхождения молча.** Конфликт SSoT ↔ расчёт фиксируется в
   `conflicts` и в `GENERATION.md`, оба значения остаются в артефакте.
 - **Не обходит гейт.** «Почти полный набор» — это `BLOCKED`, а не `preliminary`.

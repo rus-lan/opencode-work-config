@@ -282,12 +282,12 @@ ssot-verify: ## Сверка применённой критичности с SS
 	@if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make ssot-verify IS=erm.mm VERIFY_JSON=/tmp/ssot_get.json"; exit 1; fi
 	@$(CLI) ssot-verify --is $(IS) $(if $(VERIFY_JSON),--verify-json "$(VERIFY_JSON)",)
 
-handoff: ## Этап handoff: спросить и отправить тред в #Criticality_assessment: make handoff IS=... [SEND=auto|manual] [TRANSPORT=auto|mcp|api] [THREAD=tmid] [REPORT=1 [THREAD_NEW=1|UPDATE_PARENT=1] [DOCHUB_MR_URL=...] [SSOT_MR_URL=...]] [DRY_RUN=1] [WRITE=1] [ALLOW_INCOMPLETE=1] [FORCE_RESEND=1] [RESUME=1] [MCP_TIMEOUT=сек] [ALLOW_DUPLICATE_RISK=1]
+handoff: ## Этап handoff: спросить и отправить тред в #Criticality_assessment: make handoff IS=... [SEND=auto|manual] [TRANSPORT=auto|mcp|api] [THREAD=tmid] [REPORT=1 [THREAD_NEW=1|UPDATE_PARENT=1|UPDATE_MESSAGE=<id>] [DOCHUB_MR_URL=...] [SSOT_MR_URL=...]] [DRY_RUN=1] [WRITE=1] [ALLOW_INCOMPLETE=1] [FORCE_RESEND=1] [RESUME=1] [MCP_TIMEOUT=сек] [ALLOW_DUPLICATE_RISK=1]
 	@if [ -n "$(ARGS)" ]; then \
 		$(CLI) handoff $(if $(IS),--is $(IS),) $(ARGS); \
 	else \
 		if [ -z "$(IS)" ]; then echo "ERROR: укажите IS=<код ИС>, например: make handoff IS=erm.mm"; exit 1; fi; \
-		$(CLI) handoff --is $(IS) $(if $(SEND),--send $(SEND),) $(if $(TRANSPORT),--transport $(TRANSPORT),) $(if $(filter 1,$(FORCE_RESEND)),--force-resend,) $(if $(filter 1,$(RESUME)),--resume,) $(if $(MCP_TIMEOUT),--mcp-timeout $(MCP_TIMEOUT),) $(if $(filter 1,$(ALLOW_DUPLICATE_RISK)),--allow-duplicate-risk,) $(if $(THREAD),--thread $(THREAD),) $(if $(filter 1,$(REPORT)),--report,) $(if $(filter 1,$(THREAD_NEW)),--thread-new,) $(if $(filter 1,$(UPDATE_PARENT)),--update-parent,) $(if $(DOCHUB_MR_URL),--dochub-mr-url "$(DOCHUB_MR_URL)",) $(if $(SSOT_MR_URL),--ssot-mr-url "$(SSOT_MR_URL)",) $(if $(filter 1,$(ALLOW_INCOMPLETE)),--allow-incomplete,) $(if $(filter 1,$(WRITE)),--write,) $(if $(filter 1,$(DRY_RUN)),--dry-run,); \
+		$(CLI) handoff --is $(IS) $(if $(SEND),--send $(SEND),) $(if $(TRANSPORT),--transport $(TRANSPORT),) $(if $(filter 1,$(FORCE_RESEND)),--force-resend,) $(if $(filter 1,$(RESUME)),--resume,) $(if $(MCP_TIMEOUT),--mcp-timeout $(MCP_TIMEOUT),) $(if $(filter 1,$(ALLOW_DUPLICATE_RISK)),--allow-duplicate-risk,) $(if $(THREAD),--thread $(THREAD),) $(if $(filter 1,$(REPORT)),--report,) $(if $(filter 1,$(THREAD_NEW)),--thread-new,) $(if $(filter 1,$(UPDATE_PARENT)),--update-parent,) $(if $(UPDATE_MESSAGE),--update-message "$(UPDATE_MESSAGE)",) $(if $(DOCHUB_MR_URL),--dochub-mr-url "$(DOCHUB_MR_URL)",) $(if $(SSOT_MR_URL),--ssot-mr-url "$(SSOT_MR_URL)",) $(if $(filter 1,$(ALLOW_INCOMPLETE)),--allow-incomplete,) $(if $(filter 1,$(WRITE)),--write,) $(if $(filter 1,$(DRY_RUN)),--dry-run,); \
 	fi
 
 finalize: ## Финализация ИС одной командой (approve_link, даты, критичность, status=confirmed + гейты): make finalize IS=... [APPROVE_LINK=...] [ASSIGNED_DATE=YYYY-MM-DD] [REVIEW_DATE=YYYY-MM-DD] [DRY_RUN=1]

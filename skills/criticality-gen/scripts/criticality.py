@@ -13434,6 +13434,95 @@ def _selftest_handoff(criteria, expect, skip):
             (2, True),
         )
 
+        # H36: участники отчёта — только TA/TL, упоминание с доменом,
+        # блок «Остальные» убран; отсутствие ролей не ломает вывод.
+        contact_lines = _report_contacts_lines(thread_info)
+        expect(
+            "H36: ровно две строки участников (TA и TL)",
+            len(contact_lines),
+            2,
+        )
+        expect(
+            "H36: формат @login@ecom.tech, домен не дублируется",
+            contact_lines,
+            ["• TA: @dkozlov@ecom.tech", "• TL: @ipilyaev@ecom.tech"],
+        )
+        expect(
+            "H36: блок «Остальные» отсутствует",
+            any("Остальные" in line for line in contact_lines),
+            False,
+        )
+        expect(
+            "H36: без TA/TL строк нет",
+            _report_contacts_lines({"contacts": {"groups": {"qa": ["alboyko"]}}}),
+            [],
+        )
+        info_no_roles = dict(thread_info)
+        info_no_roles["contacts"] = {"groups": {"qa": ["alboyko"]}}
+        report_no_roles = _report_text_for_is(
+            project, code, entry_now(), info_no_roles, criteria, _catalog_fx
+        )
+        expect(
+            "H36: отсутствие ролей не ломает отчёт",
+            bool(report_no_roles) and "**Участники**" not in report_no_roles,
+            True,
+        )
+
+        # H37: --update-message правит произвольное сообщение (chat.update),
+        # не создавая новое и не меняя thread_link/approve_link.
+        known_link = (
+            f"{HANDOFF_DEFAULT_BASE}/channel/Criticality_assessment"
+            "?msg=parent-msg-id"
+        )
+        _set_catalog_fields(
+            project, code,
+            {
+                THREAD_LINK_FIELD: known_link,
+                APPROVE_LINK_FIELD: known_link,
+                HANDOFF_STATUS_FIELD: HANDOFF_STATUS_PUBLISHED,
+            },
+        )
+        updates.clear()
+        seq.clear()
+        globals()["_handoff_api_update"] = fake_update
+        rc_um, out_um = run(
+            cmd_handoff, send="auto", transport="api", dry_run=False,
+            report=True, update_message="old-msg-id",
+            ssot_mr_url="https://git.example/mr/ssot-3",
+        )
+        expect("H37: --update-message — код 0", rc_um, 0)
+        expect(
+            "H37: chat.update правит заданный id",
+            (updates[0][0], updates[0][1]) if updates else None,
+            ("selftest-room", "old-msg-id"),
+        )
+        expect("H37: новое сообщение не создаётся", len(seq), 0)
+        expect(
+            "H37: thread_link не изменился",
+            str(entry_now().get(THREAD_LINK_FIELD) or ""),
+            known_link,
+        )
+        expect(
+            "H37: MR-ссылка попала в текст обновления",
+            "ssot-3" in updates[0][2] if updates else False,
+            True,
+        )
+        expect(
+            "H37: в выводе сказано, что thread_link не изменён",
+            "thread_link/approve_link не изменены" in out_um,
+            True,
+        )
+        globals()["_handoff_api_update"] = saved_update
+        rc_um_bad, out_um_bad = run(
+            cmd_handoff, send="auto", transport="api", dry_run=True,
+            update_message="old-msg-id",
+        )
+        expect(
+            "H37: --update-message без --report — код 2",
+            (rc_um_bad, "только с --report" in out_um_bad),
+            (2, True),
+        )
+
     finally:
         globals()["_handoff_api_post"] = saved_post
         globals()["_handoff_api_get"] = saved_get
@@ -13682,6 +13771,16 @@ def _handoff_selftest_fixture(base):
             "object_sla": {"value": 120, "status": "confirmed", "source": source},
         },
         "facts": {},
+        # Контакты: TA без домена (дополняется `@ecom.tech`), TL уже с доменом
+        # (не дублируется), остальные группы в отчёт не попадают.
+        "contacts": {
+            "groups": {
+                "ta": ["DKozlov"],
+                "tl": ["ipilyaev@ecom.tech"],
+                "sa": ["tkolpakov"],
+                "qa": ["alboyko"],
+            },
+        },
         # Снимок SSoT: этап SSoT пройден, MR записан и проверен — иначе гейт
         # handoff заблокирует отправку (ssot_snapshot.verified.matched).
         SSOT_SNAPSHOT_SECTION: {
@@ -37976,6 +38075,44 @@ def _handoff_report_thread_publish(
     )
 
 
+def _handoff_update_message(
+    root, code, criteria, text, message_id, channel=None,
+):
+    """`--update-message <id>`: правка ПРОИЗВОЛЬНОГО сообщения (chat.update).
+
+    Нужен, чтобы поправить ранее опубликованные сообщения (изменился шаблон
+    отчёта, уточнились ссылки). Новое сообщение не создаётся, `thread_link` и
+    `approve_link` не меняются — в отличие от `--update-parent`, который правит
+    именно текущий `thread_link`.
+    """
+    channel = channel or _handoff_channel(criteria)
+    base, token, user_id, problems = _handoff_api_config(criteria)
+    if problems:
+        print(f"ERROR: REST недоступен: {'; '.join(problems)}")
+        return 1
+    ok_room, room_id, _kind, room_error = _handoff_resolve_room(
+        base, token, user_id, channel, criteria
+    )
+    if not ok_room:
+        print(
+            f"ERROR: roomId канала не резолвится ({room_error}) — "
+            "правка невозможна"
+        )
+        return 1
+    ok, error = _handoff_api_update(
+        base, token, user_id, room_id, message_id, text
+    )
+    if not ok:
+        print(f"ERROR: chat.update не удался — {error}")
+        return 1
+    print(
+        f"  сообщение обновлено: id {message_id} (chat.update), "
+        "thread_link/approve_link не изменены"
+    )
+    print(f"  ссылка: {_handoff_message_link(base, message_id, channel)}")
+    return 0
+
+
 def _handoff_update_parent(
     root, code, entry, criteria, parent_text, channel=None,
 ):
@@ -38020,13 +38157,16 @@ def _handoff_update_parent(
     return 0
 
 
-def _handoff_load_text(root, code, entry, criteria, catalog, folder):
+def _handoff_load_text(
+    root, code, entry, criteria, catalog, folder, persist_mentions=True,
+):
     """Готовый текст треда и список незаполненных полей (⛔)."""
     info = _load_info_file(folder) or {}
     body = passport_body(root, entry) or {}
     gate = evaluate_gate(info, criteria)
     text = _publication_text_for_is(
-        root, code, entry, info, criteria, gate, body, catalog
+        root, code, entry, info, criteria, gate, body, catalog,
+        persist_mentions=persist_mentions,
     )
     missing = _publication_missing_fields(text or "")
     return text, missing
@@ -38246,7 +38386,10 @@ def _handoff_fallback(
     folder_rel, _legacy = is_folder(root, code, entry)
     folder = root / folder_rel
     if text is None:
-        text, missing = _handoff_load_text(root, code, entry, criteria, catalog, folder)
+        text, missing = _handoff_load_text(
+            root, code, entry, criteria, catalog, folder,
+            persist_mentions=not dry_run,
+        )
     else:
         missing = _publication_missing_fields(text)
     if not text or missing:
@@ -38341,18 +38484,34 @@ def cmd_handoff(args) -> int:
     report = bool(getattr(args, "report", False))
     thread_new = bool(getattr(args, "thread_new", False))
     update_parent = bool(getattr(args, "update_parent", False))
+    update_message = (
+        str(getattr(args, "update_message", "") or "").strip() or None
+    )
     dochub_mr_url = str(getattr(args, "dochub_mr_url", "") or "").strip() or None
     ssot_mr_url = str(getattr(args, "ssot_mr_url", "") or "").strip() or None
-    if (thread_new or update_parent) and not report:
-        print("ERROR: --thread-new и --update-parent работают только с --report")
-        return 2
-    if thread_new and update_parent:
-        print("ERROR: --thread-new и --update-parent взаимоисключающи")
-        return 2
-    if (thread_new or update_parent) and getattr(args, "thread", None):
+    report_modes = [
+        name for name, value in (
+            ("--thread-new", thread_new),
+            ("--update-parent", update_parent),
+            ("--update-message", bool(update_message)),
+        ) if value
+    ]
+    if report_modes and not report:
         print(
-            "ERROR: --thread <tmid> несовместим с --thread-new/--update-parent: "
-            "родитель отчёта создаётся top-level, а правка идёт по thread_link"
+            "ERROR: --thread-new, --update-parent и --update-message работают "
+            "только с --report"
+        )
+        return 2
+    if len(report_modes) > 1:
+        print(
+            "ERROR: " + " и ".join(report_modes) + " взаимоисключающи: "
+            "выберите один режим"
+        )
+        return 2
+    if report_modes and getattr(args, "thread", None):
+        print(
+            f"ERROR: --thread <tmid> несовместим с {report_modes[0]}: "
+            "родитель отчёта создаётся top-level, а правка идёт по id сообщения"
         )
         return 2
     allow_duplicate_risk = bool(getattr(args, "allow_duplicate_risk", False))
@@ -38406,7 +38565,8 @@ def cmd_handoff(args) -> int:
             text = thread_texts[0]
         else:
             text = _report_text_for_is(
-                root, code, entry, info, criteria, catalog, date=date
+                root, code, entry, info, criteria, catalog, date=date,
+                dochub_mr_url=dochub_mr_url, ssot_mr_url=ssot_mr_url,
             )
         if not text:
             print(
@@ -38426,7 +38586,9 @@ def cmd_handoff(args) -> int:
         )
     else:
         text = _publication_text_for_is(
-            root, code, entry, info, criteria, gate, body, catalog
+            root, code, entry, info, criteria, gate, body, catalog,
+            # dry-run ничего не пишет: кеш резолва упоминаний — тоже запись.
+            persist_mentions=not dry_run,
         )
         if not text:
             print(
@@ -38462,7 +38624,7 @@ def cmd_handoff(args) -> int:
     if (
         thread_link and status_saved == HANDOFF_STATUS_PUBLISHED
         and saved_kind == current_kind and not force_resend
-        and not update_parent
+        and not update_parent and not update_message
     ):
         if dry_run:
             # Предпросмотр не отправляет и не меняет состояние: уже отправленный
@@ -38705,6 +38867,12 @@ def cmd_handoff(args) -> int:
             f"IS={code} MESSAGE_URL=<ссылка на сообщение>"
         )
         return 0
+    # --- update-message: правка произвольного сообщения ------------------
+    if update_message:
+        print(f"handoff --report --update-message: {code}")
+        return _handoff_update_message(
+            root, code, criteria, text, update_message, channel=channel
+        )
     # --- update-parent: правка отправленного родителя --------------------
     if update_parent:
         print(f"handoff --report --update-parent: {code}")
@@ -39855,7 +40023,10 @@ def _publication_blocked_text(fields):
     )
 
 
-def _publication_text_for_is(root, code, entry, info, criteria, gate, body, catalog):
+def _publication_text_for_is(
+    root, code, entry, info, criteria, gate, body, catalog,
+    persist_mentions=True,
+):
     """Готовый текст сообщения в тред — тем же рендером, что в `start`.
 
     None — текст собрать не удалось (нет расчёта/шаблон не отрендерился).
@@ -39875,6 +40046,7 @@ def _publication_text_for_is(root, code, entry, info, criteria, gate, body, cata
         ctx = build_render_context(
             code, entry, info, criteria, computed, today(),
             existing=body, catalog=catalog, root=root,
+            persist_mentions=persist_mentions,
         )
         # Ссылки на MR подставляются так же, как в `start`: без них текст
         # сообщения всегда содержал бы `⛔`, и число полей было бы завышено.
@@ -39948,32 +40120,35 @@ def _report_input_rows(info, criteria):
     return rows, missing
 
 
-def _report_contacts_lines(info):
-    """Строки участников: TA, TL и остальные группы контактов.
+# Домен упоминания RocketChat: в тексте сообщения логин без домена не
+# срабатывает как упоминание, поэтому в отчёте он всегда с `@ecom.tech`.
+REPORT_MENTION_DOMAIN = "ecom.tech"
 
-    Username'ы печатаются как есть (это логины Rocket.Chat, по ним ставится
-    упоминание), без перевода в ФИО: соответствия login → ФИО в SSoT нет.
+
+def _report_mention(login) -> str:
+    """`@<логин>@ecom.tech`; логин с доменом не дублируется."""
+    text = str(login or "").strip()
+    if not text:
+        return ""
+    return text if "@" in text else f"{text}@{REPORT_MENTION_DOMAIN}"
+
+
+def _report_contacts_lines(info):
+    """Строки участников отчёта: только TA и TL, в формате `@login@ecom.tech`.
+
+    Блок «Остальные» убран: в отчёте нужны ответственные за оценку, а не весь
+    список групп контактов. Роль без логинов строку не выводит (плейсхолдеров
+    «не задан» нет). Логины уже с доменом не дублируются.
     """
     contacts = info.get("contacts") if isinstance(info.get("contacts"), dict) else {}
     groups = contacts.get("groups") if isinstance(contacts.get("groups"), dict) else {}
-    def people(key):
-        raw = groups.get(key)
-        if not isinstance(raw, list):
-            return []
-        return [str(item).strip() for item in raw if str(item).strip()]
     lines = []
-    ta = people("ta")
-    tl = people("tl")
-    lines.append("• TA: " + (", ".join(ta) if ta else "не задан"))
-    lines.append("• TL: " + (", ".join(tl) if tl else "не задан"))
-    others = []
-    for key in sorted(groups):
-        if key in ("ta", "tl"):
+    for key, label in (("ta", "TA"), ("tl", "TL")):
+        logins = _clean_logins(groups.get(key))
+        if not logins:
             continue
-        names = people(key)
-        if names:
-            others.append(f"{key} — {', '.join(names)}")
-    lines.append("• Остальные: " + ("; ".join(others) if others else "нет данных"))
+        mentions = [f"@{_report_mention(login)}" for login in logins]
+        lines.append(f"• {label}: " + ", ".join(mentions))
     return lines
 
 
@@ -40111,7 +40286,10 @@ def _report_mr_line(label, url, ssot_status=""):
     return f"• {label}: не создавался"
 
 
-def _report_text_for_is(root, code, entry, info, criteria, catalog, date=None):
+def _report_text_for_is(
+    root, code, entry, info, criteria, catalog, date=None,
+    dochub_mr_url=None, ssot_mr_url=None,
+):
     """Текст ОТЧЁТА о результатах оценки для `handoff --report`.
 
     Источники — только артефакты прогона: `criticality-passport.yaml` (уровень,
@@ -40130,10 +40308,9 @@ def _report_text_for_is(root, code, entry, info, criteria, catalog, date=None):
         "",
         f"**Итог:** {data['level']} · метод {data['method']} · статус "
         f"{data['status_label']} · дата генерации {data['generated']}",
-        "",
-        "**Участники**",
     ]
-    lines.extend(data["contacts"])
+    if data["contacts"]:
+        lines.extend(["", "**Участники**", *data["contacts"]])
     lines.extend(["", "**Входные значения**"])
     if data["rows"]:
         for row in data["rows"]:
@@ -40161,8 +40338,15 @@ def _report_text_for_is(root, code, entry, info, criteria, catalog, date=None):
             "",
             "**Что дальше**",
             "• требуется подтверждение SRE/TL по значениям входов и уровню;",
-            _report_mr_line("MR в dochub", data["dochub_mr"]),
-            _report_mr_line("MR в SSoT", data["ssot_mr"], data["ssot_status"]),
+            _report_mr_line(
+                "MR в dochub",
+                str(dochub_mr_url or "").strip() or data["dochub_mr"],
+            ),
+            _report_mr_line(
+                "MR в SSoT",
+                str(ssot_mr_url or "").strip() or data["ssot_mr"],
+                data["ssot_status"],
+            ),
         ]
     )
     return "\n".join(lines) + "\n"
@@ -40191,9 +40375,10 @@ def _report_thread_texts(
         "",
         f"**Итог:** {data['level']} · метод {data['method']} · статус "
         f"{data['status_label']} · дата генерации {data['generated']}",
-        "",
-        "**Участники**",
-        *data["contacts"],
+    ]
+    if data["contacts"]:
+        parent_lines.extend(["", "**Участники**", *data["contacts"]])
+    parent_lines.extend([
         "",
         "**Ссылки**",
         "• SSoT: "
@@ -40202,7 +40387,7 @@ def _report_thread_texts(
         _report_mr_line("MR в SSoT", ssot_mr, data["ssot_status"]),
         "",
         "Детализация — в ответах ниже.",
-    ]
+    ])
     inputs = ["**Входные значения и источники**"]
     if data["rows"]:
         for row in data["rows"]:
@@ -48966,6 +49151,14 @@ def build_parser() -> argparse.ArgumentParser:
             "с --report: обновить родительское сообщение опубликованного "
             "треда (RocketChat chat.update) — например, добавить появившийся "
             "SSoT-MR, не создавая новый тред"
+        ),
+    )
+    handoff.add_argument(
+        "--update-message", dest="update_message", default=None,
+        help=(
+            "с --report: обновить текст ПРОИЗВОЛЬНОГО сообщения по его id "
+            "(RocketChat chat.update), не создавая новое и не меняя "
+            "thread_link — чтобы поправить ранее опубликованные сообщения"
         ),
     )
     handoff.add_argument(
