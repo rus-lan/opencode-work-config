@@ -30,11 +30,14 @@ related: [08-criteria.md, ../criteria/criticality-criteria.yaml, 03-fields.md, 0
 
 **Машиночитаемый источник правил** — [`criteria/criticality-criteria.yaml`](../criteria/criticality-criteria.yaml); разбор файла — [08-criteria.md](08-criteria.md). Таблицы в маркерах `<!-- BEGIN GENERATED -->` перегенерируются командой `make docs-sync`, проверяются командой `make docs-check`.
 
-> **О статусе документа.** Методика на странице-источнике имеет статус draft.
-> Формулировки осей и матрица ниже приведены в рабочем виде, согласованном с
-> репозиторием. При расхождении приоритет у источника
-> [4207454433](https://space.samokat.ru/pages/viewpage.action?pageId=4207454433) —
-> тогда правьте этот файл и указывайте, что изменилось.
+> **О статусе документа.** Действующая методика —
+> [4566730084](https://space.samokat.ru/pages/viewpage.action?pageId=4566730084)
+> («Методика и оригинальные расчёты», ECOMCS, v13, 2026-11-17). Страница
+> [4207454433](https://space.samokat.ru/pages/viewpage.action?pageId=4207454433)
+> в архиве (`archived_carrier`, v3, 2025-12-01) и остаётся носителем матриц
+> `impact_matrix` / `final_matrix` и шкал осей. Формулировки осей и матрица ниже
+> приведены в рабочем виде, согласованном с репозиторием. При расхождении
+> приоритет у 4566730084 — тогда правьте этот файл и указывайте, что изменилось.
 
 ## 1. Два режима оценки
 
@@ -235,9 +238,10 @@ SSoT записывается как `severity.type: mission-critical`.
 
 ## 11. Источники
 
-- Методика (draft): [4207454433](https://space.samokat.ru/pages/viewpage.action?pageId=4207454433)
+- Методика: [4566730084](https://space.samokat.ru/pages/viewpage.action?pageId=4566730084) («Методика и оригинальные расчёты», ECOMCS, v13, 2026-11-17)
+- Носитель матриц `impact_matrix` / `final_matrix` и шкал осей: [4207454433](https://space.samokat.ru/pages/viewpage.action?pageId=4207454433) (архив, `archived_carrier`, v3, 2025-12-01)
 - Экспресс-оценка, калькулятор `упрощенный.xlsx`: [4552328348](https://space.samokat.ru/pages/viewpage.action?pageId=4552328348)
-- Детальная оценка: [4566714956](https://space.samokat.ru/pages/viewpage.action?pageId=4566714956)
+- Детальная оценка: [4567543163](https://space.samokat.ru/pages/viewpage.action?pageId=4567543163) («Критерии, формулы и числа», ECOMCS, v13). Прежняя страница детальной оценки 4566714956 удалена 2026-11-24 (тело пустое, live GET → 404).
 - Требования к ИС по критичности: [3823234487](https://space.samokat.ru/pages/viewpage.action?pageId=3823234487)
 - Процесс D6.1.1: [3855374712](https://space.samokat.ru/pages/viewpage.action?pageId=3855374712)
 

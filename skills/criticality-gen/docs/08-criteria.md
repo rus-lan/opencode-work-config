@@ -84,7 +84,7 @@ related: [02-methodology.md, ../criteria/criticality-criteria.yaml, 09-pipeline.
 | `cia.protection_to_level` | documented | 4207454433 (**архив**) | Уровень защищённости → бизнес-шкала |
 | `final_matrix` | documented | 4207454433 (**архив**) + 4566730084 | Итог = ячейка матрицы (бизнес-уровень × уровень защищённости); 16 ячеек; `max(бизнес, ИБ)` не применяется |
 | `inputs` | documented | 4567543163 | Перечень входных данных и варианты заполнения; у каждого входа `method`, `blocking`, `source_page_id`, `where` |
-| `inputs.gate` | documented | 4566730084 | Нет хотя бы одного **blocking**-входа выбранного сценария → `BLOCKED`, расчёт не выполняется; непустой `blocking: false` — `WARN`, расчёт выполняется. Дословно: «Неполный сложный набор — это BLOCKED, а не повод посчитать простой сценарий» |
+| `inputs.gate` | documented | 4567543163 | Нет хотя бы одного **blocking**-входа выбранного сценария → `BLOCKED`, расчёт не выполняется; непустой `blocking: false` — `WARN`, расчёт выполняется. Дословно: «Если задан хотя бы один вход детального набора, метод — детальный. Фолбэк на экспресс запрещён: неполный детальный набор блокирует оценку.» Прежняя атрибуция на 4566730084 не подтверждается: в его v13 такой фразы нет |
 | `scenarios` | **convention** | — | Два сценария расчёта: простой (`express`, четыре входа калькулятора) и сложный (`detailed`, все входы `inputs.required`). Сценарий выбирается по данным, фолбэк запрещён |
 | `scenarios.simple` | **convention** | — | Простой сценарий: `peak_hour_load`, `consumers_type`, `outage_impact`, `object_sla`; отсутствие любого — `BLOCKED` |
 | `scenarios.complex` | **convention** | — | Сложный сценарий: все семь входов `inputs.required`; отсутствие любого — `BLOCKED`, фолбэк на простой сценарий запрещён |
@@ -281,7 +281,7 @@ level          = score_to_level[J] → levels.dochub_to_ssot
 
 ## 11. Что делать, если данных нет
 
-Гейт описан в `inputs.gate` (documented, 4566730084): если хотя бы одного
+Гейт описан в `inputs.gate` (documented, 4567543163): если хотя бы одного
 блокирующего входа выбранного сценария нет — **расчёт не выполняется**.
 
 ### 11.1 Выбор сценария и гейт
@@ -440,16 +440,16 @@ python3 .opencode/skills/criticality-gen/scripts/criticality.py check --strict
 
 ## 15. Источники
 
-Состав сверен с первоисточниками 2026-11-18 (`meta.synced_at`); версии и статусы —
+Состав сверен с первоисточниками 2026-11-24 (`meta.synced_at`); версии и статусы —
 `meta.sources` в файле критериев.
 
 | page_id | Документ | space | v | Обновлён | Статус | Роль |
 |---------|----------|-------|---|----------|--------|------|
-| [4566730084](https://space.samokat.ru/pages/viewpage.action?pageId=4566730084) | Методика и оригинальные расчёты | ECOMCS | 11 | 2026-11-17 | current | канон формул, интервалов, выбора сценария, границ CIA, маппинга уровней, «итог — ячейка `final_matrix`» |
-| [4567543163](https://space.samokat.ru/pages/viewpage.action?pageId=4567543163) | Критерии оценки: входы и варианты заполнения | ECOMCS | 12 | 2026-11-17 | current | канон требований к 7 входам |
-| [4567212024](https://space.samokat.ru/pages/viewpage.action?pageId=4567212024) | Данные, источники и провенанс | ECOMCS | 11 | 2026-11-17 | current | канон 10 типов провенанса и статусов значения |
-| [4552328348](https://space.samokat.ru/pages/viewpage.action?pageId=4552328348) | Заполнение паспорта критичности (ЧЕРНОВИК) | SMKT | 14 | 2026-11-16 | draft | артефакт экспресса; списки enum дефектны |
-| [4566714956](https://space.samokat.ru/pages/viewpage.action?pageId=4566714956) | Заполнение паспорта критичности (детальная оценка) (ЧЕРНОВИК) | SMKT | 3 | 2026-11-13 | draft | артефакт детальной оценки |
+| [4566730084](https://space.samokat.ru/pages/viewpage.action?pageId=4566730084) | Методика и оригинальные расчёты | ECOMCS | 13 | 2026-11-17 | current | канон формул, интервалов, выбора сценария, границ CIA, маппинга уровней, «итог — ячейка `final_matrix`» |
+| [4567543163](https://space.samokat.ru/pages/viewpage.action?pageId=4567543163) | Критерии, формулы и числа | ECOMCS | 13 | 2026-11-17 | current | канон требований к 7 входам; здесь же документируется детальный сценарий |
+| [4567212024](https://space.samokat.ru/pages/viewpage.action?pageId=4567212024) | Источники, провенанс и LINK-MAP | ECOMCS | 11 | 2026-11-17 | current | канон 10 типов провенанса и статусов значения |
+| [4552328348](https://space.samokat.ru/pages/viewpage.action?pageId=4552328348) | Заполнение паспорта критичности (ЧЕРНОВИК) | SMKT | 17 | 2026-11-16 | draft | артефакт экспресса; списки enum дефектны |
+| [4566714956](https://space.samokat.ru/pages/viewpage.action?pageId=4566714956) | Заполнение паспорта критичности (детальная оценка) (ЧЕРНОВИК) — **удалена 2026-11-24** | SMKT | 3 | 2026-11-13 | удалена (404) | страница удалена 2026-11-24 (trashed, live GET → 404, тело пустое); детальный сценарий документируется на [4567543163](https://space.samokat.ru/pages/viewpage.action?pageId=4567543163) |
 | [4553977278](https://space.samokat.ru/pages/viewpage.action?pageId=4553977278) | ЧЕРНОВИК 2026-10 D6.1.1. Процесс оценки критичности ИС | SMKT | 14 | 2026-11-18 | draft | черновик процесса 2026-10 |
 | [3855374712](https://space.samokat.ru/pages/viewpage.action?pageId=3855374712) | D6.1.1. Процесс оценки критичности ИС | SMKT | 67 | 2026-10-08 | current | действующий процесс |
 | [4207454433](https://space.samokat.ru/pages/viewpage.action?pageId=4207454433) | [DRAFT] Методика оценки критичности ИС (новая) | infrastructure | 3 | 2025-12-01 | **archived_carrier** | единственный носитель 20 ячеек `impact_matrix`, 16 ячеек `final_matrix`, шкал осей, описаний CIA; статус `archived_carrier` = документ в архиве, но заменить его нечем — правила ссылаются на него осознанно и объясняют причину в `source_note` |

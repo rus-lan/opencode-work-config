@@ -1,7 +1,7 @@
 ---
 name: criticality-gen
 title: criticality-gen — оценка и переоценка критичности ИС
-version: 2.2.2
+version: 2.2.3
 description: |
   Генерация и переоценка паспортов критичности ИС по процессу D6.1.1 — из is.yaml
   через карточку ИС в SSoT (MCP `ssot_get` → `ssot-import`, снимок в

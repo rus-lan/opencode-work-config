@@ -375,7 +375,8 @@ criticality-passport.yaml / CRITICALITY.md  (make start, этап 2b)
 ## 9. Источники
 
 - Продукт E001: [3910775831](https://space.samokat.ru/pages/viewpage.action?pageId=3910775831)
-- Методика: [4207454433](https://space.samokat.ru/pages/viewpage.action?pageId=4207454433)
+- Методика: [4566730084](https://space.samokat.ru/pages/viewpage.action?pageId=4566730084) («Методика и оригинальные расчёты», ECOMCS, v13, 2026-11-17)
+- Носитель матриц `impact_matrix` / `final_matrix` и шкал осей: [4207454433](https://space.samokat.ru/pages/viewpage.action?pageId=4207454433) (архив, `archived_carrier`, v3, 2025-12-01)
 - Процесс D6.1.1: [3855374712](https://space.samokat.ru/pages/viewpage.action?pageId=3855374712)
 - Реестр ответственных 2026: [4323248283](https://space.samokat.ru/pages/viewpage.action?pageId=4323248283)
 - Реестр ответственных 2024–25: [3774661271](https://space.samokat.ru/pages/viewpage.action?pageId=3774661271)

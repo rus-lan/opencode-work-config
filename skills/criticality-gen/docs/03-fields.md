@@ -211,7 +211,8 @@ MCP `ssot_get(group="information-systems", entity=<код>)`; его снимо�
 ## 8. Источники
 
 - Экспресс-методика и калькулятор: [4552328348](https://space.samokat.ru/pages/viewpage.action?pageId=4552328348)
-- Методика (draft): [4207454433](https://space.samokat.ru/pages/viewpage.action?pageId=4207454433)
+- Методика: [4566730084](https://space.samokat.ru/pages/viewpage.action?pageId=4566730084) («Методика и оригинальные расчёты», ECOMCS, v13, 2026-11-17)
+- Носитель матриц `impact_matrix` / `final_matrix` и шкал осей: [4207454433](https://space.samokat.ru/pages/viewpage.action?pageId=4207454433) (архив, `archived_carrier`, v3, 2025-12-01)
 - Шаблон публикации: [4553986100](https://space.samokat.ru/pages/viewpage.action?pageId=4553986100)
 - Требования к ИС по критичности: [3823234487](https://space.samokat.ru/pages/viewpage.action?pageId=3823234487)
 

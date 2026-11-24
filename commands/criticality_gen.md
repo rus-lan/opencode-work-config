@@ -1,13 +1,13 @@
 ---
 name: criticality_gen
-description: Генерация и переоценка паспортов критичности ИС по D6.1.1 — init, prepare, check, requirements, collect, services, enrich, exclude, score, start, reassess, validate, index, publish, ssot, due. Останавливается, если данных не хватает, и выдаёт лист требований.
+description: Генерация и переоценка паспортов критичности ИС по D6.1.1 — init, prepare, check, requirements, collect, services, enrich, exclude, score, start, reassess, validate, index, publish, ssot-import, ssot-plan, ssot-record, ssot-verify, due. Останавливается, если данных не хватает, и выдаёт лист требований.
 agent: build
 subtask: true
 title: "/criticality_gen — паспорта критичности ИС"
 purpose: Дать точку входа в скилл criticality-gen через одну команду с подкомандами.
 audience: [ai-agent]
 read_when: [пользователь вызвал /criticality_gen, нужна подкоманда скилла]
-updated: 2026-11-13
+updated: 2026-11-24
 status: actual
 related: [../skills/criticality-gen/SKILL.md, ../skills/criticality-gen/references/workflow.md, ../skills/criticality-gen/references/commands.md]
 ---
@@ -40,7 +40,7 @@ related: [../skills/criticality-gen/SKILL.md, ../skills/criticality-gen/referenc
 | `help` | `make help` / `python3 .opencode/skills/criticality-gen/scripts/criticality.py help [--no-state]` | справка: назначение и границы, все подкоманды, воркфлоу, артефакты по этапам, текущее состояние ИС (`код \| сценарий \| гейт \| уровень \| следующий шаг`); `make help-fast` — то же без чтения состояния |
 | `info` | `make info [SECTION=<имя>] [JSON=1]` / `python3 .opencode/skills/criticality-gen/scripts/criticality.py info [--section <имя>] [--json]` | критерии оценки с пояснениями дословно из `criteria/criticality-criteria.yaml`: уровни, сценарии, входы, enum'ы, экспресс, детальная матрица, service_lifecycle, провенанс |
 | `init` | `make init` | создать `is.yaml` из `is.example.yaml` |
-| `prepare` | `make prepare` (план) / `make prepare-apply` (запись) | клон `ssot/`, `INFORMATION.yaml`, `apps/<код ИС>/`; без `ssot/` не пишет и падает; кода нет в SSoT — ошибка (файл не создаётся); секция, отсутствующая в SSoT, сохраняется; бэкап `INFORMATION.yaml.bak-<UTC-метка>` с ротацией; флаги `--allow-empty-sections`, `--no-backup`, `--backup-keep N` |
+| `prepare` | `make prepare` (план) / `make prepare-apply` (запись) | `INFORMATION.yaml` из снимка карточки (`ssot-import`) и `apps/<код ИС>/`; клон SSoT не нужен; кода нет в снимке — ошибка (файл не создаётся); секция, отсутствующая в снимке, сохраняется; бэкап `INFORMATION.yaml.bak-<UTC-метка>` с ротацией; флаги `--allow-empty-sections`, `--no-backup`, `--backup-keep N` |
 | `check` | `make check-prepare` (подготовка + гейт) / `make check` (только гейт) | гейт достаточности: `OK` / `BLOCKED` / `SKIPPED` / `CONFLICT`; strict по умолчанию; при `BLOCKED` пишет `DATA-REQUIREMENTS.*` |
 | `check --diagnostic` | `make check-diag` | гейт без ошибки при `BLOCKED` (код 0) |
 | `requirements` | `make requirements IS=<код>` (план) / `make requirements IS=<код> APPLY=1` | лист `DATA-REQUIREMENTS.md`/`.yaml`: что/зачем/где/у кого/как подтвердить |
@@ -57,8 +57,11 @@ related: [../skills/criticality-gen/SKILL.md, ../skills/criticality-gen/referenc
 | `due` | `make due` | просроченные и ближайшие переоценки |
 | `criteria` | `make criteria` / `make criteria-check` | показать критерии / проверить их целостность |
 | `publish` | `make publish IS=<код> TASK=<key>` (план) / `make publish-apply IS=<код> TASK=<key>` (ветка + коммит) | паспорт в формате dochub: `architecture/app/<контур>/<сущность>/criticality_passport.yaml`, ключ `sber.ecom.<контур>.criticality_passport.<сущность>`, уровень в верхнем регистре; импорт в `_root.yaml`; ветка `feature/<task>` от `origin/master`; коммит из двух файлов; описание MR в `<dochub>/.publish/<код>-MR.md`. `PUSH=1` — только с записью и только по явному подтверждению. Это публикация в **dochub**, не в чат |
-| `ssot` | `make ssot IS=<код> TASK=<key>` (план) / `make ssot-apply IS=<код> TASK=<key>` (ветка + коммит) | обогащение SSoT критичностью (после `publish`): правится ТОЛЬКО блок `severity` в `entities/information-systems/<код>/base.yaml` (`type` из `levels.ssot_enum`, `method: target`, `confirmation` = `approve_link` из `catalog.yaml`); остальное содержимое файла сохраняется; ветка `feature/<task>` от `origin/master`, коммит из одного файла, описание MR в `<ssot>/.ssot/<код>-MR.md` со ссылкой на dochub-MR; совпадение блока — no-op. `PUSH=1` — только с записью и по явному подтверждению |
-| `handoff` | вручную | тред в `#Criticality_assessment` со ссылками на dochub-MR и SSoT-MR (текст — `actions/rocketchat-message.md`), подтверждение SRE. Это публикация в **чат** |
+| `ssot-import` | `make ssot-import IS=<код> ENTITY_JSON=<файл\|-> [TEAM_JSON=<файл\|->]` | снимок карточки ИС из ответа MCP `ssot_get` → `INFORMATION.yaml → ssot_snapshot` (+ `contacts` из `ssot_team`); клон и сеть не нужны; повторный импорт — no-op |
+| `ssot-plan` | `make ssot-plan IS=<код> [FORCE=1]` | план обогащения SSoT критичностью (после `publish`): `status` (`changed`/`no_change`/`blocked`), поля `severity.type` (из `levels.ssot_enum`) и `severity.confirmation` (= `approve_link`), шаги MCP; пишет `.ssot/<код>-apply-plan.json`, SSoT не меняет |
+| `ssot-record` | `make ssot-record IS=<код> MR_URL=<mrUrl> [VERSION=] [SAVE_JSON=] [STATUS_JSON=]` | результат `ssot_form_save`: `.ssot/<код>-MR.url`, `.ssot/<код>-MR.md`, поля `ssot_mr_url`/`ssot_version`/`ssot_can_apply`/`ssot_status`/`ssot_recorded_at` в `INFORMATION.yaml` |
+| `ssot-verify` | `make ssot-verify IS=<код> VERIFY_JSON=<файл\|->` | сверка применённой критичности с SSoT (`ssot_verify_change` после `ssot_apply_changes`) → `ssot_snapshot.verified` |
+| `handoff` | вручную | тред в `#Criticality_assessment` со ссылками на dochub-MR и SSoT-MR (`mrUrl` из `ssot_form_save`; текст — `actions/rocketchat-message.md`), подтверждение SRE. Это публикация в **чат** |
 
 Дополнительно: `make selftest`, `make docs-check` — проверки перед сдачей;
 `make show IS=<код>` — сводка по ИС.
@@ -86,11 +89,11 @@ related: [../skills/criticality-gen/SKILL.md, ../skills/criticality-gen/referenc
 | `check --is erm.mm` | `make check IS=erm.mm` |
 | `check --prepare` | `make check-prepare` |
 | `check --no-requirements` | `make check NO_REQUIREMENTS=1` (лист не пишется, не обновляется, не удаляется) |
-| `prepare --apply` | `make prepare-apply` (без `ssot/` не пишет и падает) |
+| `prepare --apply` | `make prepare-apply` (без снимка `ssot-import` не пишет и падает) |
 | `prepare --allow-empty-sections` | `make prepare-apply ALLOW_EMPTY_SECTIONS=1` (осознанно очистить секции, отсутствующие в SSoT) |
 | `prepare --no-backup` | `make prepare-apply NO_BACKUP=1` (без `INFORMATION.yaml.bak-<UTC-метка>`) |
 | `prepare --backup-keep N` | `make prepare-apply BACKUP_KEEP=5` (хранить 5 последних бэкапов) |
-| `prepare --no-clone` | `make prepare-apply NO_CLONE=1` (git не вызывается) |
+| `prepare --no-clone` | `make prepare-apply NO_CLONE=1` (git для `apps/` не вызывается) |
 | `requirements --is erm.mm` | `make requirements IS=erm.mm` |
 | `requirements --apply` | `make requirements IS=erm.mm APPLY=1` |
 | `collect --is erm.mm` | `make collect IS=erm.mm` |
@@ -125,10 +128,12 @@ related: [../skills/criticality-gen/SKILL.md, ../skills/criticality-gen/referenc
 | `publish --is erm.mm --task E001-31245 --apply --push` | `make publish-apply IS=erm.mm TASK=E001-31245 PUSH=1` (только по явному подтверждению) |
 | `publish --dochub /путь/к/dochub` | `make publish IS=erm.mm TASK=E001-31245 DOCHUB=/путь/к/dochub` |
 | `publish --branch feature/E001-31245-mm` | `make publish IS=erm.mm TASK=E001-31245 BRANCH=feature/E001-31245-mm` |
-| `ssot --is erm.mm --task E001-31245` | `make ssot IS=erm.mm TASK=E001-31245` |
-| `ssot --is erm.mm --task E001-31245 --apply` | `make ssot-apply IS=erm.mm TASK=E001-31245` |
-| `ssot --is erm.mm --task E001-31245 --apply --push` | `make ssot-apply IS=erm.mm TASK=E001-31245 PUSH=1` (только по явному подтверждению) |
-| `ssot --ssot /путь/к/ssot` | `make ssot IS=erm.mm TASK=E001-31245 SSOT=/путь/к/ssot` |
+| `ssot-import --is erm.mm --entity-json /tmp/ssot_get.json` | `make ssot-import IS=erm.mm ENTITY_JSON=/tmp/ssot_get.json` |
+| `ssot-import --team-json /tmp/ssot_team.json` | `make ssot-import IS=erm.mm ENTITY_JSON=... TEAM_JSON=/tmp/ssot_team.json` |
+| `ssot-plan --is erm.mm` | `make ssot-plan IS=erm.mm` |
+| `ssot-plan --is erm.mm --force` | `make ssot-plan IS=erm.mm FORCE=1` (только по явному подтверждению) |
+| `ssot-record --is erm.mm --mr-url <url>` | `make ssot-record IS=erm.mm MR_URL=<mrUrl из ssot_form_save>` |
+| `ssot-verify --is erm.mm --verify-json /tmp/ssot_get-after.json` | `make ssot-verify IS=erm.mm VERIFY_JSON=/tmp/ssot_get-after.json` |
 
 ## Если аргумент не передан
 
@@ -150,7 +155,8 @@ related: [../skills/criticality-gen/SKILL.md, ../skills/criticality-gen/referenc
 /criticality_gen reassess erm.mm
 /criticality_gen reassess-apply erm.mm
 /criticality_gen validate
-/criticality_gen ssot erm.mm --task E001-31245
+/criticality_gen ssot-import erm.mm --entity-json /tmp/ssot_get.json
+/criticality_gen ssot-plan erm.mm
 /criticality_gen publish erm.mm --task E001-31245
 /criticality_gen due
 ```
@@ -172,14 +178,15 @@ related: [../skills/criticality-gen/SKILL.md, ../skills/criticality-gen/referenc
 - `publish --apply` — пишет в клон dochub (паспорт + `_root.yaml`) и создаёт
   ветку/коммит; без `--apply` это dry-run. `--push` — только с `--apply` и только
   по явному подтверждению человека: пуш и создание MR — внешнее действие.
-- `ssot --apply` — пишет в клон SSoT `entities/information-systems/<код>/base.yaml`
-  (только блок `severity`) и создаёт ветку/коммит; без `--apply` это dry-run.
-  `--push` — только с `--apply` и только по явному подтверждению: пуш и создание
-  MR — внешнее действие. Обогащение SSoT идёт ДО публикации в
-  `#Criticality_assessment` (тред ссылается на SSoT-MR).
+- `ssot_form_save` и применение MR — только по явному подтверждению человека:
+  `ssot_mr_approve(confirm: true)` → `ssot_apply_changes(confirm: true)` →
+  `ssot_wait_master`. Обогащение SSoT идёт ДО публикации в
+  `#Criticality_assessment` (тред ссылается на SSoT-MR из `mrUrl`).
+  `ssot-plan --force` (как и `publish --force`) — осознанный обход гейта R18.
 - Публикация не меняет `criteria_inputs`, `catalog.yaml` и `is/`: источник — уже
   сгенерированный паспорт. Обогащение SSoT не меняет `catalog.yaml`, `is/` и
-  другие файлы карточки ИС: правится только `severity` в `base.yaml`.
+  другие файлы карточки ИС: в форме правятся только `severity.type` и
+  `severity.confirmation`.
 
 ## Ссылки
 
