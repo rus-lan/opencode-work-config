@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Тексты задач выборки",
+  "description": "Артефакт .task-readiness/norm/task-texts.json: тексты задач, по которым строятся векторы. Текст хранится отдельным файлом, а не в norm/sprint-sample.json (там только summary_sha256): так статистика остаётся без текста задачи. summary — заголовок как в Jira, text — конкатенация секций описания без заголовка. Файл git-ignored и наружу (отчёт, комментарий, публикации) не уходит.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "built_at",
+    "source",
+    "tasks"
+  ],
+  "properties": {
+    "built_at": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Момент сборки текстов в UTC."
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sprints",
+        "retrieved_at"
+      ],
+      "properties": {
+        "sprints": {
+          "type": "array",
+          "minItems": 0,
+          "description": "Спринты, из которых взяты тексты (имена как в Jira).",
+          "items": {
+            "type": "string",
+            "pattern": "\\S"
+          }
+        },
+        "retrieved_at": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Момент чтения задач из Jira в UTC."
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Тексты задач, отсортированы по key.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "summary",
+          "text",
+          "role",
+          "work_kind",
+          "issue_type",
+          "sp",
+          "qa_estimation",
+          "has_testing"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Ключ задачи Jira как есть."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Заголовок задачи как в Jira. Может быть пустым."
+          },
+          "text": {
+            "type": "string",
+            "description": "Конкатенация секций описания без заголовка. Может быть пустым, если описания нет."
+          },
+          "role": {
+            "enum": [
+              "BA",
+              "SA",
+              "BE",
+              "FE",
+              "QA",
+              "DEVOPS",
+              "OTHER"
+            ],
+            "description": "Роль после нормализации."
+          },
+          "work_kind": {
+            "enum": [
+              "implementation",
+              "research",
+              "bugfix",
+              "tech_debt",
+              "analysis",
+              "testing",
+              "unknown"
+            ],
+            "description": "Вид работ."
+          },
+          "issue_type": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Тип задачи Jira."
+          },
+          "sp": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Story Points: число или null, если поле не заполнено."
+          },
+          "qa_estimation": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "QA Estimation: число или null, если поле не заполнено."
+          },
+          "has_testing": {
+            "type": "boolean",
+            "description": "Признак того, что задача содержит тестирование."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E001 — Метрики PI и Epic 2026 (Q1–Q3)</title>
+<style>
+  :root {
+    --white: #ffffff; --ink: #0d0d0d; --ink2: #1a1a1a;
+    --fog: #fafafa; --pearl: #f5f5f5; --cloud: #ececec;
+    --teal: #10a37f; --teal-deep: #0a7a5e; --teal-soft: #e8f5f0;
+    --graphite: #3c3c3c; --slate: #6e6e6e; --ash: #9b9b9b; --stone: #c4c4c4;
+    --line: #e5e5e5; --line-soft: #ededed;
+    --error: #ef4146; --warn: #f5a623; --info: #2563eb;
+    --serif: 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+    --sans: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--white); color: var(--graphite); line-height: 1.65; padding: 48px 24px; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  h1 { font-family: var(--serif); font-size: 40px; font-weight: 400; color: var(--ink); letter-spacing: -0.01em; line-height: 1.15; margin-bottom: 12px; }
+  .sub { color: var(--slate); font-size: 14px; margin-bottom: 32px; }
+  h2 { font-size: 28px; font-weight: 600; color: var(--ink); letter-spacing: -0.005em; margin: 56px 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); line-height: 1.2; }
+  h3 { font-size: 20px; font-weight: 600; color: var(--ink); margin: 24px 0 12px; line-height: 1.3; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px,1fr)); gap: 16px; margin: 24px 0; }
+  .card { background: var(--white); border: 1px solid var(--line-soft); border-radius: 16px; padding: 24px; }
+  .card .name { font-size: 13px; font-weight: 500; color: var(--slate); }
+  .card .val { font-size: 30px; font-weight: 600; color: var(--ink); margin: 8px 0 4px; letter-spacing: -0.01em; }
+  .card .tgt { font-size: 12.5px; color: var(--slate); }
+  .card .gone { font-size: 12px; color: var(--stone); text-decoration: line-through; }
+  .card .badge { display:inline-block; font-size: 11px; font-weight:500; padding:3px 10px; border-radius:9999px; margin-top:10px; }
+  .ok { color: var(--teal); } .bad { color: var(--error); } .warn { color: var(--warn); }
+  .b-ok { background: var(--teal-soft); color: var(--teal-deep); } .b-bad { background: #fdeaea; color: var(--error); }
+  .b-warn { background: #fdf3e2; color: #9a6418; } .b-muted { background: var(--pearl); color: var(--slate); }
+  table { width:100%; border-collapse: collapse; background: var(--white); border-radius: 16px; overflow: hidden; border:1px solid var(--line-soft); margin: 16px 0; font-size: 14px; }
+  th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--fog); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--slate); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--fog); }
+  .right { text-align: right; }
+  .num { font-variant-numeric: tabular-nums; }
+  .tag { display:inline-block; font-size:11px; font-weight:500; padding:2px 8px; border-radius:6px; }
+  .tag-tech { background: var(--teal-soft); color: var(--teal-deep); }
+  .tag-prod { background: var(--pearl); color: var(--graphite); }
+  .chip { display:inline-block; font-size:11px; font-weight:500; padding:2px 10px; border-radius:9999px; border:1px solid var(--line); margin-right:4px; }
+  .chip-cancel { color: var(--error); border-color:#f3c6c7; background:#fff7f7; }
+  .chip-done { color: var(--teal-deep); border-color:#bfe5d8; background:var(--teal-soft); }
+  a { color: var(--teal); text-decoration: none; }
+  a:hover { text-decoration: underline; color: var(--teal-deep); }
+  .note { background: #fdf7e9; border:1px solid #f0e4c6; border-left:4px solid var(--warn); border-radius: 12px; padding: 16px 20px; font-size: 14px; margin: 20px 0; color: var(--graphite); }
+  .note b { color:#7a5a10; }
+  .warn-banner { background: #fdeaea; border:1px solid #f4c3c5; border-left:4px solid var(--error); border-radius: 12px; padding: 16px 20px; font-size: 14px; margin: 20px 0; color: var(--graphite); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap: 24px; }
+  @media (max-width:760px){ .grid2{grid-template-columns:1fr;} .cards{grid-template-columns:1fr 1fr;} }
+  .foot { margin-top:48px; padding-top:16px; border-top:1px solid var(--line); color: var(--slate); font-size: 12px; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--pearl); padding:1px 5px; border-radius:4px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>E001 — Метрики PI и Epic</h1>
+  <div class="sub">Период: закрытые (resolved) 01.01.2026 – 31.07.2026 · Источник: Cedrus <code>jira_issue_4</code> + <code>jira_issue_history_hist</code> (снимок 07.08.2026) · PI и Epic без статуса <code>Cancelled</code> · Jira: <a href="https://project.samokat.ru">project.samokat.ru</a></div>
+
+  <div class="warn-banner"><b>⚠️ Исправление методики.</b> (1) Исходный расчёт использовал <code>jira_issue_4_hist.statusname</code>, которое некорректно показывало <code>New</code> вместо <code>Backlog</code> (искусственно раздувая ТТМ). Данные пересчитаны по надёжной истории <code>jira_issue_history_hist</code> (<code>fieldname='statusName'</code>). Например E001-24815 реально был <code>New → Backlog → Cancelled</code> = ТТМ 0, а не 348 дн. CR и PIR-отчёт не зависят от этого. (2) <b>PI и Epic берутся только со статусом <code>Done</code></b> (без <code>Cancelled</code>). (3) <b>ТТМ/LT считаются в минутах с округлением по итогу</b> (ранее — усечение по каждому сегменту, что занижало значения, напр. E001-24657 было 20, верно 21). Итог: ТТМ PI <b>76.8 дн</b>, CR PI <b>68.3%</b>, LT Epic <b>45.3 дн</b>, CR Epic <b>72.8%</b>.</div>
+
+  <!-- ===================== МЕТОДИКА ===================== -->
+  <h2>Методика расчёта метрик</h2>
+  <div class="note"><b>Общее:</b> период — закрытые по <code>resolved</code> за 01.01.2026–31.07.2026. Статусы регистрозависимы, сравнение через <code>lower()</code>. История статусов — из <code>jira_issue_history_hist</code> (<code>fieldname='statusName'</code>, поле <code>newvalue</code>). Время нахождения в статусе = до следующей смены статуса (или до <code>resolved</code>, если статус последний). <b>PI (Initiative) и Epic без статуса <code>Cancelled</code></b> — в расчёт берутся только закрытые рабочей <code>Done</code>. CR считается по <code>enddate</code>/<code>baselineenddate</code> и не зависит от статусной истории. <b>ТТМ/LT считаются в минутах, суммируются, затем переводятся в дни и округляются по итогу</b> (не по каждому сегменту) — чтобы совпадать с дашбордом (например E001-24657 = 21.1 дн → 21).</div>
+  <table>
+    <thead><tr><th>Метрика</th><th>Объект / выборка</th><th>Способ расчёта</th><th class="right">Исключения</th><th class="right">Итог</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>ТТМ PI Single</b></td>
+        <td>Инициативы (<code>Initiative</code>) проекта E001, закрытые за период и <b>без связки с PRCON</b>, статус <code>Done</code></td>
+        <td>Сумма длительности рабочих статусов по <code>jira_issue_history_hist</code> (в минутах, округление по итогу), делённая на число PI</td>
+        <td class="right">Считает только рабочие статусы; значения вне 14–365 дн исключаются из среднего</td>
+        <td class="right num"><b>76.8 дн (15)</b></td>
+      </tr>
+      <tr>
+        <td><b>CR PI</b></td>
+        <td>Закрытые <code>Done</code>-инициативы с заполненными <code>enddate</code> и <code>baselineenddate</code></td>
+        <td>Доля «в срок»: <code>enddate &lt;= baselineenddate + 2 дня</code></td>
+        <td class="right">Только PI с обеими датами; <code>Cancelled</code> исключён</td>
+        <td class="right num"><b>68.3% (28/41)</b></td>
+      </tr>
+      <tr>
+        <td><b>LT Epic</b></td>
+        <td>Эпики (<code>Epic</code>) E001, закрытые за период, статус <code>Done</code></td>
+        <td>Сумма длительности в статусах <code>ba, ready for sa, sa, ready for dev, development, to test, testing</code> по <code>jira_issue_history_hist</code> (в минутах, округление по итогу)</td>
+        <td class="right">Значения вне 1–365 дн исключаются из среднего</td>
+        <td class="right num"><b>45.3 дн (133)</b></td>
+      </tr>
+      <tr>
+        <td><b>CR Epic</b></td>
+        <td>Закрытые <code>Done</code>-эпики с заполненными <code>enddate</code> и <code>baselineenddate</code></td>
+        <td>Доля «в срок»: <code>enddate &lt;= baselineenddate + 2 дня</code></td>
+        <td class="right">Только Epic с обеими датами; <code>Cancelled</code> исключён</td>
+        <td class="right num"><b>72.8% (107/147)</b></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ===================== СВОДКА ===================== -->
+  <h2>Цели против факта (пересчитано)</h2>
+  <div class="cards">
+    <div class="card"><div class="name">ТТМ PI Single</div><div class="val bad">76.8 <span style="font-size:15px">дн</span></div><div class="tgt">Цель 60 дн</div><div class="gone">было 58.3</div><span class="badge b-bad">🔴 выше цели</span></div>
+    <div class="card"><div class="name">CR PI</div><div class="val bad">68.3%</div><div class="tgt">Цель 80% · −11.7 п.п.</div><span class="badge b-bad">🔴 ниже цели</span></div>
+    <div class="card"><div class="name">LT Epic</div><div class="val warn">45.3 <span style="font-size:15px">дн</span></div><div class="tgt">Цель 45 дн</div><div class="gone">было 43.5</div><span class="badge b-warn">⚠️ чуть выше цели</span></div>
+    <div class="card"><div class="name">CR Epic</div><div class="val bad">72.8%</div><div class="tgt">Цель 80% · −7.2 п.п.</div><div class="gone">было 81.9%</div><span class="badge b-bad">🔴 ниже цели</span></div>
+  </div>
+  <div class="note"><b>Фокус после исправления методики (Done только; ТТМ/LT в минутах):</b> в цели метрик нет. <b>ТТМ PI</b> (76.8 &gt; 60), <b>CR PI</b> (68.3%), <b>CR Epic</b> (72.8%) и <b>LT Epic</b> (45.3 &gt; 45, ранее недооценивался из-за усечения сегментов) — все вне цели.</div>
+
+  <!-- ===================== РАЗБИВКА ===================== -->
+  <h2>Разбивка: технические (ekarmakov) vs продуктовые</h2>
+  <div class="note">Технические — <code>assigneeusername = 'ekarmakov'</code> [T].</div>
+
+  <table>
+    <thead><tr><th>Метрика</th><th class="right"><span class="tag tag-tech">tech</span> ekarmakov</th><th class="right"><span class="tag tag-prod">product</span></th><th class="right">Цель</th></tr></thead>
+    <tbody>
+      <tr><td>ТТМ PI Single</td><td class="right num ok">30.4 дн (3)</td><td class="right num bad">~88 дн (12)</td><td class="right num">60</td></tr>
+      <tr><td>CR PI</td><td class="right num ok">93.3% (14/15)</td><td class="right num bad">53.8% (14/26)</td><td class="right num">80%</td></tr>
+      <tr><td>LT Epic</td><td class="right num">— (0)</td><td class="right num warn">45.3 дн (133)</td><td class="right num">45</td></tr>
+      <tr><td>CR Epic</td><td class="right num">— (0)</td><td class="right num bad">72.8% (107/147)</td><td class="right num">80%</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid2">
+    <div>
+      <h3>ТТМ PI по исполнителям</h3>
+      <table>
+        <thead><tr><th>Исполнитель</th><th class="right">avg ТТМ, дн</th><th class="right">n</th></tr></thead>
+        <tbody>
+          <tr><td>imakarov</td><td class="right num">100.5</td><td class="right num">7</td></tr>
+          <tr><td><span class="tag tag-tech">ekarmakov</span></td><td class="right num">30.4</td><td class="right num">3</td></tr>
+          <tr><td>fkoledenkov</td><td class="right num">90.8</td><td class="right num">3</td></tr>
+          <tr><td>edolgikh</td><td class="right num">21.0</td><td class="right num">1</td></tr>
+          <tr><td>isadretdinov</td><td class="right num">64.0</td><td class="right num">1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3>LT Epic по исполнителям</h3>
+      <table>
+        <thead><tr><th>Исполнитель</th><th class="right">avg LT, дн</th><th class="right">n</th></tr></thead>
+        <tbody>
+          <tr><td>imakarov</td><td class="right num">53.1</td><td class="right num">38</td></tr>
+          <tr><td>fkoledenkov</td><td class="right num">39.0</td><td class="right num">32</td></tr>
+          <tr><td>rrozhkov</td><td class="right num">25.7</td><td class="right num">18</td></tr>
+          <tr><td>isadretdinov</td><td class="right num">46.4</td><td class="right num">18</td></tr>
+          <tr><td>aleksubbotin</td><td class="right num">63.5</td><td class="right num">12</td></tr>
+          <tr><td>ipilyaev</td><td class="right num">31.9</td><td class="right num">7</td></tr>
+          <tr><td>edolgikh</td><td class="right num">30.4</td><td class="right num">4</td></tr>
+          <tr><td>dshisterov</td><td class="right num">31.5</td><td class="right num">2</td></tr>
+          <tr><td>emarchenkov</td><td class="right num">270.2</td><td class="right num">1</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===================== КОНТЕЙНЕРНЫЕ ЭПИКИ ===================== -->
+  <h2>Влияние контейнерных эпиков (stream = «Контейнер»)</h2>
+  <div class="note"><b>Методика:</b> контейнерный эпик — это Epic, у которого поле <code>stream</code> = <b>«Контейнер»</b> (<code>streamid = 37105</code>, справочник <code>jira_stream</code>). За период 01.01–31.07.2026 закрыто <b>7</b> контейнерных Epic (все <code>Done</code>, все в срок). ПИ (Initiative) контейнеров <b>не имеют</b> (0 по выборке) — метрики PI не зависят от этого фильтра.</div>
+
+  <table>
+    <thead><tr><th>Метрика</th><th class="right">С контейнерами</th><th class="right">Без контейнеров</th><th class="right">Вклад контейнеров</th><th class="right">Цель</th></tr></thead>
+    <tbody>
+      <tr><td>LT Epic</td><td class="right num">45.3 дн (133)</td><td class="right num">45.3 дн (132)</td><td class="right num">44 дн (1 в среднем)</td><td class="right num">45</td></tr>
+      <tr><td>CR Epic</td><td class="right num bad">72.8% (107/147)</td><td class="right num">71.4% (100/140)</td><td class="right num">100% (7/7)</td><td class="right num">80%</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note"><b>Учтено задач (n):</b> базовые счётчики совпадают с основным расчётом отчёта. LT Epic — среднее по включённым в диапазон 1–365 дн; CR Epic — доля «в срок» среди закрытых с заполненными датами.</div>
+  <table>
+    <thead><tr><th>Метрика</th><th class="right">Закрыто за период</th><th class="right">Вошло в расчёт</th><th class="right">Из них контейнерных</th><th class="right">После исключения</th></tr></thead>
+    <tbody>
+      <tr><td>LT Epic (в диапазоне 1–365 дн)</td><td class="right num">133</td><td class="right num">133</td><td class="right num">1</td><td class="right num">132</td></tr>
+      <tr><td>CR Epic (закрытые с обеими датами)</td><td class="right num">147</td><td class="right num">147</td><td class="right num">7</td><td class="right num">140</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:24px">В разрезе кварталов</h3>
+  <div class="grid2">
+    <div>
+      <h3 style="margin-top:0">LT Epic</h3>
+      <table>
+        <thead><tr><th>Квартал</th><th class="right">С контейнерами</th><th class="right">Без контейнеров</th><th class="right">Контейнерных в среднем</th></tr></thead>
+        <tbody>
+          <tr><td>Q1 2026</td><td class="right num">47.8 дн (52)</td><td class="right num">47.8 дн (52)</td><td class="right num">0</td></tr>
+          <tr><td>Q2 2026</td><td class="right num">48.4 дн (60)</td><td class="right num">48.4 дн (60)</td><td class="right num">0</td></tr>
+          <tr><td>Q3 2026</td><td class="right num">30.6 дн (20)</td><td class="right num">29.9 дн (19)</td><td class="right num">1 (44 дн)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3 style="margin-top:0">CR Epic</h3>
+      <table>
+        <thead><tr><th>Квартал</th><th class="right">С контейнерами</th><th class="right">Без контейнеров</th><th class="right">Контейнерных (все в срок)</th></tr></thead>
+        <tbody>
+          <tr><td>Q1 2026</td><td class="right num bad">51.9% (28/54)</td><td class="right num">50.9% (27/53)</td><td class="right num">1/1</td></tr>
+          <tr><td>Q2 2026</td><td class="right num ok">85.5% (59/69)</td><td class="right num">84.6% (55/65)</td><td class="right num">4/4</td></tr>
+          <tr><td>Q3 2026</td><td class="right num ok">82.6% (19/23)</td><td class="right num">81.0% (17/21)</td><td class="right num">2/2</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="note"><b>По кварталам:</b> эффект исключения контейнерных эпиков минимален во всех кварталах — изменение LT Epic ≤ 0.8 дн (только Q3), изменение CR Epic ≤ 1.6 п.п. Во всех кварталах контейнеры закрывались в срок, поэтому их удаление лишь слегка снижает CR.</div>
+
+  <h3 style="margin-top:24px">Всего задач по месяцам (без фильтра по контейнерам)</h3>
+  <table>
+    <thead><tr><th>Месяц</th><th class="right">Закрыто Epic</th><th class="right">LT Epic</th><th class="right">CR Epic</th></tr></thead>
+    <tbody>
+      <tr><td>2026-01</td><td class="right num">6</td><td class="right num">39.0 дн (6)</td><td class="right num">2/6</td></tr>
+      <tr><td>2026-02</td><td class="right num">21</td><td class="right num">43.2 дн (20)</td><td class="right num">14/21</td></tr>
+      <tr><td>2026-03</td><td class="right num">27</td><td class="right num">53.4 дн (26)</td><td class="right num">12/27</td></tr>
+      <tr><td>2026-04</td><td class="right num">23</td><td class="right num">51.1 дн (18)</td><td class="right num">18/23</td></tr>
+      <tr><td>2026-05</td><td class="right num">29</td><td class="right num">47.9 дн (25)</td><td class="right num">26/29</td></tr>
+      <tr><td>2026-06</td><td class="right num">18</td><td class="right num">42.4 дн (18)</td><td class="right num">16/18</td></tr>
+      <tr><td>2026-07</td><td class="right num">23</td><td class="right num">30.6 дн (20)</td><td class="right num">19/23</td></tr>
+      <tr><td><b>Итого</b></td><td class="right num"><b>147</b></td><td class="right num"><b>45.3 дн (133)</b></td><td class="right num"><b>72.8% (107/147)</b></td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>В среднем ~21 Epic/мес</b> (147 Done за 7 мес, включая E001-29150). Пик закрытий — мар (27) и май (29); минимум — янв (6). <b>LT Epic</b> 39–53 дн, к июл снижается до 30.6 дн. <b>CR Epic</b> самый низкий в янв (33.3%) и мар (44.4%), стабильно высокий в май–июл. <b>Таблица посчитана по снимку <code>jira_issue_4</code> (по <code>resolved</code>) с одним дополнением:</b> июнь = <b>18</b> (в снимке 17, + E001-29150, закрыт по истории 26.06, но в снимке статус ещё <code>ready to deploy</code>). Итого 147 Done (146 по снимку + 29150), LT 45.3 дн (133 в диапазоне), CR 107/147 = 72.8%.</div>
+
+  <details>
+    <summary><b>Январь 2026 — детализация по 6 Done Epic</b> <span style="font-weight:400;color:var(--slate)">(нажмите, чтобы развернуть)</span></summary>
+    <div style="margin-top:12px">
+      <div class="note" style="margin-bottom:12px">Закрыто за янв 2026: <b>6</b> Done Epic · LT Epic <b>39.0 дн</b> (6 в диапазоне) · CR Epic <b>2/6 = 33.3%</b>. Эпики со статусом <code>Cancelled</code> исключены; LT в минутах с округлением по итогу (напр. E001-24657 = 21.1 → 21).</div>
+      <table>
+        <thead><tr><th>Epic</th><th class="right">LT, дн</th><th>Статус</th><th>CR</th><th>Исполн.</th><th>Описание</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-24657">E001-24657</a></td><td class="right num">21</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>rrozhkov</td><td>ERM  Вывод из эксплуатации нескольких сервисов ERM</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-25502">E001-25502</a></td><td class="right num">76</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>isadretdinov</td><td>SIMPL  Интеграция с CW для забора проектов</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-25626">E001-25626</a></td><td class="right num">14</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>fkoledenkov</td><td>Сокращение отложки в CRM</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26171">E001-26171</a></td><td class="right num">60</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>imakarov</td><td>ERM , TICKETS  ПВЗ Меги и ПВЗ Самоката в КС ММ</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26335">E001-26335</a></td><td class="right num">25</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>fkoledenkov</td><td>OCRMCRM Заказы с динамическим SLA в ОСРМ</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26972">E001-26972</a></td><td class="right num">37</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>aleksubbotin</td><td>ERM  Размещение ссылки на ЕРМ в оркестраторе</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details>
+    <summary><b>Март 2026 — детализация по 27 Done Epic</b> <span style="font-weight:400;color:var(--slate)">(нажмите, чтобы развернуть)</span></summary>
+    <div style="margin-top:12px">
+      <div class="note" style="margin-bottom:12px">Закрыто за март 2026: <b>27</b> Done Epic · LT Epic <b>53.4 дн</b> (26 в диапазоне, 1 с LT 0 исключён) · CR Epic <b>12/27 = 44.4%</b>. Эпики со статусом <code>Cancelled</code> исключены; LT в минутах с округлением по итогу.</div>
+      <table>
+        <thead><tr><th>Epic</th><th class="right">LT, дн</th><th>Статус</th><th>CR</th><th>Исполн.</th><th>Описание</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26460">E001-26460</a></td><td class="right num">124</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>aleksubbotin</td><td>ERM  СДЭК в оркестраторе</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26477">E001-26477</a></td><td class="right num">111</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>fkoledenkov</td><td>Виджеты Заказа в Оркестраторе</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26689">E001-26689</a></td><td class="right num">102</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>aleksubbotin</td><td>ERM  Поиск доставки/заказа в оркестраторе</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26345">E001-26345</a></td><td class="right num">97</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>fkoledenkov</td><td>Компенсации за заказ: рублёвая скидка</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-25080">E001-25080</a></td><td class="right num">94</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>imakarov</td><td>TICKETS Отказ от ОТРС и перенос процессов</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27389">E001-27389</a></td><td class="right num">85</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>isadretdinov</td><td>SIMPL  Виджет заказа Купера в оркестратор</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27562">E001-27562</a></td><td class="right num">70</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>fkoledenkov</td><td>OCRMCRM Платная упаковка</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-25079">E001-25079</a></td><td class="right num">73</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>imakarov</td><td>Передавать информацию об НРП в Легком возврате</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26476">E001-26476</a></td><td class="right num">69</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>fkoledenkov</td><td>Виджеты Клиента в Оркестраторе</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26974">E001-26974</a></td><td class="right num">65</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>imakarov</td><td>ERM  Разметка событий в ЕРМ в оркестраторе</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27602">E001-27602</a></td><td class="right num">64</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>imakarov</td><td>TICKETS  СДЭК-доставка в тикетах</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27604">E001-27604</a></td><td class="right num">66</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>imakarov</td><td>ERM  СДЭК-доставка в ЕРМ</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27903">E001-27903</a></td><td class="right num">54</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>rrozhkov</td><td>TICKETS  Рефакторинг и регресс тестирование автоматизаций</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27743">E001-27743</a></td><td class="right num">44</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>rrozhkov</td><td>[ERM] [Логистическая доступность] Отказ от ElasticSearch - location-index</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27567">E001-27567</a></td><td class="right num">40</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>fkoledenkov</td><td>OCRMCRM Акция НСПК МИР (Бекофис)</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-25257">E001-25257</a></td><td class="right num">36</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>ipilyaev</td><td>T006 OCRM | Передача владения данными в продукты (СМКТ и ММ)</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27991">E001-27991</a></td><td class="right num">36</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>isadretdinov</td><td>SIMPL  События для пилота</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27647">E001-27647</a></td><td class="right num">36</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>imakarov</td><td>ERM  СДЭК-доставка в Оркестраторе</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28022">E001-28022</a></td><td class="right num">28</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>imakarov</td><td>TICKETS  Обработка события премодерации в Jira</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28314">E001-28314</a></td><td class="right num">22</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>fkoledenkov</td><td>OCRMCRM Акция НСПК МИР (Оркестратор)</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-25964">E001-25964</a></td><td class="right num">22</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>fkoledenkov</td><td>Поиск Заказов</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27505">E001-27505</a></td><td class="right num">14</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>rrozhkov</td><td>TICKETS  Расселение Legacy кластеров ММ - миграция VM и БД</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27706">E001-27706</a></td><td class="right num">10</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>fkoledenkov</td><td>Интеграция виджетов с Оркестратором</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27744">E001-27744</a></td><td class="right num">9</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>rrozhkov</td><td>TICKETS [Логистическая доступность] Отказ от ElasticSearch - index_pvz_v6</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28118">E001-28118</a></td><td class="right num">10</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>fkoledenkov</td><td>OCRMCRM Авторизация через КК</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28410">E001-28410</a></td><td class="right num">7</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>aleksubbotin</td><td>ERM  Отказ от вкладки "Главная"</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26789">E001-26789</a></td><td class="right num">0</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>fkoledenkov</td><td>Проверка на Фрод</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details>
+    <summary><b>Июнь 2026 — детализация по 18 Done Epic</b> <span style="font-weight:400;color:var(--slate)">(нажмите, чтобы развернуть)</span></summary>
+    <div style="margin-top:12px">
+      <div class="note" style="margin-bottom:12px">Закрыто за июнь 2026: <b>18</b> Done Epic (17 по снимку <code>jira_issue_4</code> + E001-29150, закрыт по истории 26.06, но в снимке статус отстаёт) · LT Epic <b>~48</b> дн (18 в диапазоне, методика «сумма минут → дни, округление по итогу») · CR Epic <b>16/18 = 88.9%</b>. За тот же месяц есть ещё <b>2</b> Epic со статусом <code>Cancelled</code> (E001-26782, E001-27654) — исключены. Эпики со статусом <code>Cancelled</code> исключены из всех счётчиков.</div>
+      <div class="warn-banner" style="margin-bottom:12px"><b>⚠️ Причина расхождения счёта с дашбордом.</b> Счёт зависит от даты и источника статуса. (1) По снимку <code>jira_issue_4</code> в июне <b>17</b> Done; (2) с учётом <b>истории статусов</b> <code>jira_issue_history_hist</code> добавляется <b>E001-29150</b> (<code>ready to deploy → done</code> 26.06, но поле <code>statusname</code> в снимке ещё <code>ready to deploy</code>, <code>resolved</code> пусто) → <b>18</b>; (3) по дате <code>enddate</code> набор меняется: уходит E001-27724 (enddate 05-31, resolved 06-01), приходят E001-29578/29783 (enddate 06-30, resolved 07-01); (4) если не исключать <code>Cancelled</code> — ещё +2 (E001-26782, E001-27654). Рекомендуется сверить, по какому полю (<code>resolved</code>/<code>enddate</code>) и с каким источником статуса (снимок/история) считает дашборд — этим объясняется разница 17 vs 18 (+E001-29150).</div>
+      <div class="note" style="margin-bottom:12px"><b>✅ Системная проверка расхождений (по всем E001 Epic/Initiative за период).</b> Статус в снимке <code>jira_issue_4</code> был сверен с последней непустой записью <code>jira_issue_history_hist</code> (<code>statusName</code>). Результат: <b>единственное</b> расхождение типа «закрыт, но не учтён» — E001-29150 (учтён выше). Обратных случаев «снимок = <code>done</code>, но история ≠ <code>done</code>» в периоде нет: найденные E001-27508/27509/29970/30192 закрыты 05.08.2026 (вне периода отчёта 01.01–31.07) и на метрики не влияют. Остальные различия с дашбордом объясняются только датой среза (<code>resolved</code>/<code>enddate</code>) и фильтром статуса (<code>Cancelled</code>).</div>
+      <table>
+        <thead><tr><th>Epic</th><th class="right">LT, дн</th><th>Статус</th><th>CR</th><th>Исполн.</th><th>Описание</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27724">E001-27724</a></td><td class="right num">101</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>fkoledenkov</td><td>Компенсации клиенту - рублевая скидка + мин чек (3)</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27105">E001-27105</a></td><td class="right num">84</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>imakarov</td><td>ERM  Оркестратор: Создание тикетов по клиентским категориям</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26813">E001-26813</a></td><td class="right num">68</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>aleksubbotin</td><td>ERM  Влияние отмены на данные в заказах</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28445">E001-28445</a></td><td class="right num">67</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>fkoledenkov</td><td>Доставка Роверами</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28429">E001-28429</a></td><td class="right num">63</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-cancel">просроч</span></td><td>aleksubbotin</td><td>ERM  Ссылка для отслеживания СДЭК</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26347">E001-26347</a></td><td class="right num">57</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>fkoledenkov</td><td>Компенсации за заказ: % скидка за товары (5)</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28913">E001-28913</a></td><td class="right num">37</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>imakarov</td><td>ERM  Переходы из ОРК в ЕРМ по ссылкам</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-29174">E001-29174</a></td><td class="right num">37</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>isadretdinov</td><td>Создание уведомлений по проектам в админке</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28551">E001-28551</a></td><td class="right num">36</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>imakarov</td><td>ЕРМ (для РОМС) Тикеты ММ. Дообогащение информацией по адресу (из address\suggest) при создании и преобразовании тикета в ЕРМ.</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-24088">E001-24088</a></td><td class="right num">35</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>imakarov</td><td>TICKETS  НТС. Смена статуса при комментарии от продавца</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28783">E001-28783</a></td><td class="right num">35</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>ipilyaev</td><td>OCRMCRM Настройка CI автотестов в CRM</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-29224">E001-29224</a></td><td class="right num">28</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>ipilyaev</td><td>OCRM NRT - Клиент (профиль)</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-18461">E001-18461</a></td><td class="right num">27</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>imakarov</td><td>TICKETS  Некорректное выставление Открыт для ЛКМ</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28552">E001-28552</a></td><td class="right num">27</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>imakarov</td><td>ЛКП (для РОМС) Тикеты ММ. Дообогащение информацией по адресу (из address\suggest) при создании тикета </td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28320">E001-28320</a></td><td class="right num">22</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>imakarov</td><td>TICKETS  Признак registration_repeated в тикетах</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28575">E001-28575</a></td><td class="right num">19</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>dshisterov</td><td>SIMPL  Отказ от config-server в пользу k8s</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28901">E001-28901</a></td><td class="right num">18</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>ipilyaev</td><td>OCRMCRM Внедрение id покупателя в opercrm | omnipresent-user-id</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-29150">E001-29150</a></td><td class="right num">14</td><td><span class="chip chip-done">Done</span></td><td><span class="chip chip-done">в срок</span></td><td>fkoledenkov</td><td>OCRM Доп проверки при выдачи компенсаций к фродерам Оркестратор</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <div class="note"><b>Вывод:</b> исключение контейнерных эпиков <b>не меняет выводы</b>.
+  <b>LT Epic</b> — без изменений (45.3 → 45.3 дн, n 133 → 132: в средний расчёт в диапазоне 1–365 дн попадает всего <b>1</b> контейнерный Epic с LT 44 дн).
+  <b>CR Epic</b> — <i>слегка падает</i> 72.8% → 71.4%: все 7 контейнеров были в срок, их удаление избавляет выборку от «лёгких» в срок закрытых эпиков. Обе метрики остаются в районе цели 45/80.</div>
+
+  <h3>Контейнерные эпики за период (7)</h3>
+  <table>
+    <thead><tr><th>Epic</th><th>Статус</th><th>Описание</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26620">E001-26620</a></td><td><span class="chip chip-done">Done</span></td><td>OCRMCRM Тех задачи на бэк 25_Q4 (контейнер)</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-27570">E001-27570</a></td><td><span class="chip chip-done">Done</span></td><td>SIMPL  Автоматизация тестирования T083 SIMPL</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-27731">E001-27731</a></td><td><span class="chip chip-done">Done</span></td><td>SIMPL  Metrics &amp; SLO + Alerts</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-28049">E001-28049</a></td><td><span class="chip chip-done">Done</span></td><td>SIMPL  Доработки в рамках E2E UI Оркестратора</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-28247">E001-28247</a></td><td><span class="chip chip-done">Done</span></td><td>SIMPL  MM E2E UI Оркестратора</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-28248">E001-28248</a></td><td><span class="chip chip-done">Done</span></td><td>SIMPL  SMKT E2E UI Оркестратора</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-28249">E001-28249</a></td><td><span class="chip chip-done">Done</span></td><td>SIMPL  KPR E2E UI Оркестратора</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ===================== ТТМ ===================== -->
+  <h2>ТТМ PI Single — кто тянет среднее (Done, минуты)</h2>
+  <div class="note">В диапазоне 14–365 дн — <b>15 Done PI</b> без PRCON-связи, исключённых нет; статус <code>Cancelled</code> исключён; рабочее время — по <code>jira_issue_history_hist</code>, в минутах с округлением по итогу. Текущее <b>76.8 дн</b>.</div>
+  <table>
+    <thead><tr><th>ПИ</th><th class="right">ТТМ, дн</th><th>Статус</th><th>Исполн.</th><th>Описание</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26092">E001-26092</a></td><td class="right num">184</td><td><span class="chip chip-done">Done</span></td><td>imakarov</td><td>Распил ЕРМ: создание тикета</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26236">E001-26236</a></td><td class="right num">127</td><td><span class="chip chip-done">Done</span></td><td>imakarov</td><td>Распил ЕРМ: поиск доставки</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-27188">E001-27188</a></td><td class="right num">111</td><td><span class="chip chip-done">Done</span></td><td>fkoledenkov</td><td>Оркестратор: компенсации Клиенту</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-27275">E001-27275</a></td><td class="right num">99</td><td><span class="chip chip-done">Done</span></td><td>imakarov</td><td>Доработки по основным сценариям Создания тикета</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-25063">E001-25063</a></td><td class="right num">98</td><td><span class="chip chip-done">Done</span></td><td>imakarov</td><td>Переход на АД и Кейклоак в ЕРМ</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26234">E001-26234</a></td><td class="right num">92</td><td><span class="chip chip-done">Done</span></td><td>imakarov</td><td>Распил ЕРМ: отмена доставки</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26212">E001-26212</a></td><td class="right num">90</td><td><span class="chip chip-done">Done</span></td><td>fkoledenkov</td><td>Оркестратор - возвраты</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-27412">E001-27412</a></td><td class="right num">77</td><td><span class="chip chip-done">Done</span></td><td>imakarov</td><td>Поменять триггер холдирования\расхолдирования кэшбека в тикетах</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-28487">E001-28487</a></td><td class="right num">71</td><td><span class="chip chip-done">Done</span></td><td>fkoledenkov</td><td>Реализация компенсаций в виджетах OCRM</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26328">E001-26328</a></td><td class="right num">64</td><td><span class="chip chip-done">Done</span></td><td>isadretdinov</td><td>Сквозная аналитика в UI-оркестраторе</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-28743">E001-28743</a></td><td class="right num">42</td><td><span class="chip chip-done">Done</span></td><td>ekarmakov</td><td>Отказ от LIS</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-28767">E001-28767</a></td><td class="right num">35</td><td><span class="chip chip-done">Done</span></td><td>ekarmakov</td><td>Внедрение автотестов в продукт E001</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-28712">E001-28712</a></td><td class="right num">27</td><td><span class="chip chip-done">Done</span></td><td>imakarov</td><td>Распил ЕРМ: поиск общих промокодов</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-28717">E001-28717</a></td><td class="right num">21</td><td><span class="chip chip-done">Done</span></td><td>edolgikh</td><td>Распил ЕРМ: бонусный баланс</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-29312">E001-29312</a></td><td class="right num">14</td><td><span class="chip chip-done">Done</span></td><td>ekarmakov</td><td>Миграция с Keycloak Мегамаркет на Keycloak ECOM</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>Наблюдение:</b> среднее <b>76.8 дн</b> (было 75.3 при усечении). «Виновники» — долгие рабочие ПИ блоков <b>«Распил ЕРМ»</b> и <b>«Оркестратор»</b> у imakarov/fkoledenkov (64–184 дн). Разброс 14–184 дн.</div>
+
+  <!-- ===================== CR PI ===================== -->
+  <h2>CR PI — просроченные ПИ (без Cancelled, пересчитано)</h2>
+  <div class="note">Закрытые Done PI с обеими датами (41); в срок, если <code>enddate &lt;= baselineenddate + 2 дня</code> (28 → <b>68.3%</b>). До цели 80% нужно 33 — «в график» ещё <b>5</b> из 13 просроченных. CR по <code>enddate</code>/<code>baselineenddate</code> не зависит от статусной истории; здесь выборка сужена до Done.</div>
+  <table>
+    <thead><tr><th>ПИ</th><th class="right">Просрочка, дн</th><th>Статус</th><th>Описание</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-13957">E001-13957</a></td><td class="right num">470</td><td><span class="chip chip-done">Done</span></td><td>Передача данных по обращениям Самоката в SberCare</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-25063">E001-25063</a></td><td class="right num">141</td><td><span class="chip chip-done">Done</span></td><td>Переход на АД и Кейклоак в ЕРМ</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26502">E001-26502</a></td><td class="right num">127</td><td><span class="chip chip-done">Done</span></td><td>Запуск пилота OperCRM в Оркестраторе</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-24806">E001-24806</a></td><td class="right num">126</td><td><span class="chip chip-done">Done</span></td><td>(Возвраты) Невозвратные категории в OperCRM</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-27188">E001-27188</a></td><td class="right num">62</td><td><span class="chip chip-done">Done</span></td><td>Оркестратор: компенсации Клиенту</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26490">E001-26490</a></td><td class="right num">61</td><td><span class="chip chip-done">Done</span></td><td>Поддержать отображение ПВЗ Меги и ПВЗ СМКТ</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26212">E001-26212</a></td><td class="right num">53</td><td><span class="chip chip-done">Done</span></td><td>Оркестратор - возвраты</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-28743">E001-28743</a></td><td class="right num">41</td><td><span class="chip chip-done">Done</span></td><td>Отказ от LIS</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26519">E001-26519</a></td><td class="right num">28</td><td><span class="chip chip-done">Done</span></td><td>Интеграции для работы правил оркестрации</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-24790">E001-24790</a></td><td class="right num">16</td><td><span class="chip chip-done">Done</span></td><td>Распил ЕРМ на микрофронты: задержка доставки</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>Наблюдение:</b> после исключения Cancelled-PI из топ-просрочек ушли отменённые (18496/18489/24985). Крупнейшая просрочка — Done-PI <b>E001-13957 (470 дн)</b>; блок «Оркестратор» стабильно даёт недовыполненные в срок PI.</div>
+
+  <!-- ===================== LT EPIC ===================== -->
+  <h2>LT Epic — чуть выше цели (Done, минуты)</h2>
+  <div class="note">Время в статусах <code>ba, ready for sa, sa, ready for dev, development, to test, testing</code> по <code>jira_issue_history_hist</code>, в минутах с округлением по итогу; среднее, исключены &lt;1 / &gt;365 дн; эпики <code>Cancelled</code> исключены. Текущее <b>45.3 дня</b> (133 Done Epic), цель 45 — ⚠️ чуть выше.</div>
+  <table>
+    <thead><tr><th>Epic</th><th class="right">LT, дн</th><th>Исполн.</th><th>Описание</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-14559">E001-14559</a></td><td class="right num">270</td><td>emarchenkov</td><td>[research] Exchanger: Передача данных СМКТ в Сбер</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-24694">E001-24694</a></td><td class="right num">172</td><td>imakarov</td><td>TICKETS: Переоткрытие тикета другими группами</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-25137">E001-25137</a></td><td class="right num">147</td><td>aleksubbotin</td><td>Отображение карточки доставки для UI оркестратора</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26460">E001-26460</a></td><td class="right num">124</td><td>aleksubbotin</td><td>ERM: СДЭК в оркестраторе</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26477">E001-26477</a></td><td class="right num">111</td><td>fkoledenkov</td><td>Виджеты Заказа в Оркестраторе</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-24311">E001-24311</a></td><td class="right num">108</td><td>imakarov</td><td>TICKETS: Вывод логов на фронт НТС</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-28813">E001-28813</a></td><td class="right num">103</td><td>isadretdinov</td><td>SIMPL: Виджет умного поиска</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26689">E001-26689</a></td><td class="right num">102</td><td>aleksubbotin</td><td>ERM: Поиск доставки/заказа в оркестраторе</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-27724">E001-27724</a></td><td class="right num">101</td><td>fkoledenkov</td><td>Компенсации клиенту — рублёвая скидка + мин чек (3)</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26094">E001-26094</a></td><td class="right num">100</td><td>aleksubbotin</td><td>ERM: Создание лёгкого возврата</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-26345">E001-26345</a></td><td class="right num">97</td><td>fkoledenkov</td><td>Компенсации за заказ: рублёвая скидка</td></tr>
+      <tr><td><a href="https://project.samokat.ru/browse/E001-25080">E001-25080</a></td><td class="right num">94</td><td>imakarov</td><td>TICKETS: Отказ от ОТРС и перенос процессов</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ===================== КВАРТАЛЫ ===================== -->
+  <h2>Метрики в разрезе кварталов (Q1 / Q2 2026)</h2>
+  <div class="note">Разрез по дате закрытия <code>resolved</code> (Q1 = янв–мар, Q2 = апр–июн). ТТМ/LT — по <code>jira_issue_history_hist</code>.</div>
+  <div class="grid2">
+    <div>
+      <h3>ТТМ PI Single</h3>
+      <table>
+        <thead><tr><th>Квартал</th><th class="right">avg, дн</th><th class="right">n</th><th class="right">min/max</th></tr></thead>
+        <tbody>
+          <tr><td>Q1 2026</td><td class="right num warn">96.1</td><td class="right num">3</td><td class="right num">64 / 127</td></tr>
+          <tr><td>Q2 2026</td><td class="right num warn">80.0</td><td class="right num">10</td><td class="right num">14 / 184</td></tr>
+          <tr><td>Q3 2026</td><td class="right num ok">31.5</td><td class="right num">2</td><td class="right num">21 / 42</td></tr>
+        </tbody>
+      </table>
+      <h3 style="margin-top:16px">CR PI</h3>
+      <table>
+        <thead><tr><th>Квартал</th><th class="right">CR</th><th class="right">в срок / даты</th></tr></thead>
+        <tbody>
+          <tr><td>Q1 2026</td><td class="right num bad">59.1%</td><td class="right num">13/22</td></tr>
+          <tr><td>Q2 2026</td><td class="right num ok">82.4%</td><td class="right num">14/17</td></tr>
+          <tr><td>Q3 2026</td><td class="right num bad">50.0%</td><td class="right num">1/2</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3>LT Epic</h3>
+      <table>
+        <thead><tr><th>Квартал</th><th class="right">avg, дн</th><th class="right">n</th><th class="right">min/max</th></tr></thead>
+        <tbody>
+          <tr><td>Q1 2026</td><td class="right num warn">47.8</td><td class="right num">52</td><td class="right num">—</td></tr>
+          <tr><td>Q2 2026</td><td class="right num warn">48.4</td><td class="right num">60</td><td class="right num">—</td></tr>
+          <tr><td>Q3 2026</td><td class="right num ok">30.6</td><td class="right num">20</td><td class="right num">—</td></tr>
+        </tbody>
+      </table>
+      <h3 style="margin-top:16px">CR Epic</h3>
+      <table>
+        <thead><tr><th>Квартал</th><th class="right">CR</th><th class="right">в срок / даты</th></tr></thead>
+        <tbody>
+          <tr><td>Q1 2026</td><td class="right num bad">51.9%</td><td class="right num">28/54</td></tr>
+          <tr><td>Q2 2026</td><td class="right num ok">85.5%</td><td class="right num">59/69</td></tr>
+          <tr><td>Q3 2026</td><td class="right num ok">82.6%</td><td class="right num">19/23</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="note"><b>Выводы по кварталам:</b> ТТМ PI — Q1 96.1 / Q2 80.0 / Q3 31.5 дн (тренд вниз, но Q1–Q2 выше 60); <b>CR PI</b> — Q1 59.1% → Q2 82.4% (в норме), Q3 50.0% (малая выборка 1/2); <b>LT Epic</b> — Q1 47.8 / Q2 48.4 (чуть выше 45), Q3 30.6; <b>CR Epic</b> — резко вырос с Q1 (51.9%) до Q2–Q3 (85.5 / 82.6).</div>
+
+  <h3 style="margin-top:24px">Список PI (Done) в разрезе кварталов</h3>
+  <div class="note"><b>Методика:</b> только закрытые <code>Done</code> PI проекта E001 за 01.01–31.07.2026 (без <code>Cancelled</code>), срез по дате <code>resolved</code>. CR = <code>enddate &lt;= baselineenddate + 2 дня</code>. Итого <b>41 Done-PI</b>: Q1 <b>22</b> (13/22 = 59.1%), Q2 <b>17</b> (14/17 = 82.4%), Q3 <b>2</b> (1/2 = 50.0%). Это те же цифры, что в сводной таблице — расчёт по <code>jira_issue_4</code> (снимок 07.08.2026) воспроизводится. Если дашборд показывает другое число — разница в дате среза: снимок 07.08 против текущего состояния данных (e.g. Q2 <code>total_closed</code> = 46 с Cancelled, а дашборд может считать иCancelled-или по <code>enddate</code>).</div>
+
+  <details>
+    <summary><b>Q1 2026 — 22 Done PI</b> <span style="font-weight:400;color:var(--slate)">(CR 13/22 = 59.1%)</span></summary>
+    <div style="margin-top:12px">
+      <table>
+        <thead><tr><th>ПИ</th><th>CR</th><th class="right">resolved</th><th>Исполн.</th><th>Описание</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-25256">E001-25256</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">03-25</td><td>ekarmakov</td><td>E001 Инструменты оператора | [DATA] Передача владения данными в продукты (СМКТ и ММ контур)</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26236">E001-26236</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">03-18</td><td>imakarov</td><td>Распил ЕРМ на микрофронты: поиск доставки</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26328">E001-26328</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">03-25</td><td>isadretdinov</td><td>Сквозная аналитика в UI-оркестраторе</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26504">E001-26504</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">03-17</td><td>imakarov</td><td>Отказ от ОТРС</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26682">E001-26682</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">02-20</td><td>ekarmakov</td><td>E001 Инструменты оператора | Миграция интеграционных стендов Самокат в Cloud.ru</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27285">E001-27285</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">03-25</td><td>imakarov</td><td>СДЭК: доставка курьером до двери</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27309">E001-27309</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">03-03</td><td>fkoledenkov</td><td>Поддержка проекта: акция НСПК МИР</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27667">E001-27667</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">02-10</td><td>ekarmakov</td><td>E001 Инструменты оператора | Переключение продуктов на idm (в рамках отказа от amm)</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27668">E001-27668</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">02-27</td><td>ekarmakov</td><td>E001 Инструменты оператора | event-relay-update</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27679">E001-27679</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">03-27</td><td>ekarmakov</td><td>E001 Инструменты оператора | [Логистическая доступность] Отказ от ElasticSearch - index_pvz_v6</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27681">E001-27681</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">03-26</td><td>ekarmakov</td><td>E001 Инструменты оператора | [Логистическая доступность] Отказ от ElasticSearch - location-index</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27682">E001-27682</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">03-27</td><td>ekarmakov</td><td>E001 Инструменты оператора | Расселение Legacy кластеров ММ</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27685">E001-27685</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">02-18</td><td>ekarmakov</td><td>Переезд на единый GitLab ECOM E001</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-24790">E001-24790</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">02-18</td><td>imakarov</td><td>Распил ЕРМ на микрофронты: задержка доставки</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-24806">E001-24806</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">02-03</td><td>fkoledenkov</td><td>(Возвраты) Невозвратные категории в OperCRM</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-25063">E001-25063</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">02-18</td><td>imakarov</td><td>Переход на АД и Кейклоак в ЕРМ</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26153">E001-26153</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">02-17</td><td>fkoledenkov</td><td>Поддержка проекта: спеццены за подписку Самокат</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26214">E001-26214</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">01-27</td><td>fkoledenkov</td><td>Динамический SLA</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26490">E001-26490</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">01-28</td><td>imakarov</td><td>Поддержать отображение ПВЗ Меги и ПВЗ СМКТ</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26502">E001-26502</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">03-31</td><td>fkoledenkov</td><td>Запуск пилота OperCRM в Оркестраторе</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26519">E001-26519</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">01-27</td><td>isadretdinov</td><td>Интеграции для работы правил оркестрации </td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27308">E001-27308</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">03-24</td><td>fkoledenkov</td><td>Поддержка проекта: услуга упаковки</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details>
+    <summary><b>Q2 2026 — 17 Done PI</b> <span style="font-weight:400;color:var(--slate)">(CR 14/17 = 82.4%)</span></summary>
+    <div style="margin-top:12px">
+      <table>
+        <thead><tr><th>ПИ</th><th>CR</th><th class="right">resolved</th><th>Исполн.</th><th>Описание</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26092">E001-26092</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">05-20</td><td>imakarov</td><td>Распил ЕРМ на микрофронты: создание тикета</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26234">E001-26234</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-24</td><td>imakarov</td><td>Распил ЕРМ на микрофронты: отмена доставки</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27275">E001-27275</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-24</td><td>imakarov</td><td>Доработки по основным сценариям Создания тикета</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27412">E001-27412</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">04-22</td><td>imakarov</td><td>Поменять триггер холдирования\расхолдирования кэшбека в тикетах</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27704">E001-27704</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">05-20</td><td>imakarov</td><td>Отказ от трекинга в ЕРМ</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28207">E001-28207</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-24</td><td>imakarov</td><td>Отказ от address-processing</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28487">E001-28487</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-25</td><td>fkoledenkov</td><td>Реализация компенсаций в виджетах OCRM</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28712">E001-28712</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-29</td><td>imakarov</td><td>Распил ЕРМ: поиск общих промокодов</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28765">E001-28765</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-29</td><td>ekarmakov</td><td>E001 Инструменты оператора | [Логистическая доступность] Отказ от ElasticSearch - location-index</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28766">E001-28766</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-29</td><td>ekarmakov</td><td>E001 Инструменты оператора | [Логистическая доступность] Отказ от ElasticSearch - index_pvz_v6</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28767">E001-28767</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-29</td><td>ekarmakov</td><td>Внедрение автотестов в продукт E001</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28799">E001-28799</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-30</td><td>ekarmakov</td><td>E001 Инструменты оператора | omnipresent-user-id</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-29312">E001-29312</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">05-19</td><td>ekarmakov</td><td>Миграция с Keycloak Мегамаркет на Keycloak ECOM</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-29529">E001-29529</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">05-27</td><td>ekarmakov</td><td>Переход на новую систему авторизации S3 Selectel</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-13957">E001-13957</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">05-15</td><td>imakarov</td><td>Передача данных по обращениям Самоката в SberCare </td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26212">E001-26212</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">04-14</td><td>fkoledenkov</td><td>Оркестратор - возвраты</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27188">E001-27188</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">06-01</td><td>fkoledenkov</td><td>Оркестратор: компенсации Клиенту</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details>
+    <summary><b>Q3 2026 — 2 Done PI</b> <span style="font-weight:400;color:var(--slate)">(CR 1/2 = 50.0%)</span></summary>
+    <div style="margin-top:12px">
+      <table>
+        <thead><tr><th>ПИ</th><th>CR</th><th class="right">resolved</th><th>Исполн.</th><th>Описание</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28717">E001-28717</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">07-15</td><td>edolgikh</td><td>Распил ЕРМ: бонусный баланс</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28743">E001-28743</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">07-14</td><td>ekarmakov</td><td>Отказ от LIS</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+  <div class="note"><b>Сверка с дашбордом:</b> списочные счётчики (22/17/2) получены из актуального снимка <code>jira_issue_4</code> и совпадают с агрегированной таблицей отчёта (CR PI 59.1% / 82.4% / 50.0%). Расхождение с дашбордом объясняется различием в правилах: дашборд может (а) включать PI со статусом <code>Cancelled</code> (тогда Q1 total_closed = 47, Q2 = 46, Q3 = 6), (б) считать по дате <code>enddate</code> вместо <code>resolved</code>, или (в) использовать свежий снимок данных. Для точной сверки уточните, какое из правил применяет дашборд.</div>
+
+  <h3 style="margin-top:24px">Одиночные (Single, без связки с PRCON) PI по кварталам</h3>
+  <div class="note"><b>Методика:</b> из закрытых <code>Done</code> PI исключены те, у кого в <code>linkedissues</code> есть задачи проекта <b>PRCON</b> (связь с программами PRCON). Именно «одиночные» (без PRCON) идут в метрику <b>ТТМ PI Single</b>. Итого <b>15</b> из 41 Done-PI (Q1 3 / Q2 10 / Q3 2) — совпадает с квартальной таблицей ТТМ PI (Q1 96.1·3 / Q2 80.0·10 / Q3 31.5·2). CR по этим PI: Q1 2/3 (66.7%), Q2 8/10 (80.0%), Q3 2/2 (100%).</div>
+
+  <details>
+    <summary><b>Q1 2026 — 3 одиночных PI</b> <span style="font-weight:400;color:var(--slate)">(CR 2/3 = 66.7%)</span></summary>
+    <div style="margin-top:12px">
+      <table>
+        <thead><tr><th>ПИ</th><th>CR</th><th class="right">resolved</th><th>Исполн.</th><th>Описание</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26236">E001-26236</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">03-18</td><td>imakarov</td><td>Распил ЕРМ на микрофронты: поиск доставки</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26328">E001-26328</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">03-25</td><td>isadretdinov</td><td>Сквозная аналитика в UI-оркестраторе</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-25063">E001-25063</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">02-18</td><td>imakarov</td><td>Переход на АД и Кейклоак в ЕРМ</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details>
+    <summary><b>Q2 2026 — 10 одиночных PI</b> <span style="font-weight:400;color:var(--slate)">(CR 8/10 = 80.0%)</span></summary>
+    <div style="margin-top:12px">
+      <table>
+        <thead><tr><th>ПИ</th><th>CR</th><th class="right">resolved</th><th>Исполн.</th><th>Описание</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26092">E001-26092</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">05-20</td><td>imakarov</td><td>Распил ЕРМ на микрофронты: создание тикета</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26234">E001-26234</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-24</td><td>imakarov</td><td>Распил ЕРМ на микрофронты: отмена доставки</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27275">E001-27275</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-24</td><td>imakarov</td><td>Доработки по основным сценариям Создания тикета</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27412">E001-27412</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">04-22</td><td>imakarov</td><td>Поменять триггер холдирования\расхолдирования кэшбека в тикетах</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28487">E001-28487</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-25</td><td>fkoledenkov</td><td>Реализация компенсаций в виджетах OCRM</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28712">E001-28712</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-29</td><td>imakarov</td><td>Распил ЕРМ: поиск общих промокодов</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28767">E001-28767</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">06-29</td><td>ekarmakov</td><td>Внедрение автотестов в продукт E001</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-29312">E001-29312</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">05-19</td><td>ekarmakov</td><td>Миграция с Keycloak Мегамаркет на Keycloak ECOM</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-26212">E001-26212</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">04-14</td><td>fkoledenkov</td><td>Оркестратор - возвраты</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-27188">E001-27188</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">06-01</td><td>fkoledenkov</td><td>Оркестратор: компенсации Клиенту</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <details>
+    <summary><b>Q3 2026 — 2 одиночных PI</b> <span style="font-weight:400;color:var(--slate)">(CR 1/2 = 50.0%)</span></summary>
+    <div style="margin-top:12px">
+      <table>
+        <thead><tr><th>ПИ</th><th>CR</th><th class="right">resolved</th><th>Исполн.</th><th>Описание</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28717">E001-28717</a></td><td><span class="chip chip-done">в срок</span></td><td class="right num">07-15</td><td>edolgikh</td><td>Распил ЕРМ: бонусный баланс</td></tr>
+          <tr><td><a href="https://project.samokat.ru/browse/E001-28743">E001-28743</a></td><td><span class="chip chip-cancel">просроч</span></td><td class="right num">07-14</td><td>ekarmakov</td><td>Отказ от LIS</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+  <div class="note"><b>Сверка:</b> список одиночных (без PRCON) PI получен из актуального <code>jira_issue_4</code> по <code>linkedissues</code>: исключены PI с любым лаком на задачи проекта PRCON. Счётчики (3/10/2 = 15) совпадают с метрикой ТТМ PI Single отчёта (15 PI). CR по группе одиночных: Q1 2/3 (66.7%), Q2 8/10 (80.0%), Q3 1/2 (50.0%). E001-28743 (просрочен) не имеет PRCON-связи и входит в эту группу; 26 из 41 Done-PI исключены как связанные с PRCON.</div>
+
+  <!-- ===================== ДИНАМИКА МЕТРИК ===================== -->
+  <h2>Динамика метрик по месяцам</h2>
+  <div class="note">Динамика после пересчёта (только <code>Done</code> PI/Epic; ТТМ/LT в минутах). Пунктирная линия — целевое значение (ТТМ 60 дн, LT 45 дн, CR 80%). Малые месячные выборки ТТМ PI (фев–май по 1–2 PI) показаны для справки.</div>
+  <div class="grid2">
+    <div>
+      <h3>ТТМ PI Single, дн</h3>
+      <canvas id="chTTM" height="140"></canvas>
+    </div>
+    <div>
+      <h3>CR PI, %</h3>
+      <canvas id="chCRPI" height="140"></canvas>
+    </div>
+    <div>
+      <h3>LT Epic, дн</h3>
+      <canvas id="chLT" height="140"></canvas>
+    </div>
+    <div>
+      <h3>CR Epic, %</h3>
+      <canvas id="chCREpic" height="140"></canvas>
+    </div>
+  </div>
+  <div class="note"><b>Читаемость:</b> <b>LT Epic</b> — пик в мар (53.4), снижение к июл (30.6). <b>CR Epic</b> — провалы в янв (33%) и мар (44%), рост к маю–июн (&gt;88%). <b>ТТМ PI</b> — устойчиво выше 60 до июн, резкий спад к июл (31.5). <b>CR PI</b> — нестабилен, Q1–Q3 сильно ниже 80%.</div>
+
+  <!-- ===================== РЕКОМЕНДАЦИИ ===================== -->
+  <h2>Рекомендации (после исключения Cancelled в PI и Epic)</h2>
+  <table>
+    <thead><tr><th>#</th><th>Действие</th><th>Эффект</th><th>Задачи</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><b>CR PI — главный дефицит.</b> Продуктовые PI: 53.8% (14/26). Довести до 80%</td><td>53.8% → 80%</td><td>крит. просроченный Done-PI: <a href="https://project.samokat.ru/browse/E001-13957">13957</a> (470 дн), «Оркестратор»</td></tr>
+      <tr><td class="num">2</td><td><b>ТТМ PI — выше цели.</b> Сократить долгие ПИ «Распил ЕРМ»/«Оркестратор»</td><td>76.8 → 60</td><td>64–184 дн: <a href="https://project.samokat.ru/browse/E001-26092">26092</a>, <a href="https://project.samokat.ru/browse/E001-26236">26236</a>, <a href="https://project.samokat.ru/browse/E001-27188">27188</a></td></tr>
+      <tr><td class="num">3</td><td><b>CR Epic — второй дефицит.</b> Довести до 80%: Q1 (51.9%) проседает из-за янв/мар</td><td>72.8% → 80%</td><td>просроченные в янв–мар; улучшить baselineenddate</td></tr>
+      <tr><td class="num">4</td><td><b>LT Epic — чуть выше цели.</b> Довести Q1–Q2 до &lt;45</td><td>45.3 → 45</td><td>хвосты: <a href="https://project.samokat.ru/browse/E001-14559">14559</a>, <a href="https://project.samokat.ru/browse/E001-24694">24694</a>, <a href="https://project.samokat.ru/browse/E001-25137">25137</a></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Ключевые выводы</h3>
+  <ul style="margin:8px 0 0 20px; font-size:14.5px">
+    <li><b>ТТМ PI выше цели</b> (76.8 vs 60): в среднем только реально проработанные инициативы; LT считается в минутах с округлением по итогу.</li>
+    <li><b>LT Epic чуть выше цели</b> (45.3 vs 45) — ранее недооценивался из-за усечения сегментов (E001-24657: было 20, верно 21).</li>
+    <li><b>CR PI</b> — устойчивый дефицит 68.3% (продукт 53.8%). Не зависит от бага статусов.</li>
+    <li><b>CR Epic</b> — дефицит 72.8% &lt; 80%; основной провал в Q1 (51.9%).</li>
+  </ul>
+
+  <div class="foot">Отчёт по данным Cedrus (снимок 07.08.2026). История статусов — из <code>jira_issue_history_hist</code> (<code>fieldname='statusName'</code>). CR — по <code>enddate</code>/<code>baselineenddate</code>. Ссылки: project.samokat.ru/browse/&lt;KEY&gt;.</div>
+
+</div>
+<script>
+(function(){
+  var M=['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07'];
+  function mk(sel, label, data, goal, unit){
+    var hasGoal = goal!=null;
+    var datasets=[
+      {label:label, data:data, borderColor:'#10a37f', backgroundColor:'rgba(16,163,127,.12)',
+       borderWidth:2, tension:.3, fill:true, pointRadius:4, spanGaps:true}
+    ];
+    if(hasGoal){
+      datasets.push({label:'цель', data:M.map(function(){return goal;}),
+        borderColor:'#9b9b9b', borderDash:[6,4], borderWidth:1, pointRadius:0, fill:false});
+    }
+    new Chart(sel,{type:'line', data:{labels:M, datasets:datasets},
+      options:{responsive:true, plugins:{legend:{display:true,labels:{boxWidth:8,font:{size:11}}}},
+        scales:{y:{beginAtZero:true, grid:{color:'#f0f0f0'}, ticks:{font:{size:10}}}, x:{grid:{display:false}, ticks:{font:{size:10}}}},
+        interaction:{mode:'index', intersect:false}}});
+  }
+  try{
+    mk('chTTM','ТТМ PI',[null,97.5,95.4,83.6,99.0,72.5,31.5],60,'дн');
+    mk('chCRPI','CR PI',[0,50.0,81.8,50.0,80.0,90.0,50.0],80,'%');
+    mk('chLT','LT Epic',[39.0,43.2,53.4,51.1,47.9,46.4,30.6],45,'дн');
+    mk('chCREpic','CR Epic',[33.3,66.7,44.4,78.3,89.7,88.9,82.6],80,'%');
+  }catch(e){ console.error(e); }
+})();
+</script>
+</body>
+</html>

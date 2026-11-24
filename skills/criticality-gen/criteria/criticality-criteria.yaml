@@ -1,0 +1,1085 @@
+# Критерии оценки критичности ИС — ЕДИНСТВЕННЫЙ машиночитаемый источник правил.
+#
+# Правила репозитория:
+#   * каждое правило обязано иметь поле kind (documented | convention);
+#   * kind = documented  — дословно из Confluence, обязателен page_id/source_page_id;
+#   * kind = convention  — инженерное решение репозитория, которого нет в источнике:
+#                         обязательны rationale и status (needs_validation | validated);
+#   * менять правила можно ТОЛЬКО здесь; после правки — `make criteria-check`
+#     и `make selftest`, плюс обновление docs/08-criteria.md.
+#
+# Файл написан в блок-стиле YAML без inline-словарей и без многострочных
+# скаляров: его обязан разобрать встроенный мини-парсер scripts/criticality.py
+# (PyYAML опционален, поведение обоих путей идентично).
+#
+# Разбор правил: docs/08-criteria.md
+# Проверка: python3 scripts/criticality.py criteria check
+
+schema_version: 1
+
+meta:
+  name: Критерии оценки критичности ИС
+  purpose: Единый источник правил расчёта критичности для скилла criticality-gen
+  status: draft
+  updated: "2026-11-18"
+  # Дата сверки состава источников с первоисточниками (REST API Confluence).
+  # Версии и даты обновления страниц фиксируются в sources ниже: по ним видно,
+  # когда источник ушёл вперёд файла критериев.
+  synced_at: "2026-11-18"
+  # Канон: что где лежит. Числа расчёта живут только в этом файле: страницы
+  # задают правила и провенанс, а зеркала в документации обязаны помечать себя
+  # копией (наличие пометки проверяет `make docs-check`).
+  canon:
+    numbers: "Числа расчёта (коэффициенты, интервалы, матрицы, веса, границы) — только этот файл; в документации допустимы зеркала с явной пометкой «копия, канон — criteria» и обязательной сверкой `make docs-check`."
+    formulas: "Нарратив формул E/t, интервалы, выбор сценария, границы CIA, маппинг уровней и правило «итог — ячейка final_matrix, не max» — 4566730084."
+    inputs: "Требования к семи входам: откуда брать, кто подтверждает, варианты заполнения — 4567543163."
+    provenance: "Типы провенанса, статусы missing/derived/confirmed, запреты и что делать без данных — 4567212024."
+    artifacts: "Артефакты заполнения паспорта: экспресс — 4552328348, детальная оценка — 4566714956."
+    process: "Процесс оценки: 3855374712 (действующий) и 4553977278 (черновик 2026-10)."
+  # role — машинный идентификатор роли источника (по нему `_criteria_source`
+  # ищет страницу для артефактов); source_status — current | draft | archived |
+  # supporting | archived_carrier. archived-источник обязан быть помечен у каждого
+  # правила, которое на него ссылается (проверяет `criteria check`).
+  # archived_carrier — документ в архиве, но остаётся единственным носителем
+  # части канона: правило ссылается на него осознанно и обязано объяснить
+  # причину в `source_note`.
+  sources:
+    - page_id: 4566730084
+      title: "Методика и оригинальные расчёты"
+      title_version: 11
+      title_verified_at: "2026-11-19"
+      space: ECOMCS
+      version: 11
+      updated: "2026-11-17"
+      role: methodology
+      role_note: "Канон: формулы E/t, интервалы, выбор сценария, границы CIA, маппинг уровней, «итог — ячейка final_matrix, не max»"
+      kind: documented
+      source_status: current
+    - page_id: 4567543163
+      title: "Критерии оценки: входы и варианты заполнения"
+      title_version: 12
+      title_verified_at: "2026-11-19"
+      space: ECOMCS
+      version: 12
+      updated: "2026-11-17"
+      role: inputs_canon
+      role_note: "Канон требований к семи входам: откуда брать, кто подтверждает, варианты заполнения"
+      kind: documented
+      source_status: current
+    - page_id: 4567212024
+      title: "Данные, источники и провенанс"
+      title_version: 11
+      title_verified_at: "2026-11-19"
+      space: ECOMCS
+      version: 11
+      updated: "2026-11-17"
+      role: provenance_canon
+      role_note: "Канон: 10 типов провенанса, статусы missing/derived/confirmed, запреты, что делать без данных"
+      kind: documented
+      source_status: current
+    - page_id: 4552328348
+      title: "Заполнение паспорта критичности (ЧЕРНОВИК)"
+      title_version: 14
+      title_verified_at: "2026-11-19"
+      space: SMKT
+      version: 14
+      updated: "2026-11-16"
+      role: express_artifact
+      role_note: "Артефакт экспресса + карта полей yaml; списки enum дефектны (канон — xlsx-калькулятор)"
+      kind: documented
+      source_status: draft
+    - page_id: 4566714956
+      title: "Заполнение паспорта критичности (детальная оценка) (ЧЕРНОВИК)"
+      title_version: 3
+      title_verified_at: "2026-11-19"
+      space: SMKT
+      version: 3
+      updated: "2026-11-13"
+      role: detailed_artifact
+      role_note: "Артефакт детальной оценки; уникальных правил относительно методики нет"
+      kind: documented
+      source_status: draft
+    - page_id: 4553977278
+      title: "ЧЕРНОВИК 2026-10 D6.1.1. Процесс оценки критичности ИС"
+      title_version: 14
+      title_verified_at: "2026-11-19"
+      space: SMKT
+      version: 14
+      updated: "2026-11-18"
+      role: process_draft
+      role_note: "Черновик процесса 2026-10; формулировок гейта не содержит"
+      kind: documented
+      source_status: draft
+    - page_id: 3855374712
+      title: "D6.1.1. Процесс оценки критичности ИС"
+      title_version: 67
+      title_verified_at: "2026-11-19"
+      space: SMKT
+      version: 67
+      updated: "2026-10-08"
+      role: process_current
+      role_note: "Действующий процесс оценки критичности"
+      kind: documented
+      source_status: current
+    - page_id: 4207454433
+      title: "[DRAFT] Методика оценки критичности ИС (новая)"
+      title_version: 3
+      title_verified_at: "2026-11-19"
+      space: infrastructure
+      version: 3
+      updated: "2025-12-01"
+      role: methodology_archive
+      role_note: "Архив («Архив (мусор)»); единственный носитель 20 ячеек impact_matrix, 16 ячеек final_matrix, шкал осей и описаний CIA"
+      kind: documented
+      source_status: archived_carrier
+    - page_id: 3823234487
+      title: "Требования к ИС, в зависимости от критичности"
+      title_version: 45
+      title_verified_at: "2026-11-19"
+      space: SMKT
+      version: 45
+      updated: "2026-03-16"
+      role: requirements
+      role_note: "Вспомогательный: ни одно правило файла на него не ссылается, числовых SLA нет"
+      kind: documented
+      source_status: supporting
+  principles:
+    - "Любое числовое значение в артефакте обязано иметь источник (provenance). Нет источника — null."
+    - "Расчёт выполняется только при полном наборе обязательных входов."
+    - "Одна и та же входная модель всегда даёт один и тот же уровень (детерминизм)."
+    - "Convention-правила не применяются без явной пометки в результате."
+
+external_refs:
+  kind: convention
+  status: needs_validation
+  rationale: "Внешние документы процесса/методики; в шаблонах не хардкодятся, чтобы инструмент переносился в другой контур/компанию"
+  base_url: "https://space.samokat.ru/pages/viewpage.action?pageId="
+  # Домены ссылок подтверждения (approve_link). Пусто — проверяется только схема
+  # http(s): инструмент не привязан к конкретному Rocket.Chat-инстансу.
+  approve_link_domains:
+    - rocketchat.samokat.ru
+    - chat.samokat.ru
+  # Базовый адрес Rocket.Chat для этапа handoff (REST-фолбэк и сборка ссылки
+  # на сообщение). Env ROCKETCHAT_URL / RC_URL / ROCKET_BASE_URL переопределяет.
+  rocketchat_base: "https://rocketchat.samokat.ru"
+  # Шаблон ссылки на GitLab-группу ИС. {contour} и {name} подставляются из кода ИС.
+  # Пусто — ссылка на GitLab не собирается (в артефакте ⛔ не заполнено).
+  gitlab_group_base: "https://git.ecom.tech/ecom/dev/is/{contour}/{name}"
+  # База ссылки на задачу Jira (обратная совместимость): task_link =
+  # <jira_browse_base>/browse/<jira_task>. Используется там, где ключ известен,
+  # а шаблон `jira_base` не задан.
+  jira_browse_base: "https://jira.samokat.ru"
+  # Шаблон ссылки на карточку ИС в SSoT. {code} — код ИС. Формат взят дословно
+  # из чек-листа публикации (templates/publication.md): адрес не хардкодится в
+  # скрипте, чтобы инструмент переносился в другой контур.
+  ssot_card_base: "https://ssot.ecom.tech/information-systems/{code}"
+  # Шаблон ссылки на задачу Jira. {key} — ключ задачи (`catalog.yaml →
+  # jira_task` / `is.yaml → task`). Ключ известен — в публикации печатается
+  # ссылка, а не `⛔ не заполнено`.
+  jira_base: "https://jira.samokat.ru/browse/{key}"
+  # Репозитории, в которых живут публикуемые артефакты. URL — канон здесь:
+  # в коде они не хардкодятся, чтобы инструмент переносился в другой контур.
+  # `publish`/`ssot` при отсутствии клона печатают готовую команду
+  # `git clone <url> <путь> --depth 1` (флаг --clone выполняет её сам),
+  # `prepare` проверяет доступность (git ls-remote, таймаут 10 с; WARN).
+  repos:
+    dochub:
+      url: "https://git.ecom.tech/ecom/dev/is/ecomtech/dochub/aaac.git"
+      branch: "master"
+      note: "архитектура dochub: паспорт кладётся в architecture/app/<контур>/<сущность>/"
+      # GitLab-инстанс и путь проекта — для проверки открытых MR по паспорту
+      # (`make publish` отказывается создавать дубль). Обычно берутся из
+      # remote.origin.url клона; эти поля — фолбэк, чтобы проверка работала без
+      # правки кода при переносе инструмента в другой контур.
+      gitlab_base: "https://git.ecom.tech"
+      gitlab_project: "ecom/dev/is/ecomtech/dochub/aaac"
+    ssot:
+      url: "ssh://git@git.ecom.tech:5022/ecom/infrastructure/products-and-services/ssot/ecomtech/data-storage.git"
+      branch: "master"
+      note: "SSoT: severity ИС в entities/information-systems/<код>/base.yaml"
+      gitlab_base: "https://git.ecom.tech"
+      gitlab_project: "ecom/infrastructure/products-and-services/ssot/ecomtech/data-storage"
+  refs:
+    publication_page:
+      id: 4553986100
+      title: "Шаблон для публикации данных по оценки критичности (ЧЕРНОВИК на время пилота)"
+      title_version: 3
+      title_verified_at: "2026-11-19"
+      note: "Источник дословного текста публикации (templates/publication.md)"
+    responsibility_registry:
+      id: 4323248283
+      title: "Реестр изменений ответственных по продуктам/технологиям 2026"
+      title_version: 275
+      title_verified_at: "2026-11-19"
+      note: "Журнал заявок на оргизменения, НЕ ростер. Актуальный ростер — SSoT entities/teams/<team>/team.yaml; реестр — fallback при свежей передаче продукта."
+    express_method_page:
+      id: 4552328348
+      title: "Заполнение паспорта критичности (ЧЕРНОВИК)"
+      title_version: 14
+      title_verified_at: "2026-11-19"
+      note: "meta.sources; по этой странице заполняется criticality-passport.yaml"
+    methodology_page:
+      id: 4566730084
+      title: "Методика и оригинальные расчёты"
+      title_version: 11
+      title_verified_at: "2026-11-19"
+      note: "Канон формул E/t, интервалов, выбора сценария, границ CIA, маппинга уровней и правила «итог — ячейка final_matrix»"
+    inputs_page:
+      id: 4567543163
+      title: "Критерии оценки: входы и варианты заполнения"
+      title_version: 12
+      title_verified_at: "2026-11-19"
+      note: "Канон требований к семи входам; источник поля where в criteria.inputs"
+    provenance_page:
+      id: 4567212024
+      title: "Данные, источники и провенанс"
+      title_version: 11
+      title_verified_at: "2026-11-19"
+      note: "Канон 10 типов провенанса и статусов значения"
+    process_page:
+      id: 3855374712
+      title: "D6.1.1. Процесс оценки критичности ИС"
+      title_version: 67
+      title_verified_at: "2026-11-19"
+      note: "Действующий процесс оценки критичности"
+    process_draft_page:
+      id: 4553977278
+      title: "ЧЕРНОВИК 2026-10 D6.1.1. Процесс оценки критичности ИС"
+      title_version: 14
+      title_verified_at: "2026-11-19"
+      note: "Черновик процесса 2026-10; формулировок гейта не содержит"
+    tier_framework:
+      id: 4433941403
+      title: "Фреймворк управления нефункциональными требованиями"
+      title_version: 3
+      title_verified_at: "2026-11-19"
+      note: "TIER-1 SLA ≥ 99,95 %/мес, RTO ≤ 60 мин, RPO ≤ 240 мин; TIER-2 SLA ≥ 99,5 %; TIER-3 SLA ≥ 99,0 %. TIER ≠ уровень критичности 1:1 — перенос подтверждает SRE"
+    is_registry:
+      id: 4541626830
+      title: "Список ИС Самоката по критичности и state"
+      title_version: 133
+      title_verified_at: "2026-11-19"
+      note: "Колонки «Ссылка на DRP план» и «TIER DR (0,1,2,3)» — маршрут к DRP-плану и TIER"
+    e2e_catalog:
+      id: 3790195333
+      title: "🗃 Каталог сквозных процессов 2.0"
+      title_version: 36
+      title_verified_at: "2026-11-19"
+      note: "Карточки процессов (метка e2e-process-card) и таблицы шагов процесса (метка checkliste2e) — основной маршрут входа e2e"
+    e2e_registry:
+      id: 3700777856
+      title: "Реестр сквозных процессов"
+      title_version: 41
+      title_verified_at: "2026-11-19"
+      note: "Перечень сквозных процессов и участвующих в них ИС — маршрут, когда карточка процесса не находится по метке"
+    is_process_registry:
+      id: 4060332274
+      title: "Реестр информационных систем"
+      title_version: 11
+      title_verified_at: "2026-11-19"
+      note: "Колонки «Наименование ИС / Код ИС / Название процесса» — обратный поиск процессов по коду ИС, когда метки таблиц шагов не сработали"
+    mm_registry:
+      id: 4541630532
+      title: "Список ИС ММ mission critical (по данным backstage)"
+      title_version: 93
+      title_verified_at: "2026-11-19"
+      note: "Реестр мастер-микросервисов; заголовок сверен с Confluence (title_verified_at)"
+    drp_template:
+      id: 4545516731
+      title: "Шаблон DRP плана"
+      title_version: 4
+      title_verified_at: "2026-11-19"
+      note: "Шаблон плана аварийного восстановления; заголовок сверен с Confluence (title_verified_at)"
+    protection_classes:
+      id: 3762360880
+      title: "Перечень классов защищенности систем"
+      title_version: 12
+      title_verified_at: "2026-11-19"
+      note: "Уровни защищённости и категории данных для ИБ-части; заголовок сверен с Confluence (title_verified_at)"
+    sec_methodology:
+      id: 4566723467
+      title: "Методика оценки критичности ИС для целей ИБ"
+      title_version: 3
+      title_verified_at: "2026-11-19"
+      note: "Категории данных — 5 классов; 5 классов ≠ low/medium/high, напрямую в cia не подставляются"
+    pilot:
+      id: 4552335523
+      title: "Пилот по критичности 2026-10"
+      title_version: 18
+      title_verified_at: "2026-11-19"
+      note: "Страница пилота процесса; заголовок сверен с Confluence (title_verified_at)"
+    requirements_page:
+      id: 3823234487
+      title: "Требования к ИС, в зависимости от критичности"
+      title_version: 45
+      title_verified_at: "2026-11-19"
+      note: "Вспомогательный источник требований; числовых SLA не содержит, правил файла не обосновывает"
+    decision_log:
+      id: null
+      title: "Данные, источники и провенанс"
+      title_version: 11
+      title_verified_at: "2026-11-19"
+      note: "Заполняется в catalog.yaml: systems.<код>.decision_log_page_id"
+
+handoff:
+  kind: convention
+  status: needs_validation
+  rationale: "Параметры канала передачи треда человеку: имя канала, срок ожидания ответа MCP и дедупликация при фолбэке на REST. В методике D6.1.1 канал и таймауты не заданы — это инженерное решение инструмента, вынесенное из кода, чтобы перенос в другой контур менял только файл критериев."
+  # Канал треда (без # или с # — принимается оба вида). Значение по умолчанию
+  # в скрипте (#Criticality_assessment) — фолбэк, а не канон.
+  channel: "Criticality_assessment"
+  # Сколько секунд ждать ответа MCP-исполнителя. Истёк срок — MCP считается
+  # нерабочим, handoff автоматически уходит в REST (fallback_reason: mcp_timeout).
+  mcp_timeout_seconds: 120
+  # Дедупликация при фолбэке: сколько последних сообщений канала смотреть и
+  # сколько первых символов текста сравнивать (плюс автор сообщения).
+  message_search_count: 20
+  message_match_prefix: 80
+
+provenance:
+  kind: documented
+  page_id: 4567212024
+  note: "Канон типов провенанса и статусов значения. Тип без описания не принимается: `enrich` сверяет source.type со списком ниже."
+  # Типы провенанса в порядке канона. Список обязан совпадать с
+  # PROVENANCE_TYPES в scripts/criticality.py — и по составу, и по порядку.
+  types:
+    - name: ssot
+      description: "Файл SSoT-репозитория"
+    - name: is_yaml_override
+      description: "Переопределение из локального is.yaml"
+    - name: catalog
+      description: "Поле реестра репозитория"
+    - name: confluence
+      description: "Страница: page_id и раздел"
+    - name: gitlab
+      description: "Репозиторий, файл с номером строки или MR"
+    - name: jira
+      description: "Задача"
+    - name: grafana
+      description: "Дашборд, панель, точный запрос"
+    - name: attachment
+      description: "Вложение Confluence (таблица, выгрузка, калькулятор)"
+    - name: ssot_links
+      description: "Ссылка из карточки ИС в SSoT (links.yaml)"
+    - name: manual
+      description: "Ручное значение, подтверждённое человеком"
+  # Решение владельца — не цитата: без ссылки на само решение это missing.
+  manual_decision:
+    kind: documented
+    page_id: 4567212024
+    rule: "Решение владельца без дословной цитаты — это manual с ref вида «решение PdM, <YYYY-MM-DD>; INFORMATION.yaml#notes». Без ссылки на решение — missing, а не manual."
+    check_note: "Формат ref «решение PdM, <YYYY-MM-DD>» проверяется человеком, а не механикой: ref — свободный текст, `enrich` и `criteria check` его не разбирают. Механической проверки здесь нет намеренно."
+
+levels:
+  kind: documented
+  page_id: 4207454433
+  source_status: archived_carrier
+  source_note: "Страница в архиве («Архив (мусор)»); шкала уровней — единственный носитель, при изменении методики переносить в 4566730084."
+  order: [Office productivity, Business operational, Business critical, Mission critical]
+  rank:
+    Office productivity: 1
+    Business operational: 2
+    Business critical: 3
+    Mission critical: 4
+  definitions:
+    Mission critical: "Полный отказ приводит к остановке бизнеса, катастрофические убытки"
+    Business critical: "Остановка ведёт к значительным финансовым/репутационным потерям"
+    Business operational: "Влияет на эффективность, но кратковременные простои не критичны"
+    Office productivity: "Не влияют на бизнес-процессы"
+  dochub_extra_level:
+    value: "Mission critical+"
+    kind: documented
+    source_page_id: 4566730084
+    note: "Существует только в dochub-паспорте. Методикой не производится: балл 5 калькулятора даёт Mission critical в паспорте и SSoT, MC+ сохраняется только в трассировке (calculator_level)."
+    mapping_to_ssot: "Mission critical"
+  dochub_to_ssot:
+    kind: documented
+    page_id: 4566730084
+    map:
+      "Office productivity": "Business operational"
+      "Business operational": "Business operational"
+      "Business critical": "Business critical"
+      "Mission critical": "Mission critical"
+      "Mission critical+": "Mission critical"
+  publish_enum:
+    kind: convention
+    status: validated
+    rationale: "Enum паспорта в dochub (_metamodel_/ecom/entities/app/criticality.yaml → $defs.sber.ecom.criticality_enum) записан в ВЕРХНЕМ регистре и не совпадает с Title Case levels.order. Маппинг нужен только на этапе публикации (make publish): в самом паспорте уровня Title Case остаётся, иначе make validate его не примет. Значения повторяют functions/criticality.yaml → ecom_criticality_calc."
+    enum:
+      - НЕ ОЦЕНЕНО
+      - MISSION CRITICAL
+      - BUSINESS CRITICAL
+      - BUSINESS OPERATIONAL
+    map:
+      "": НЕ ОЦЕНЕНО
+      "Office productivity": BUSINESS OPERATIONAL
+      "Business operational": BUSINESS OPERATIONAL
+      "Business critical": BUSINESS CRITICAL
+      "Mission critical": MISSION CRITICAL
+      "Mission critical+": MISSION CRITICAL
+  ssot_enum:
+    kind: convention
+    status: validated
+    rationale: "Enum severity.type в SSoT (schemas/information-systems/base.schema.json) записан kebab-case и содержит три значения. Уровень Office productivity методикой производится, но в SSoT отсутствует — публикуется как business-operational (это же следует из ssot_severity_normalization: office-productivity → Office productivity). Маппинг нужен только на этапе обогащения SSoT (make ssot): в паспорте уровень остаётся Title Case, иначе make validate его не примет."
+    enum:
+      - mission-critical
+      - business-critical
+      - business-operational
+    map:
+      "Office productivity": business-operational
+      "Business operational": business-operational
+      "Business critical": business-critical
+      "Mission critical": mission-critical
+      "Mission critical+": mission-critical
+
+ssot_severity_normalization:
+  kind: convention
+  status: needs_validation
+  rationale: "В SSoT уровни записаны kebab-case; в паспорте и SSoT-карточке используется Title Case."
+  map:
+    office-productivity: Office productivity
+    business-operational: Business operational
+    business-critical: Business critical
+    mission-critical: Mission critical
+
+axes:
+  kind: documented
+  page_id: 4207454433
+  source_status: archived_carrier
+  source_note: "Шкалы осей — единственный носитель (страница в архиве)."
+  aggregation: max
+  aggregation_note: "Итог = максимальная оценка по любой оси"
+  items:
+    - id: legal
+      title: Юридические
+      scale:
+        "0": "Нет"
+        "1": "Предупреждение регуляторов"
+        "2": "Гражданские иски"
+        "3": "Штрафы регуляторов"
+        "4": "Прекращение финансирования и отзыв лицензий"
+    - id: economic
+      title: Экономические
+      scale:
+        "0": "Нет"
+        "1": "Потеря менее 0.1% плановой прибыли"
+        "2": "Потеря от 0.1% до 0.5% плановой прибыли"
+        "3": "Потеря от 0.5% до 1% плановой прибыли"
+        "4": "Потеря более 1% плановой прибыли"
+    - id: reputational
+      title: Репутационные
+      scale:
+        "0": "Нет"
+        "1": "Огласка в СМИ маловероятна"
+        "2": "Огласка в локальных СМИ"
+        "3": "Огласка в региональных СМИ"
+        "4": "Огласка в федеральных СМИ"
+    - id: client
+      title: Клиентские
+      scale:
+        "0": "Нет"
+        "1": "Менее 1% от общего кол-ва клиентов"
+        "2": "От 1% до 5% от общего кол-ва клиентов"
+        "3": "От 5% до 10% от общего кол-ва клиентов"
+        "4": "Более 10% от общего кол-ва клиентов"
+
+time_buckets:
+  kind: documented
+  page_id: 4207454433
+  source_status: archived_carrier
+  source_note: "Корзины времени — единственный носитель (страница в архиве)."
+  order: ["<1h", "1-12h", "12-24h", ">24h"]
+  definitions:
+    "<1h": "менее 1 часа"
+    "1-12h": "от 1 до 12 часов"
+    "12-24h": "от 12 до 24 часов"
+    ">24h": "более 24 часов"
+
+impact_matrix:
+  kind: documented
+  page_id: 4207454433
+  source_status: archived_carrier
+  source_note: "20 ячеек матрицы — единственный носитель (страница в архиве)."
+  note: "Строки — максимальная оценка по осям (0..4), колонки — время до наступления негативных последствий"
+  cells:
+    "0":
+      "<1h": Business operational
+      "1-12h": Business operational
+      "12-24h": Office productivity
+      ">24h": Office productivity
+    "1":
+      "<1h": Business operational
+      "1-12h": Business operational
+      "12-24h": Office productivity
+      ">24h": Office productivity
+    "2":
+      "<1h": Business critical
+      "1-12h": Business operational
+      "12-24h": Business operational
+      ">24h": Office productivity
+    "3":
+      "<1h": Mission critical
+      "1-12h": Business critical
+      "12-24h": Business critical
+      ">24h": Business operational
+    "4":
+      "<1h": Mission critical
+      "1-12h": Mission critical
+      "12-24h": Business critical
+      ">24h": Business critical
+
+cia:
+  kind: documented
+  page_id: 4207454433
+  source_status: archived_carrier
+  source_note: "Параметры C/I/A, описания и веса — единственный носитель (страница в архиве)."
+  parameters: [C, I, A]
+  levels: [low, medium, high]
+  descriptions:
+    kind: documented
+    page_id: 4207454433
+    source_status: archived_carrier
+    source_note: "Описания уровней C/I/A — единственный носитель; страница в архиве, но заменить таблицу нечем."
+    note: "Единственный носитель описаний уровней; страница в архиве — при изменении методики перенести таблицу в 4566730084."
+    C:
+      low: "Утечка общедоступных данных"
+      medium: "Утечка данных для внутреннего пользования, не содержащих КИ (внутренние документы, отчеты и т.п.)"
+      high: "Утечка конфиденциальной информации (базы клиентов/работников, условия договоров, отчеты и т.п.)"
+    I:
+      low: "Незначительные ошибки/изменения"
+      medium: "Серьезный ущерб (<24 ч.)"
+      high: "Критические искажения (за последние 24 ч)"
+    A:
+      low: "Утечка общедоступных данных"
+      medium: "Искажение незначимых данных"
+      high: "Простой <4 часов"
+      source_defect: true
+      note: "Формулировки в источнике дублируют ось C и не описывают доступность. Приведены дословно; применение требует подтверждения владельца методики."
+  weights:
+    kind: documented
+    page_id: 4207454433
+    source_status: archived_carrier
+    source_note: "Веса F(low/medium/high) — единственный носитель; страница в архиве, при изменении методики переносить в 4566730084."
+    note: "Единственный носитель весов F(low/medium/high); страница в архиве — при изменении методики перенести таблицу в 4566730084."
+    low: 0.1
+    medium: 0.22
+    high: 0.56
+  # Границы V для уровней защищённости. Дублируют protection_levels.ranges
+  # намеренно: это единственный ключ, из которого рендерятся артефакты
+  # (templates/CRITICALITY.md, reassessment). Согласованность с ranges
+  # проверяет `criteria check` — правьте оба места или ни одного.
+  thresholds:
+    kind: documented
+    source_page_id: 4566730084
+    low_upper: 2.8
+    medium_upper: 5.6
+    high_upper: 8.0
+  formula: "V = 6*(F(C)+F(I)+F(A))"
+  protection_levels:
+    kind: documented
+    source_page_id: 4566730084
+    note: "Источник: V < 2.8 -> Low; 2.8 <= V < 5.6 -> Medium; 5.6 <= V < 8 -> High; V > 8 -> Critical. В ranges граница V = 8 отнесена к Critical — отклонение зафиксировано в boundary_convention."
+    ranges:
+      - level: Low
+        min: null
+        max: 2.8
+        max_inclusive: false
+      - level: Medium
+        min: 2.8
+        max: 5.6
+        max_inclusive: false
+      - level: High
+        min: 5.6
+        max: 8.0
+        max_inclusive: false
+      - level: Critical
+        min: 8.0
+        max: null
+        max_inclusive: true
+    boundary_convention:
+      kind: convention
+      status: needs_validation
+      source_page_id: 4566730084
+      rationale: "Источник задаёт V > 8, оставляя V = 8 без уровня. Принято V >= 8 -> Critical, чтобы границы были полными."
+  protection_to_level:
+    kind: documented
+    page_id: 4207454433
+    source_status: archived_carrier
+    source_note: "Маппинг «уровень защищённости → бизнес-шкала» — единственный носитель (страница в архиве)."
+    map:
+      Low: Office productivity
+      Medium: Business operational
+      High: Business critical
+      Critical: Mission critical
+
+final_matrix:
+  kind: documented
+  page_id: 4207454433
+  source_page_id: 4566730084
+  source_status: archived_carrier
+  source_note: "16 ячеек — единственный носитель (архивная страница); правило «итог — ячейка матрицы» взято из 4566730084, но сами значения взять негде."
+  note: "Итоговый класс берётся из ячеек final_matrix (бизнес-уровень × уровень защищённости). Правило max(бизнес, ИБ) не применяется: 3 ячейки строки Office productivity расходятся с максимумом (см. docs/08-criteria.md). 16 ячеек — единственный носитель 4207454433 (архив); правило «итог — ячейка матрицы» — 4566730084."
+  cells:
+    Mission critical:
+      Critical: Mission critical
+      High: Mission critical
+      Medium: Mission critical
+      Low: Mission critical
+    Business critical:
+      Critical: Mission critical
+      High: Business critical
+      Medium: Business critical
+      Low: Business critical
+    Business operational:
+      Critical: Mission critical
+      High: Business critical
+      Medium: Business operational
+      Low: Business operational
+    Office productivity:
+      Critical: Business critical
+      High: Business operational
+      Medium: Office productivity
+      Low: Office productivity
+
+inputs:
+  kind: documented
+  page_id: 4567543163
+  # Метаданные процесса (что это, зачем, где взять, у кого) — не цитата из
+  # методики, а конвенция репозитория: см. docs/12-requirements.md.
+  guidance_kind: convention
+  guidance_status: needs_validation
+  guidance_rationale: "Формулировки «что это / зачем / где взять / у кого / как подтвердить» — инженерное решение репозитория: канон 4567543163 задаёт сами входы, варианты заполнения и подтверждающих, правило гейта — 4566730084."
+  # У каждого входа обязательны поля (проверяет `criteria check`):
+  #   method      — detailed | express | both — к какому набору относится вход;
+  #   blocking    — true | false — блокирует ли отсутствие значения расчёт
+  #                 выбранным сценарием;
+  #   switches_scenario — true у входов, заполнение которых переключает ИС на
+  #                 сложный сценарий (axes_scores, time_to_impact, cia);
+  #   source_page_id — страница-канон требования к входу (4567543163);
+  #                 дополнительные страницы маршрута — в самом where;
+  #   title/definition/why/acceptable/where/whom/confirm/example — пояснение
+  #                 для человека, который будет заполнять DATA-REQUIREMENTS.yaml.
+  # Сценарии и правило выбора — секция `scenarios` ниже: простой сценарий
+  # (экспресс-оценка) блокируют четыре входа калькулятора, сложный — все
+  # `inputs.required`. Неполный сложный набор — BLOCKED, фолбэк на простой
+  # сценарий запрещён; поле `method` остаётся для расчёта и для скилла без
+  # секции `scenarios`.
+  # blocking: false — advisory: не блокирует уровень, но попадает в WARN
+  # «не заполнено, требуется для полноты паспорта».
+  required:
+    - id: peak_hour_load
+      title: "Пиковая нагрузка"
+      description: "Число клиентов/транзакций за час пиковой нагрузки"
+      definition: "Сколько клиентов или транзакций обслуживается за час пиковой нагрузки. Целое число, единица — клиентов/час. Пример: 1200."
+      why: "Блокирующий вход экспресс-метода: множитель в E = коэф. типа клиентов × коэф. влияния × клиентов/час; без нагрузки E = 0 и уровень не определяется. Дополнительно заполняет object_workload паспорта."
+      acceptable: "Целое число больше 0, клиентов/час (запросов/час, если нагрузка снята как RPS шлюза)"
+      where: "Клоны сервисов ИС (apps/<код>/<сервис>): docs/ и openspec/ — основная документация; затем Grafana: папка продукта E001 (uid feuw533xc1hq8c) → подпапка ИС → панели трафика шлюза (rate(http_*), nginx_vts, krakend); вторично — Confluence: страницы трафика/RPS/QPS дерева от страницы ИС; SSoT links.yaml/resources.yaml даёт только ссылки на дашборды. Формула: peak_hour_load = peak_rps × 3600. Ловушка: не экстраполировать 5-минутку — она дала 394 536/час против контрольного increase(counter[1h]) = 42 367/час; при съёме RPS считать peak_rps × 3600"
+      whom: "TL (снимает пик в Grafana), SRE (подтверждает панель и datasource)"
+      confirm: "source: {type: grafana, ref: 'dashboard uid=<uid>, panel <id>, datasource <uid>, expr: <точный PromQL>, окно 7d/30d'} + status: confirmed или derived с формулой"
+      example: "peak_hour_load: {value: 75528, unit: запросов/час, source: {type: grafana, ref: 'dashboard uid=ermmm_20250813_2, panel 64, expr: sum(rate(http_server_duration_count{namespace=\"erm\", env=\"prod\"}[5m]))'}, status: derived}"
+      used_by: [express]
+      method: express
+      blocking: true
+      source_page_id: 4567543163
+      source_hint: "Grafana E001, панели трафика шлюза; Confluence; TL"
+    - id: consumers_type
+      title: "Тип клиентов"
+      description: "Тип клиентов, затронутых простоем"
+      definition: "Категория клиентов, которые заметят простой. Одно значение из enum_selection.consumers_type.values, дословно."
+      why: "Блокирующий вход экспресс-метода: множитель в E = коэф. типа клиентов × коэф. влияния × клиентов/час (коэффициент берётся из express_method.client_coefficients). Дополнительно заполняет object_consumers_type паспорта и §3 CRITICALITY.md."
+      acceptable: "enum: enum_selection.consumers_type.values (7 значений, дословно)"
+      where: "Клоны сервисов ИС (apps/<код>/<сервис>): docs/ и openspec/ — основная документация; затем Confluence: страница ИС и её дерево (BFS до глубины 2) — раздел «Пользователи продукта» / «Про продукт»; Product scope продукта (catalog.yaml → product_scope_page_id) — функциональные области называют потребителей; вторично — SSoT base.yaml (title, description). Значение — дословно из enum_selection.consumers_type.values; описывается наиболее негативный сценарий (selection_rule)"
+      whom: "PdM (владелец продукта), TL (техническая сверка)"
+      confirm: "source: {type: confluence, ref: 'page_id=<id>, раздел «Пользователи продукта»'} + status: confirmed"
+      example: "consumers_type: {value: 'Сотрудники компаний Группы (Внутренние клиенты)', source: {type: confluence, ref: 'page_id=<id>, раздел «Пользователи продукта»'}, status: confirmed}"
+      used_by: [express]
+      method: express
+      blocking: true
+      source_page_id: 4567543163
+      source_hint: "Confluence: дерево страницы ИС, Product scope, PdM"
+    - id: outage_impact
+      title: "Влияние при простое"
+      description: "Характер влияния при недоступности"
+      definition: "Что именно происходит с клиентом при недоступности ИС. Одно значение из enum_selection.outage_impact.values, дословно."
+      why: "Блокирующий вход экспресс-метода: коэффициент влияния (express_method.impact_coefficients) — второй множитель в E = коэф. типа × коэф. влияния × клиентов/час; из E считаются t по всем четырём порогам."
+      acceptable: "enum: enum_selection.outage_impact.values (6 значений, дословно)"
+      where: "Клоны сервисов ИС (apps/<код>/<сервис>): docs/ и openspec/ — основная документация; затем Confluence: DR-страница ИС (catalog.yaml → dr_page_id) — раздел влияния и сценарии отказа; DRP-план ИС (реестр ИС 4541626830, колонка «Ссылка на DRP план»; шаблон 4545516731) — описание последствий и режимов деградации; затем Support-страница и описание E2E. Формулировка — дословно из enum_selection.outage_impact.values; косвенные признаки («операторы не работают») значением не являются — нужна цитата или решение PdM"
+      whom: "PdM (характер влияния), TL (техническая реализуемость)"
+      confirm: "source: {type: confluence, ref: 'page_id=<id>, раздел <название>'} + status: confirmed; решение PdM при отсутствии цитаты — manual с ref на решение (provenance.manual_decision)"
+      example: "outage_impact: {value: 'Не оказана услуга в заявленный SLA срок (Внутренние и Внешние клиенты)', source: {type: confluence, ref: 'page_id=<id>, раздел «Влияние»'}, status: confirmed}"
+      used_by: [express]
+      method: express
+      blocking: true
+      source_page_id: 4567543163
+      source_hint: "Confluence: DR-страница ИС, DRP-план, E2E; PdM"
+    - id: object_sla
+      title: "Допустимое время простоя (SLA)"
+      description: "Допустимое время простоя (SLA), минуты"
+      definition: "Допустимое время недоступности ИС в минутах (SLA/RTO). Целое число >= 0: 0 — простой недопустим (последствия наступают немедленно), отрицательных значений не бывает. Пример: 60."
+      why: "Блокирующий вход экспресс-метода: прибавляется к каждому t = порог/E×60 + SLA, то есть сдвигает все четыре времени наступления последствий и через интервалы меняет уровень. Без SLA уровень не считается (в xlsx пустой SLA молча равен 0 — отклонение зафиксировано в express_method.deviations_from_artifact)."
+      acceptable: "Целое число минут >= 0 (0 = простой недопустим; отрицательные запрещены)"
+      where: "Клоны сервисов ИС (apps/<код>/<сервис>): docs/ и openspec/ — основная документация; затем Confluence: Support-страница ИС — «целевое время решения» / «SLA решения», раздел «Классификация инцидентов»; DR-страница — «допустимое время простоя» / RTO; SLA в договоре с потребителем. Новый источник — фреймворк НФТ 4433941403: TIER-1 SLA ≥ 99,95 %/мес, RTO ≤ 60 мин, RPO ≤ 240 мин; TIER-2 SLA ≥ 99,5 %; TIER-3 SLA ≥ 99,0 %; TIER берётся из реестра ИС 4541626830, колонка «TIER DR (0,1,2,3)». Обязательная оговорка: TIER ≠ уровень критичности 1:1, перенос подтверждает SRE. RTO в часах — другой норматив: переводить в минуты можно только с подтверждением SRE; процент доступности (99.x) не равен простою в минутах"
+      whom: "SRE (владелец норматива), Support (SLA инцидентов)"
+      confirm: "source: {type: confluence, ref: 'page_id=<id>, таблица «Классификация инцидентов»'} + status: confirmed или derived с формулой (например 4h × 60 = 240 мин)"
+      example: "object_sla: {value: 240, unit: мин, source: {type: confluence, ref: 'page_id=<id>, «SLA решения 4h»'}, status: derived}"
+      used_by: [express]
+      method: express
+      blocking: true
+      source_page_id: 4567543163
+      additional_source_page_ids: [4433941403]
+      source_hint: "Confluence: Support-страница (SLA решения), DR-страница (RTO), фреймворк НФТ (TIER); SRE"
+    - id: axes_scores
+      title: "Оценки по осям (0..4)"
+      description: "Оценки 0..4 по осям legal/economic/reputational/client"
+      definition: "Четыре целых оценки 0..4 — по одной на ось legal, economic, reputational, client. Что означает каждая оценка — axes.items[].scale."
+      why: "Блокирующий вход детального метода: max по осям — строка impact_matrix, вместе с time_to_impact даёт бизнес-уровень, а он через final_matrix — итоговую критичность."
+      acceptable: "четыре целых 0..4; шкалы — axes.items[].scale"
+      where: "Клоны сервисов ИС (apps/<код>/<сервис>): docs/ и openspec/ — основная документация; затем Экспертно — из документов не выводится: legal — юридическая оценка, economic — финансовая модель, reputational — ИБ и PR, client — клиентские метрики. Страница критичности даёт только итоговый уровень, разбивки по осям в ней нет; ссылка на страницу критичности подтверждением осей не считается; нагрузки и SLA осей не заменяют"
+      whom: "TL (сбор), ИБ, финансы, PdM"
+      confirm: "source: {type: manual, ref: 'TL + ИБ + финансы, протокол/встреча <дата>'} + status: confirmed"
+      example: "axes_scores: {legal: 3, economic: 2, reputational: 1, client: 4, source: {type: manual, ref: 'TL + ИБ + финансы'}, status: confirmed}"
+      used_by: [detailed]
+      method: detailed
+      blocking: true
+      switches_scenario: true
+      source_page_id: 4567543163
+      source_hint: "экспертная оценка: TL + ИБ + финансы"
+    - id: time_to_impact
+      title: "Время до последствий"
+      description: "Время до наступления негативных последствий"
+      definition: "Через сколько времени простой начнёт давать неприемлемый ущерб. Одна корзина из time_buckets.order: <1h, 1-12h, 12-24h, >24h."
+      why: "Блокирующий вход детального метода: колонка impact_matrix; вместе с max по осям даёт бизнес-уровень критичности."
+      acceptable: "enum: time_buckets.order (<1h | 1-12h | 12-24h | >24h)"
+      where: "Клоны сервисов ИС (apps/<код>/<сервис>): docs/ и openspec/ — основная документация; затем Confluence: DR-страница ИС — сценарии отказа, кеш, репликация, очередь, момент наступления последствий; DRP-план ИС (реестр ИС 4541626830, колонка «Ссылка на DRP план»; шаблон 4545516731) — целевые сроки восстановления; разбор фактических инцидентов. Норматив в источнике обязателен: «последствия мгновенные» без зафиксированного окна — не значение"
+      whom: "SRE (сценарий отказа), TL (архитектура: кеш, репликация, очередь)"
+      confirm: "source: {type: confluence, ref: 'page_id=<id>, сценарий <название>'} + status: confirmed"
+      example: "time_to_impact: {bucket: '<1h', source: {type: confluence, ref: 'page_id=<id>, сценарий <название>'}, status: confirmed}"
+      used_by: [detailed]
+      method: detailed
+      blocking: true
+      switches_scenario: true
+      source_page_id: 4567543163
+      source_hint: "Confluence: DR-страница ИС, DRP-план, сценарии простоя; SRE"
+    - id: cia
+      title: "Оценки CIA"
+      description: "Оценки C/I/A (low|medium|high)"
+      definition: "Три уровня low|medium|high для конфиденциальности (C), целостности (I) и доступности (A). Что означает уровень — cia.descriptions."
+      why: "Блокирующий вход детального метода: cia.weights и формула V = 6*(F(C)+F(I)+F(A)) дают уровень защищённости, который через final_matrix участвует в итоговой критичности."
+      acceptable: "enum: low | medium | high для каждого из C, I, A (cia.levels)"
+      where: "Клоны сервисов ИС (apps/<код>/<сервис>): docs/ и openspec/ — основная документация; затем ИБ: классификация данных и модель угроз; связанный источник 4566723467 (методика для целей ИБ) — категории данных 5 классов; facts.data_classification в INFORMATION.yaml; уровни ПДн по полям API из ADR (если есть). Оговорка: 5 классов методики ИБ ≠ low/medium/high, подставлять напрямую нельзя — нужна экспертиза ИБ; «УЗ-N» в cia — ошибка: уровень защищённости НДС на класс критичности не влияет. Из страницы ИС и SSoT-карточки CIA не выводится — отметок конфиденциальности/целостности/доступности там нет"
+      whom: "ИБ (владелец классификации)"
+      confirm: "source: {type: manual, ref: 'ИБ: <логин>'} + status: confirmed"
+      example: "cia: {c: high, i: medium, a: low, source: {type: manual, ref: 'ИБ: <логин>'}, status: confirmed}"
+      used_by: [detailed]
+      method: detailed
+      blocking: true
+      switches_scenario: true
+      source_page_id: 4567543163
+      additional_source_page_ids: [4566723467]
+      source_hint: "экспертная оценка ИБ + facts.data_classification + 4566723467"
+  optional:
+    - id: financial_loss
+      title: "Финансовые потери по сценариям"
+      description: "Финансовые потери по сценариям"
+      definition: "Денежная оценка потерь по сценариям простоя (рубли). Свободный текст с числом и периодом."
+      why: "В формулу уровня не входит: обогащает обоснование критичности; без него соответствующий раздел паспорта остаётся «не заполнено»."
+      acceptable: "Сценарий + сумма в рублях; в остальных полях — свободный текст"
+      where: "Финансовая модель продукта и расчёты PdM; вход — сценарии простоя из DR-страницы ИС. Пороги калькулятора: низкий — до 1 млн, средний — 1–10 млн, высокий — 10–50 млн, неприемлемый — свыше 50 млн (руб.)"
+      whom: "PdM, финансы"
+      confirm: "source: {type: manual, ref: '<логин>'} + status: confirmed"
+      example: "financial_loss: {value: '1 млн руб/час простоя', source: {type: manual, ref: 'PdM: Smirnov'}, status: confirmed}"
+      used_by: [detailed]
+      source_page_id: 4567543163
+      source_hint: "финансовая модель"
+      queries:
+        - 'text ~ "потери GMV"'
+        - 'text ~ "недополученного GMV"'
+        - 'title ~ "финансовая модель" AND text ~ "{product}"'
+        - 'text ~ "{is_code}" AND (text ~ "ущерб" OR text ~ "потери")'
+        - 'title ~ "постмортем" AND text ~ "{is_name}"'
+      applicability_check:
+        question: "Обслуживает ли ИС внешних клиентов / заказы?"
+        source: "DR-страница ИС (catalog.yaml → dr_page_id), раздел про клиентов"
+        if_no: 'Потери GMV от заказов к ИС не относятся: ИС внутренняя. Кандидат значения — `0 руб/час` со ссылкой на DR-страницу и прецедент (4417913261 «Отсутствуют потери, нет влияния на GMV… продукт внутреннего использования»). Не подставлять общесетевой GMV и не выводить «примерно».'
+      methodology_refs:
+        - id: 4261521386
+          title: "Расчет недополученного GMV от КРИТИЧЕСКИХ технологических инцидентов"
+          note: "Формула: (отмены во время инцидента − среднее за 3 недели) × средний чек; средний чек по умолчанию 750 ₽. Применима только к ИС, обслуживающим заказы клиентов."
+      precedent_refs:
+        - id: 4196617026
+          note: "mask-kpr.smkt: «потеря менее 1% GMV»"
+        - id: 4417913261
+          note: "fdbk.ecom: внутренняя ИС → потерь нет"
+        - id: 4417940072
+          note: "sbc.ecom: «отсутствие потери GMV»"
+      traps:
+        - "Блок «Оценка ущерба» в постмортемах T006 — пустой шаблон, не данные."
+        - "Дашборд Grafana WjUcCb_Zz «GMV, AOV, Conversion» — общесетевой GMV, не атрибутируется ИС; как потери ИС не использовать."
+      advisory: true
+      source_status: current
+  # Маршруты поиска без собственного входа расчёта: не блокируют уровень, не
+  # входят в scenarios и не участвуют в гейте. Их читает агент на tier 2, когда
+  # входа нет в criteria.inputs.required/optional, но подтверждение нужно для
+  # паспорта. Канон запросов — здесь; references/search.md держит копию.
+  routes:
+    e2e:
+      kind: convention
+      status: needs_validation
+      rationale: "Маршрут найден глубоким поиском 2026-11-18 (метки checkliste2e / e2e-process-card, реестры процессов) и не описан в каноне входов 4567543163: страница-канон задаёт требования к семи входам, но не маршрут сквозных процессов. Пока владелец методики не подтвердил, правило помечено конвенцией."
+      title: "Сквозные процессы (e2e)"
+      description: "Участие ИС в сквозных бизнес-процессах: карточка процесса и место ИС в шагах"
+      where: 'Каталог сквозных процессов: «🗃 Каталог сквозных процессов 2.0» (3790195333), «Реестр сквозных процессов» (3700777856), «Реестр информационных систем» (4060332274, колонки «Наименование ИС / Код ИС / Название процесса»). Прямой запрос по ИС — метка таблицы шагов процесса: label = "checkliste2e" AND text ~ "<код ИС>". Карточки процессов — label = "e2e-process-card" AND space = SMKT. Ловушка: пустая колонка "Сквозной бизнес-процесс (e2e)" в Product scope НЕ означает отсутствие процессов: в таблице-глоссарии стоит пометка "В рамках пилота не заполняем". Опустевшая колонка — повод идти в каталог процессов, а не основание для not_filled.'
+      queries:
+        - 'label = "checkliste2e" AND text ~ "{is_code}"'
+        - 'label = "e2e-process-card" AND space = SMKT AND text ~ "{is_name}"'
+        - 'text ~ "{is_code}" AND title ~ "BP"'
+        - 'text ~ "{is_name}" AND text ~ "сквозной процесс"'
+      evidence_grading:
+        direct: "код ИС присутствует в колонке «Информационная система» таблицы шагов процесса"
+        indirect: "ИС упомянута как получатель данных или в описании, но не в шагах"
+        none: "совпадений нет"
+      record_steps: true
+      # Реестры входа перечислены явно: без этого `_research_ref_pages`
+      # подбирает их эвристикой по вхождению title в `where`, и правка
+      # формулировки молча отключает покрытие.
+      external_refs: [e2e_catalog, e2e_registry, is_process_registry]
+      source_page_id: 4567543163
+      source_status: current
+  gate:
+    kind: documented
+    page_id: 4566730084
+    source_quote: "Неполный сложный набор — это BLOCKED, а не повод посчитать простой сценарий. Blocking-вход считается готовым, когда значение есть и его status не missing."
+    rule: "Если хотя бы один обязательный критерий недоступен — расчёт не выполняется, возвращается статус incomplete со списком недостающих критериев и требованием указать источник или значение."
+
+scenarios:
+  kind: convention
+  status: validated
+  rationale: "Критичность считается по двум сценариям. Простой (экспресс) — четыре входа калькулятора критичности. Сложный (детальная оценка) — все входы блока inputs обязательны: частично заполненный детальный набор не даёт права на расчёт."
+  simple:
+    title: "Простой сценарий (экспресс-оценка)"
+    method: express
+    inputs:
+      - peak_hour_load
+      - consumers_type
+      - outage_impact
+      - object_sla
+    rule: "Все четыре входа обязательны и должны иметь непустое значение. Отсутствие любого — BLOCKED."
+  complex:
+    title: "Сложный сценарий (детальная оценка)"
+    method: detailed
+    inputs:
+      - peak_hour_load
+      - consumers_type
+      - outage_impact
+      - object_sla
+      - time_to_impact
+      - axes_scores
+      - cia
+    rule: "Все входы блока inputs обязательны. Отсутствие любого — BLOCKED; фолбэк на простой сценарий запрещён."
+  selection:
+    source_page_id: 4566730084
+    rule: "Если хотя бы один вход, относящийся только к сложному набору (time_to_impact, axes_scores, cia), содержит непустое значение — сценарий сложный. Иначе — простой."
+
+service_lifecycle:
+  kind: convention
+  status: validated
+  rationale: "Сервисы с lifecycle: closed выведены из эксплуатации и не участвуют в функционировании ИС. Их нельзя клонировать, анализировать и использовать как источник оснований для входов критичности."
+  skip:
+    - closed
+  skip_reason: "сервис закрыт (lifecycle: closed): удалён из эксплуатации, не участвует в функционировании ИС"
+  applies_to:
+    - prepare
+    - collect
+    - services
+  evidence_rule: "закрытый сервис не может быть источником для criteria_inputs и facts"
+
+express_method:
+  kind: documented
+  status: validated
+  source_page_id: 4566730084
+  source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+  source_sheets:
+    inputs: "Простой - Экспресс оценка"
+    lookup: "Расчет!A50:F56"
+    intervals: "Расчет!B9:C14"
+    matrix: "Расчет!D26:I29"
+    score_to_level: "Расчет!B35:C39"
+  note: "Алгоритм перенесён из файла-артефакта дословно: лист «Простой - Экспресс оценка» (C2..C5) -> «Простой - Детальная оценка» строка 5 -> скрытый лист «Расчет» (D33:I33 -> J33 -> K33) -> C7. Макросов в файле нет, все константы лежат в ячейках. Рантайм-зависимости от xlsx нет: коэффициенты, интервалы и матрица продублированы ниже."
+  formula:
+    kind: documented
+    source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+    load: "E = client_coefficients[consumers_type] × impact_coefficients[outage_impact] × peak_hour_load"
+    time: "t[severity] = thresholds[severity] / E × 60 + object_sla"
+    score: "score[interval] = matrix[severity][interval] первой severity из matrix.rows, для которой lo < t[severity] <= hi"
+    level: "J = max(score по интервалам); level = score_to_level[J]"
+  aggregation: max
+  thresholds:
+    Неприемлемые: 50000
+    Высокие: 10000
+    Средние: 1000
+    Низкие: 100
+  client_coefficients:
+    kind: documented
+    source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+    note: "Расчет!A50:B56; в xlsx у «Физические  лица канала Сбербанк Первый» двойной пробел — в enum_selection.consumers_type.values значение канонизировано, поиск сравнивает без учёта краевых/двойных пробелов."
+    map:
+      "Физические лица (Внешние клиенты)": 1
+      "Микро/малый бизнес (Внешние клиенты)": 1
+      "Крупный и средний бизнес (Внешние клиенты)": 10
+      "Крупнейшие клиенты и финансовые институты (Внешние клиенты)": 100
+      "Физические лица канала Сбербанк Первый (Внешние клиенты)": 10
+      "Физические и юридические лица канала Private banking (Внешние клиенты)": 20
+      "Сотрудники компаний Группы (Внутренние клиенты)": 0.2
+  impact_coefficients:
+    kind: documented
+    source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+    note: "Расчет!D51:F56 (столбец F — коэффициент). В xlsx у первых двух значений реальный хвостовой пробел, у «Клиент не получил кредитные средства…» — двойной; в enum_selection.outage_impact.values значения канонизированы, поиск сравнивает без учёта краевых/двойных пробелов."
+    map:
+      "Клиент не смог узнать необходимую информацию (Внутренние и внешние клиенты)": 0.2
+      "Не оказана услуга в ожидаемый срок, без нарушения SLA (Внутренние и внешние клиенты)": 0.5
+      "Не оказана услуга в заявленный SLA срок (Внутренние и Внешние клиенты)": 0.8
+      "Клиент не получил кредитные средства в заявленный срок (Внешние клиенты)": 1.0
+      "Не получен доступ ко своим счетам, не смог осуществить сделку (Внешние клиенты)": 1.5
+      "Клиент понес прямой убыток из-за недоступности сервиса (Внешние клиенты)": 3.0
+  impact_categories:
+    kind: documented
+    source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+    note: "Расчет!E51:E56 — категория последствий для человека; на расчёт не влияет."
+    map:
+      "Клиент не смог узнать необходимую информацию (Внутренние и внешние клиенты)": Незначительное
+      "Не оказана услуга в ожидаемый срок, без нарушения SLA (Внутренние и внешние клиенты)": Низкое
+      "Не оказана услуга в заявленный SLA срок (Внутренние и Внешние клиенты)": Ниже среднего
+      "Клиент не получил кредитные средства в заявленный срок (Внешние клиенты)": Среднее
+      "Не получен доступ ко своим счетам, не смог осуществить сделку (Внешние клиенты)": Высокое
+      "Клиент понес прямой убыток из-за недоступности сервиса (Внешние клиенты)": Критическое
+  intervals:
+    kind: documented
+    source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+    note: "Расчет!B9:C14. Проверка строго lo < t <= hi; интервалы непрерывны и покрывают (0;∞)."
+    items:
+      - index: 0
+        lo: 0
+        hi: 10
+        label: ">0 мин – ≤10 мин"
+      - index: 1
+        lo: 10
+        hi: 30
+        label: ">10 мин – ≤30 мин"
+      - index: 2
+        lo: 30
+        hi: 60
+        label: ">30 мин – ≤1 ч"
+      - index: 3
+        lo: 60
+        hi: 240
+        label: ">1 ч – ≤4 ч"
+      - index: 4
+        lo: 240
+        hi: 1440
+        label: ">4 ч – ≤24 ч"
+      - index: 5
+        lo: 1440
+        hi: null
+        label: ">24 ч"
+  matrix:
+    kind: documented
+    source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+    note: "Расчет!D26:I29. Порядок строк — порядок проверки в D33 (сверху вниз): первая подходящая severity задаёт балл интервала."
+    evaluation_order: first_match
+    rows:
+      - severity: Неприемлемые
+        scores: [5, 4, 4, 4, 3, 1]
+      - severity: Высокие
+        scores: [4, 4, 3, 3, 2, 1]
+      - severity: Средние
+        scores: [3, 3, 2, 2, 1, 1]
+      - severity: Низкие
+        scores: [2, 2, 2, 1, 1, 1]
+  score_to_level:
+    kind: documented
+    source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+    note: "Расчет!B35:C39. Балл -> код уровня калькулятора. «MC+» — уровень калькулятора; в паспорт пишется SSoT-уровень по levels.dochub_to_ssot (Mission critical), «калькулятор: MC+» фиксируется в score_trace/GENERATION.md."
+    map:
+      "1": OP
+      "2": BO
+      "3": BC
+      "4": MC
+      "5": MC+
+  calculator_level_codes:
+    kind: documented
+    source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+    note: "Расчет!C35:C39 — коды уровней. Расшифровка кода в полный уровень levels.order (названия совпадают с dochub-паспортом)."
+    map:
+      OP: Office productivity
+      BO: Business operational
+      BC: Business critical
+      MC: Mission critical
+      "MC+": Mission critical+
+  deviations_from_artifact:
+    - "Пустой SLA в xlsx трактуется как 0 (арифметика Excel). В скилле object_sla обязателен (blocking), но значение 0 допустимо и означает «простой недопустим»: расчёт идёт с t = порог/E×60 + 0 и сопровождается WARN о крайнем уровне."
+    - "Пустые клиенты/тип клиентов/влияние в xlsx дают E = 0 и уровень #N/A. В скилле это BLOCKED (IncompleteError), а не «нет уровня»."
+    - "«MC+» — только dochub-уровень калькулятора; в паспорт пишется SSoT-уровень Mission critical (levels.dochub_to_ssot), «калькулятор: MC+» сохраняется в trace."
+    - "Значения enum в xlsx содержат хвостовые и двойные пробелы; поиск в скилле сравнивает канонические значения (strip + схлопывание пробелов)."
+  numerics:
+    kind: convention
+    status: validated
+    rationale: "Округление t до 9 знаков перед сравнением с границами интервалов: FP-дрейф (100/3021.12*60) иначе переключал бы границу (t=240.00000000000003 уходил бы в интервал #4 вместо #3). 9 знаков не меняют ни одного реального значения SLA/нагрузки и совпадают с точностью LibreOffice-сверки."
+    round_digits: 9
+  validation_required: "Экспресс-результат имеет статус preliminary и требует подтверждения SRE."
+
+enum_selection:
+  consumers_type:
+    kind: documented
+    page_id: 4552328348
+    source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+    source_defect: true
+    source_defect_note: "На странице 4552328348 список неполон: «Физические лица (Внешние клиенты)» отсутствует, «Сотрудники компаний Группы» продублирован. Канонические 7 значений — в xlsx Расчет!A50:B56; страница используется только как описание поля."
+    values:
+      - "Микро/малый бизнес (Внешние клиенты)"
+      - "Крупный и средний бизнес (Внешние клиенты)"
+      - "Крупнейшие клиенты и финансовые институты (Внешние клиенты)"
+      - "Физические лица (Внешние клиенты)"
+      - "Физические лица канала Сбербанк Первый (Внешние клиенты)"
+      - "Физические и юридические лица канала Private banking (Внешние клиенты)"
+      - "Сотрудники компаний Группы (Внутренние клиенты)"
+    selection_rule:
+      kind: documented
+      page_id: 4552328348
+      rule: "Описывать наиболее негативный сценарий. При влиянии на разные категории — выбирать сценарий с влиянием на внешних клиентов."
+  outage_impact:
+    kind: documented
+    page_id: 4552328348
+    source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+    source_defect: true
+    source_defect_note: "На странице 4552328348 только 4 из 6 значений; канон — xlsx Расчет!D51:D56."
+    values:
+      - "Клиент не смог узнать необходимую информацию (Внутренние и внешние клиенты)"
+      - "Не оказана услуга в ожидаемый срок, без нарушения SLA (Внутренние и внешние клиенты)"
+      - "Не оказана услуга в заявленный SLA срок (Внутренние и Внешние клиенты)"
+      - "Клиент не получил кредитные средства в заявленный срок (Внешние клиенты)"
+      - "Не получен доступ ко своим счетам, не смог осуществить сделку (Внешние клиенты)"
+      - "Клиент понес прямой убыток из-за недоступности сервиса (Внешние клиенты)"
+    severity_order:
+      kind: documented
+      source_artifact: "docs/reference/calculator/калькулятор критичности упрощенный.xlsx"
+      note: "Порядок возрастания негативности равен коэффициентам влияния (express_method.impact_coefficients); в xlsx значения записаны с хвостовыми/двойными пробелами — здесь канонизированы."
+      order: [0.2, 0.5, 0.8, 1.0, 1.5, 3.0]
+
+conflicts:
+  kind: convention
+  status: needs_validation
+  rationale: "Источники могут расходиться (SSoT, страница критичности Confluence, dochub-паспорт, E2E-описание)."
+  priority: [dochub_passport, criticality_page, ssot_card]
+  on_conflict: "Зафиксировать расхождение в артефакте (раздел «Расхождения»), выбрать значение по приоритету, пометить статус требует подтверждения."
+
+staleness:
+  kind: convention
+  status: needs_validation
+  review_period_months: 12
+  rationale: "Процесс D6.1.1 не задаёт срок действия оценки; 12 месяцев — конвенция репозитория для напоминаний."
+
+artifacts:
+  kind: convention
+  status: needs_validation
+  rationale: "Требование к форме артефактов — правило этого репозитория, а не методики: оно гарантирует, что в паспорт не попадут числа без источника."
+  rule: "Любой артефакт формируется только из шаблона templates/ и только из фактов INFORMATION.yaml + критериев. Свободный текст допускается только в полях «комментарий/обоснование»."

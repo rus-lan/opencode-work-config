@@ -1,0 +1,352 @@
+# Конфигурация скилла task-readiness-review.
+#
+# Что это: единственный файл настроек, который скилл читает из корня проекта.
+# Он НЕ версионируется вместе с проектом — каждый проект заводит свой.
+#
+# Как появился: этот файл скопирован командой `init` из
+#   skills/task-readiness-review/task-readiness-review.example.yaml
+# Правки делайте здесь, а не в файле скилла.
+#
+# Секретов здесь нет и быть не может: токены берутся только из переменных
+# окружения JIRA_TOKEN / CONFLUENCE_TOKEN / GITLAB_TOKEN. Любой ключ, похожий
+# на token/secret/password/pat/api_key, роняет `config-check` с кодом 3.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# ДЕМО-значения (T100). Замените на свои: они не используются как дефолты.
+# Всё, что относится к конкретной команде — проект Jira, страница эталона,
+# борд, спринты и id полей — собрано в этом блоке. Ниже него только поведение
+# скилла, менять которое не нужно.
+# `trr config-check` такой конфиг пропускает (структура верная), а `doctor`
+# печатает `[WARN] … похоже на демо-значение, замените` для каждого демо-id.
+# ─────────────────────────────────────────────────────────────────────────────
+
+skill: task-readiness-review
+
+# Источники данных для обучения модели.
+#
+# sources.reference — эталоны оценки в Story Points. У элемента обязателен
+# хотя бы один ключ:
+#   page_id  — прямой id страницы Confluence (рабочий вариант ниже);
+#   page_url — URL Confluence: viewpage.action?pageId=N или /display/SPACE/Title
+#              (резолвится без сети; /display/... даёт space/title, а не id);
+#   text     — свободный текст: упоминание источника словами, URL, название.
+# Дублирующая копия той же таблицы может лежать в Obsidian — тогда добавьте
+# второй элемент с system: obsidian и page_id: <путь заметки в хранилище>.
+#
+# sources.sprints — борды и спринты для статистики. У элемента обязателен хотя
+# бы один вариант:
+#   board_id + sprint_ids — числовые id (рабочий вариант ниже);
+#   board_labels          — названия спринтов как в UI Jira через запятую
+#                           (`trr match-sprints` резолвит их в id);
+#   text                  — свободный текст с названиями и/или id.
+# Берутся только закрытые спринты: по незакрытым статистика недостоверна.
+#
+# Гейт init/train требует минимум один эталон и минимум один спринт.
+sources:
+  reference:
+    - page_id: "4278391451"
+      title: "T100 Story Points"
+
+  # Имена спринтов (для справки): T100-T102 26.18, T100-T102 26.19,
+  # T100-T102 26.20, T100-T102 26.21, T100-T102 26.22.
+  sprints:
+    - board_id: 6662
+      sprint_ids: [20367, 20693, 20694, 21143, 21144]
+
+  # Обход дочерних страниц эталона. По умолчанию выключен: recursive: false,
+  # max_depth: 1 (только сама страница эталона), max_pages: 20.
+  # recursive: true + max_depth: 2 — плюс прямые дочерние страницы; страницы
+  # дерева агент складывает в файл и передаёт в `trr resolve-sources --pages-json`.
+  confluence:
+    recursive: false
+    max_depth: 1
+    max_pages: 20
+
+# Поля Jira.
+#
+# fields.* — идентификаторы полей проекта. Пустая строка означает «резолвить по
+# имени»: тогда id берётся из field_names (`trr match-fields --names-json …`),
+# а Python проверяет консистентность. Если resolve_fields_by_name: false, все
+# три id обязаны быть заполнены.
+#
+# field_names.* — имена полей как в UI Jira. Используются только для резолва.
+jira:
+  project: E001
+  fields:
+    story_points: customfield_10004
+    qa_estimation: customfield_13819
+    role: customfield_12750
+  field_names:
+    story_points: "Story Points"
+    qa_estimation: "QA Estimation"
+    role: "Роль"
+  resolve_fields_by_name: true
+
+  # post  — по умолчанию результат публикуется комментарием в задачу
+  #         (trr publish готовит текст, агент публикует его через MCP Jira
+  #         и фиксирует id через --comment-id);
+  # draft — только печать, комментарий не отправляется.
+  comment_mode: post
+
+# ─────────────────────────────────────────────────────────────────────────────
+# конец блока ДЕМО-значений. Дальше — только поведение скилла.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# АЛЬТЕРНАТИВНЫЕ формы источников (закомментированы): схема принимает
+# string | array, поэтому блок выше и варианты ниже равноправны. Резолв
+# свободного текста и названий спринтов выполняет ИИ на этапе init, результат
+# фиксируется в .task-readiness/resolved-sources.json с evidence.
+#
+# sources:
+#   reference:
+#     - page_id: 4278391451
+#     - page_url: "https://space.samokat.ru/pages/viewpage.action?pageId=4278391451"
+#     - page_url: "https://space.samokat.ru/display/ECOMCS/T100+Story+Points"
+#     - text: |
+#         эталон оценки указан на страницах в конфлюенсе
+#         https://space.samokat.ru/display/ECOMCS/T100+Story+Points
+#         и в obsidian на странице SP-эталон
+#   sprints:
+#     - board_id: 6662
+#       sprint_ids: [20367, 20693]
+#     - board_labels: "T100-T102 26.18, T100-T102 26.19"
+#     - text: "T100-T102 26.20, T100-T102 26.21"
+
+# Каталог шаблонов относительно корня скилла. Менять не нужно.
+templates_dir: templates
+
+# Свой шаблон описания задачи вместо встроенного.
+# null — использовать встроенный templates/task-description.md.
+# Канонический путь — верхний уровень, как здесь.
+# Устаревшая форма sources.override_template ещё принимается (значение
+# переносится наверх), но печатает [WARN] и в новых конфигах не используется.
+override_template: null
+
+# Правила проверки готовности.
+validation:
+  # Проверять ли связанные задачи (зависимости) — дороже по времени.
+  with_dependencies: false
+
+  # Минимальный размер бакета, при котором статистика считается достаточной.
+  # Бакет меньше порога даёт coverage=insufficient и confidence=low.
+  min_sample_n: 5
+
+  # Типы задач, для которых требуется оценка QA.
+  # Типы вне списка (Задача, Tech Debt, ADR, Релиз, Дизайн) QA-оценки
+  # не требуют: исполнитель выполняет полный объём, включая проверку
+  # результата, поэтому QA-записи в оценке нет.
+  qa_required_issue_types:
+    - Feature
+    - New Feature
+    - Фича
+    - Ошибка
+    - Bug
+    - Дефект
+
+  # Отображение значения роли из Jira в enum role.
+  # Ключ — то, что реально приходит из Jira; значение — BA/SA/BE/FE/QA/DEVOPS/OTHER.
+  # Неизвестное значение не ошибка: роль нормализуется в OTHER.
+  role_map:
+    BA: BA
+    SA: SA
+    BE: BE
+    FE: FE
+    QA: QA
+
+  # Целевой шаблон описания задачи: ссылка в компактных блоках отчёта
+  # («Что заполнить» / «Что стоит уточнить»). Пустая строка — печатать путь
+  # к templates/task-description.md вместо ссылки.
+  template_url: "https://space.samokat.ru/pages/viewpage.action?pageId=3882222857"
+
+# Правила расчёта оценки.
+estimation:
+  # Шкала Story Points: ровно 7 значений, строго возрастающая.
+  scale: [1, 2, 3, 5, 8, 13, 21]
+
+  # Границы коэффициента калибровки [min, max]: 0 < min < max.
+  # factor = clamp(median спринтов / база эталона, 0.5, 2.0).
+  factor_clamp: [0.5, 2.0]
+
+  # Векторизация текстов задач (этап A): поиск похожих задач по тексту.
+  # По умолчанию включено: векторы строятся на train (norm/task-vectors.json)
+  # и используются как справка — adjust_range: false, числа оценки не меняются.
+  # enabled: true — искать соседей и добавлять similar_tasks[] в estimate.json.
+  # adjust_range: true — разрешить векторам менять range (по умолчанию выключено).
+  # min_corpus ниже 30 — ошибка конфига: на малом корпусе пороги недостоверны.
+  vector:
+    enabled: true
+    adjust_range: false
+    top_k: 5
+    min_corpus: 30
+    top_terms: 15
+    weight_word: 0.5
+
+  # Три эвристических параметра задачи (каждый 0.0…1.0).
+  #
+  # В Jira полей под них НЕТ — значения выводятся из снимка задачи
+  # (context.json) командой `trr params`, всегда с провенансом (source,
+  # evidence). Смысл параметров:
+  #   weight        — вес задачи, отражает сложность задачи;
+  #   heat          — «теплота», отражает необходимость проработки;
+  #   connectivity  — «связанность», сложность и количество внешних интеграций.
+  #
+  # Это ЭВРИСТИКА, а не измерение: сигналы (тип задачи, длина описания,
+  # метки, issuelinks, упоминания внешних систем) дают приблизительное
+  # значение. Любой параметр можно переопределить вручную: числом weight /
+  # heat / connectivity в context.json или в context.params.<имя>
+  # (в CLI — флаги `--weight/--heat/--connectivity` у `check` и `estimate`).
+  # Override приоритетнее эвристики.
+  #
+  # Блок необязателен: без него действуют значения ниже. Множитель входит
+  # в формулу оценки третьим сомножителем:
+  #   expected = nearest_scale(base × factor × params_multiplier).
+  # База сравнения — профиль параметров бакета модели (params_profile), иначе
+  # defaults: типовая задача бакета оценку не сдвигает.
+  params:
+    # false — не выводить эвристику: все три значения = defaults.
+    enabled: true
+
+    # Границы множителя [min, max]: 0 < min <= 1.0 <= max <= 4.0.
+    # Множитель = 1 + 0.5*(weight-0.5) + 0.4*(heat-0.5) + 0.3*(connectivity-0.5),
+    # зажатый в эти границы. При значениях по умолчанию множитель = 1.0.
+    clamp: [0.5, 2.0]
+
+    # Коэффициенты множителя при отклонении параметра от профиля бакета (0…2).
+    # Больше коэффициент — сильнее параметр двигает оценку. Калибруются
+    # регрессией по спринтам, если данных достаточно; иначе берутся эти значения.
+    coefficients:
+      weight: 0.5
+      heat: 0.4
+      connectivity: 0.3
+
+    # Значения по умолчанию (0…1): когда сигналов нет или enabled: false.
+    defaults:
+      weight: 0.5
+      heat: 0.5
+      connectivity: 0.5
+
+    # Переопределение весов сигналов: «имя сигнала → вес 0…1».
+    # Пустой объект — веса по умолчанию (issue_type 0.35, description_len 0.20,
+    # acceptance_items 0.15, refactor_markers 0.15, components 0.15 и т.д. —
+    # полный список в references/estimation-model.md). Неизвестные имена
+    # игнорируются. Менять только осознанно: сумма весов параметра = 1.0.
+    signals: {}
+
+  # Дополнительные ресурсы задачи (правило RS-01): за каждый дополнительный
+  # ресурс (allure для тест-кейсов, e2e-сервис автотестирования для автотестов)
+  # +1 SP к оценке либо верхняя граница диапазона (`mode: upper_bound`).
+  # Особенно важно для задач, которые фактически на написание тестов.
+  #
+  # enabled: true         — распознавать ресурсы по тексту задачи;
+  # sp_per_resource: 1    — сколько SP добавляет один ресурс (0 — не менять оценку);
+  # mode: add             — прибавить SP за каждый ресурс;
+  # mode: upper_bound     — взять верхнюю границу уже посчитанного диапазона;
+  # items                 — каталог «имя ресурса → алиасы (подстроки, casefold)».
+  #                         Своё имя добавляет ресурс, пустой список выключает
+  #                         (`allure: []` — ресурс больше не распознаётся).
+  # Надбавка применяется только к основному исполнителю: производная QA-запись
+  # (`source=derived`) не затрагивается — иначе двойной счёт.
+  resources:
+    enabled: true
+    sp_per_resource: 1
+    mode: add
+    items:
+      allure: ["allure", "тест-кейс", "тест кейс", "тесткейс", "test case", "testcase"]
+      e2e: ["e2e", "автотест", "autotest", "auto-test", "end-to-end", "end to end"]
+
+# Публикация отчёта.
+# target: none — отчёт печатается в stdout и лежит в каталоге прогона.
+# Чтобы публиковать в Confluence, поставьте target: confluence и заполните
+# space (ключ пространства) и page_id (страница, куда писать):
+#   confluence:
+#     space: "ECOMCS"
+#     page_id: "4279119874"
+# Чтобы публиковать в Obsidian, поставьте target: obsidian и укажите путь
+# заметки в хранилище:
+#   obsidian:
+#     path: "projects/e001/task-readiness-report.md"
+output:
+  target: none
+  confluence:
+    space: ""
+    page_id: null
+  obsidian:
+    path: ""
+
+# Локальное SQLite-зеркало артефактов, метрик и векторов.
+#
+# Зачем: файлы (`norm/*.json`, `model/*.json`, `runs/*`) остаются источником
+# истины, но по ним нельзя одним запросом ответить «сколько задач FE с sp=3
+# закрыто в 26.19» и не видно истории метрик. Зеркало пишет те же данные в один
+# файл SQLite — рядом с артефактами, включено по умолчанию.
+#
+#   trr db init      # создать/мигрировать файл (идемпотентно)
+#   trr db ingest    # бэкфилл из уже лежащих на диске артефактов
+#   trr db stats     # таблица → строк
+#   trr db query --sql "SELECT role, work_kind, value FROM reference_buckets"
+#   trr db export --out dump.json
+#
+# Confluence — отдельная ось: выключение зеркала публикацию не затрагивает.
+# Блок необязателен: без него действуют дефолты, указанные ниже.
+storage:
+  sqlite:
+    # false — шаги пишут только файлы, БД не создаётся (`trr db …` → [BLOCKED]).
+    enabled: true
+
+    # Файл БД. Относительный путь — от корня проекта; `../…` — ошибка конфига.
+    # Абсолютный путь разрешён, но config-check печатает [WARN].
+    path: ".task-readiness/trr.sqlite3"
+
+    # Хранить векторы задач (BLOB float32). false — таблица vectors пуста,
+    # метаданные модели (vector_meta) пишутся всё равно.
+    keep_vectors: true
+
+    # Хранить полные JSON-снимки (payload модели/валидации/оценки, terms).
+    # false — только скалярные поля: меньше размер, меньше данных о задачах.
+    keep_payloads: true
+
+    # VACUUM при `trr db export` — сжать файл после массовых удалений.
+    vacuum_on_pack: false
+
+# Экспорт и импорт обученных артефактов (`trr artifact …`).
+#
+# Зачем: обучение читает Confluence и Jira. Бандл (.tar.gz) переносит уже
+# обученную модель в другой проект/машину/CI — импорт даёт stage=trained без
+# повторного train:
+#   trr artifact pack --out model.tar.gz        # здесь, после train
+#   trr artifact inspect model.tar.gz           # что внутри (проект, спринты, версия)
+#   trr artifact unpack model.tar.gz            # там, где обучение не нужно
+#   trr init --from-artifact model.tar.gz       # init + импорт одной командой
+#
+# Дефолт — «не публиковать»: export_target: none. Публикация включается явно,
+# и тогда место обязано быть заполнено (иначе config-check: [MISSING]).
+artifacts:
+  # Класть ли в бандл norm/sprint-sample.json (сырую выборку спринтов).
+  # true — бандл самодостаточен для повторного stats/calibrate;
+  # false — только производные артефакты (меньше размер и меньше данных о задачах).
+  include_sprint_sample: true
+
+  # none | local | confluence | gitlab | obsidian
+  export_target: none
+
+  # export_target: local — файл или каталог, куда складывается бандл.
+  local:
+    path: null
+
+  # export_target: confluence — страница бандла под parent_page_id.
+  # {{model_version}} и {{project}} подставляются в заголовок.
+  confluence:
+    space: null
+    parent_page_id: null
+    title_template: "Task Readiness model {{model_version}} — {{project}}"
+
+  # export_target: gitlab — файл в репозитории. Коммит делает агент через MCP:
+  # скилл никогда не пишет git (см. `trr artifact plan --target gitlab`).
+  gitlab:
+    project: null
+    path: "task-readiness/"
+    branch: "main"
+
+  # export_target: obsidian — путь заметки/вложения в хранилище.
+  obsidian:
+    path: null

@@ -1,0 +1,44 @@
+# ШАБЛОН. Рендерится командой criticality.py start. Руками не править.
+# Паспорт критичности ИС — канонический формат dochub
+# Путь в dochub: {{ identity.dochub_path }}
+# Ссылку на файл добавить в _root.yaml в секцию imports. MR помечать меткой "criticality".
+# Заполняется по: {{ refs.express_method_page.url | or_missing }}
+#
+# Набор ключей канонический: своих полей не добавлять — файл копируется в MR как есть.
+# Подробности живут в CRITICALITY.md рядом.
+#
+# object_consumers_type (ровно одно): Микро/малый бизнес (Внешние клиенты) ·
+#   Крупный и средний бизнес (Внешние клиенты) · Крупнейшие клиенты и финансовые
+#   институты (Внешние клиенты) · Физические лица (Внешние клиенты) · Физические лица
+#   канала Сбербанк Первый (Внешние клиенты) · Физические и юридические лица канала
+#   Private banking (Внешние клиенты) · Сотрудники компаний Группы (Внутренние клиенты)
+# object_outage_impact (ровно одно): Клиент не смог узнать необходимую информацию ·
+#   Не оказана услуга в ожидаемый срок, без нарушения SLA · Не оказана услуга в
+#   заявленный SLA срок · Клиент понес прямой убыток из-за недоступности сервиса
+# object_criticality_estimation — только из расчёта (criteria.levels.order):
+{{#each levels.calculated}}#   {{ . }}
+{{/each}}#   (перечень из criteria.levels.order — то, что может выдать расчёт;
+#   править здесь нельзя)
+#
+# --- Форматы -----------------------------------------------------------------
+#   object_workload  — целое число клиентов за ЧАС пиковой нагрузки (или транзакций/сессий)
+#   object_sla       — целое число минут допустимого простоя (SLA)
+#   assigned_date    — дата первой оценки = дата генерации (generated_at), YYYY.MM.DD
+#   review_date      — дата переоценки = generated_at + период (catalog.yaml/критерии), YYYY.MM.DD
+#   generated_at     — дата генерации паспорта (--date), YYYY.MM.DD; не дата оценки
+#   approve_link     — ссылка на тред согласования в #Criticality_assessment (ставит handoff)
+#   null             — значение ещё не собрано (это нормально для draft)
+# -----------------------------------------------------------------------------
+
+ecom.criticality_passport:
+  {{ passport.id }}:
+    evaluated_object: {{ passport.evaluated_object }}
+    object_workload: {{ passport.object_workload | or_missing: null }}          # клиентов за час пика
+    object_consumers_type: {{ passport.object_consumers_type | yaml }}    # enum — в шапке файла
+    object_outage_impact: {{ passport.object_outage_impact | yaml }}     # enum — в шапке файла
+    object_sla: {{ passport.object_sla | or_missing: null }}               # минут простоя, целое
+    object_criticality_estimation: {{ passport.object_criticality_estimation | or_missing: null }}  # {{ levels.inline_calculated }}
+    assigned_date: {{ passport.assigned_date | or_missing: null }}            # дата первой оценки = дата генерации, YYYY.MM.DD
+    review_date: {{ passport.review_date | or_missing: null }}              # generated_at + период переоценки, YYYY.MM.DD
+    generated_at: {{ passport.generated_at | or_missing: null }}            # дата генерации паспорта (--date), не дата оценки
+    approve_link: {{ passport.approve_link | yaml }}             # ссылка на тред согласования в #Criticality_assessment

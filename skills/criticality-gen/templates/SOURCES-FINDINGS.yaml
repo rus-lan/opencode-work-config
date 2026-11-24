@@ -1,0 +1,41 @@
+# SOURCES-FINDINGS.yaml — результаты обхода ссылок ИС.
+# Заполняет MCP-агент по LINK-MAP.md; принимает `criticality.py sources` (make sources-apply)
+# теми же валидаторами, что гейт и enrich.
+#
+# findings[]: input (только из criteria.inputs.required) · value (по типу входа) ·
+# unit (необязательно; только из acceptable: клиентов/час|запросов/час|мин) ·
+# status (необязательно: confirmed по умолчанию | derived по разрешённой формуле) ·
+# source {type из provenance.types, ref непустой} · evidence (дословная цитата или
+# панель + PromQL + окно; без неё значение отклоняется) · node (id из LINK-MAP.yaml).
+# not_found[]: input + nodes + reason — значение не найдено (такой же результат обхода).
+# node_status[]: node + status (pending|visited|found|not_found|skipped|truncated) + reason —
+# явный результат уровня узла; принятый факт важнее пометки.
+#
+# Ничего не выдумывать. Пустой файл (findings: []) валиден: обход был, фактов нет.
+# Стиль блочный: парсер скилла не читает inline-словари {...}.
+schema_version: 1
+code: <код ИС>
+generated_at: <YYYY-MM-DD | null>
+nodes_visited: 0
+findings: []
+# Пример факта (раскомментировать и заменить):
+# findings:
+#   - input: peak_hour_load
+#     value: 120
+#     unit: запросов/час
+#     status: derived
+#     source:
+#       type: grafana
+#       ref: "grafana.samokat.io/d/<dashboard_uid>#panel=<id>"
+#     evidence: "RPS по панели <id>, окно 30d, max; peak_rps × 3600"
+#     node: n007
+not_found: []
+# not_found:
+#   - input: outage_impact
+#     nodes: [n003]
+#     reason: "раздел влияния не найден"
+node_status: []
+# node_status:
+#   - node: n004
+#     status: not_found
+#     reason: "ссылка goto/<uid> отдала HTTP 404"

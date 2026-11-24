@@ -1,0 +1,294 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Эталонные оценки в Story Points",
+  "description": "Артефакт .task-readiness/norm/reference-estimates.json: вычитанная агентом эталонная таблица Story Points. Семантические правила (value обязан входить в scale, пара (role, work_kind) не повторяется) проверяет calibrate.py; схема фиксирует форму.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source",
+    "scale",
+    "buckets",
+    "absent_roles"
+  ],
+  "properties": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "page_id",
+        "url",
+        "title",
+        "retrieved_at"
+      ],
+      "properties": {
+        "system": {
+          "enum": [
+            "confluence",
+            "jira",
+            "obsidian",
+            "file"
+          ],
+          "description": "Система, откуда прочитан эталон."
+        },
+        "page_id": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Идентификатор страницы эталона."
+        },
+        "url": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Ссылка на страницу эталона."
+        },
+        "title": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Заголовок страницы эталона."
+        },
+        "retrieved_at": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Момент чтения эталона в UTC."
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Номер версии страницы эталона в системе-источнике (Confluence version.number). Необязателен: у файловых эталонов версии может не быть."
+        },
+        "space_key": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Ключ пространства системы-источника (например, ECOMCS). Необязателен."
+        }
+      }
+    },
+    "levels": {
+      "type": "array",
+      "description": "Полная матрица эталонной таблицы: по элементу на строку шкалы. Необязательна — старые артефакты без неё остаются валидными; buckets от неё не зависят.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sp",
+          "description"
+        ],
+        "properties": {
+          "sp": {
+            "type": "integer",
+            "description": "Значение Story Points строки (колонка «Кол-во»)."
+          },
+          "description": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Текст колонки «Описание (сложность, скорость, объём кода)» дословно."
+          },
+          "uncertainty": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Колонка «Присутствуют неопределённость» как есть: «Нет», «Низкая», «Высокая»; null — ячейка пуста."
+          },
+          "refactoring": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Колонка «Возможен рефакторинг» как есть; null — ячейка пуста."
+          },
+          "research": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Колонка «Требуется исследование» как есть; null — ячейка пуста."
+          },
+          "decomposition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Колонка «Требует декомпозицию» как есть; null — ячейка пуста."
+          },
+          "time": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Колонка «Примерное время» дословно; null — ячейка пуста."
+          },
+          "examples": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Примеры строки по ролям (bold-подзаголовки внутри колонки «Примеры»). Отсутствующий ключ = роли в строке нет.",
+            "properties": {
+              "BE": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "FE": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "QA": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "params_hint": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Подсказка параметров задачи для уровня, выведенная из колонок-маркеров (см. references/estimation-model.md).",
+            "properties": {
+              "weight": {
+                "type": "number"
+              },
+              "heat": {
+                "type": "number"
+              },
+              "connectivity": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "scale": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "description": "Шкала Story Points: ровно 7 элементов, строго возрастающая.",
+      "items": {
+        "type": "integer",
+        "enum": [
+          1,
+          2,
+          3,
+          5,
+          8,
+          13,
+          21
+        ]
+      }
+    },
+    "buckets": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Бакеты эталона по паре (role, work_kind).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "work_kind",
+          "value",
+          "description",
+          "evidence"
+        ],
+        "properties": {
+          "role": {
+            "enum": [
+              "BA",
+              "SA",
+              "BE",
+              "FE",
+              "QA",
+              "DEVOPS",
+              "OTHER"
+            ],
+            "description": "Роль, к которой относится оценка."
+          },
+          "work_kind": {
+            "enum": [
+              "implementation",
+              "research",
+              "bugfix",
+              "tech_debt",
+              "analysis",
+              "testing",
+              "unknown"
+            ],
+            "description": "Вид работ, к которому относится оценка."
+          },
+          "value": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              5,
+              8,
+              13,
+              21
+            ],
+            "description": "Значение Story Points из шкалы эталона."
+          },
+          "description": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Пояснение эталона: что означает это значение."
+          },
+          "evidence": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Цитата или координата строки таблицы эталона."
+          },
+          "level": {
+            "type": "integer",
+            "description": "SP-уровень эталонной таблицы, к которому привязан бакет (обычно совпадает с value). Необязателен."
+          },
+          "example_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Сколько примеров этой роли содержит строка уровня в колонке «Примеры». Необязателен."
+          },
+          "params_hint": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Параметры-приоры уровня, унаследованные бакетом из `levels[].params_hint`. Необязательны.",
+            "properties": {
+              "weight": {
+                "type": "number"
+              },
+              "heat": {
+                "type": "number"
+              },
+              "connectivity": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "absent_roles_note": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Факт, которым проверено отсутствие ролей в эталоне (чем и как искали). Необязателен: нужен, чтобы «роли нет» было провенансом, а не догадкой."
+    },
+    "absent_roles": {
+      "type": "array",
+      "description": "Роли, которых в эталоне нет. Заполняется честно: у таблицы Story Points это BA, SA, DEVOPS и OTHER — в ней есть только bold-подзаголовки Back-end / Front-end / QA.",
+      "items": {
+        "enum": [
+          "BA",
+          "SA",
+          "BE",
+          "FE",
+          "QA",
+          "DEVOPS",
+          "OTHER"
+        ]
+      }
+    }
+  }
+}

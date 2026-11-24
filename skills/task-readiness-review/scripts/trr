@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""Исполняемый диспетчер скилла task-readiness-review.
+
+Запуск: `<skill>/scripts/trr <подкоманда> [опции]` — из любого рабочего
+каталога. Скрипт находит каталог своих модулей через `__file__` и кладёт его в
+`sys.path`, поэтому ни PYTHONPATH, ни установка не нужны.
+
+Эквивалентный запуск без шебанга — `python3 -m trr_impl <подкоманда>` из
+каталога `scripts/` (там же лежит пакет `trr_impl/`).
+
+Все подкоманды и коды выхода — в `trr_impl/cli.py`.
+"""
+
+import os
+import sys
+
+# Рантайм не должен мусорить в каталоге скилла: без этого после первого запуска
+# рядом с модулями появляется `trr_impl/__pycache__/*.pyc` (скилл может быть
+# установлен read-only или лежать в git-дереве хаба). Флаг ставится ДО импорта
+# `trr_impl`, иначе байткод пакета уже успеет записаться.
+sys.dont_write_bytecode = True
+
+_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+from trr_impl import cli  # noqa: E402
+
+if __name__ == "__main__":
+    raise SystemExit(cli.main(sys.argv[1:], invocation=sys.argv[0]))

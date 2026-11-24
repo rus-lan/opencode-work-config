@@ -1,0 +1,155 @@
+# catalog.yaml — машиночитаемый реестр ИС проекта: единственный источник списка ИС
+# для scripts/criticality.py и навигации. Создаётся `make init`, дополняется
+# `make scaffold`; после ручных правок обязателен `make validate`.
+#
+# version — версия схемы реестра · product — код продукта (scaffold: arch_code) ·
+# product_name — имя продукта (INDEX.md) · product_confluence_page_id — page_id
+# страницы продукта · review_period_months_default — период переоценки (месяцы) ·
+# dochub_url — URL репозитория dochub для `make publish` (альтернативы:
+# `dochub: {url}` / `criteria.dochub.url`; флаг `--dochub-url` главнее).
+#
+# Ключи верхнего уровня:
+#   version                      — версия схемы реестра (сейчас 1)
+#   product                      — код продукта (нужен scaffold: arch_code, запись)
+#   product_name                 — человеческое имя продукта (INDEX.md)
+#   product_confluence_page_id   — page_id страницы продукта в Confluence
+#   product_scope_page_id        — page_id страницы Product scope продукта:
+#                     источник E2E-процессов и функциональных областей
+#                     (`label = "functional-area"`). Переопределяется в записи
+#                     ИС (`systems[].product_scope_page_id`), если у ИС своя
+#                     страница области.
+#   review_period_months_default — период переоценки по умолчанию (месяцы)
+#   rocketchat_users             — кеш резолва логинов RocketChat (заполняется
+#                     автоматически `make start`, править не нужно):
+#                     <login>: {username, user_id, resolved_at}
+#   systems                      — список ИС (ниже)
+#
+# Поля записи ИС (systems[]):
+#   code            — <name_is>.<контур>; совпадает с именем папки is/<код ИС>
+#                     (плоская раскладка: is/erm.mm, is/cc-exchanger.smkt)
+#   name            — название ИС (человеческое). Прежнее имя ключа — title,
+#                     схема использует name.
+#   contour         — контур: mm | smkt (часть кода после последней точки)
+#   asset           — актив: ММ / СМКТ / СБЛ / СМ
+#   path            — путь к папке ИС внутри репозитория; ровно is/<code>
+#                     (абсолютные пути и `..` запрещены)
+#   product         — код продукта (обычно совпадает с верхнеуровневым)
+#   arch_code       — код архитектурного объекта (например E001.A10)
+#   team            — код команды-владельца (например T100)
+#   sa              — системный архитектор
+#   tech_architect  — технический архитектор (подпись в action-пакете и
+#                     публикации); при отсутствии берётся sa
+#   criticality     — уровень из паспорта dochub (5 уровней, см. levels)
+#   criticality_ssot— уровень для карточки ИС в SSoT (3 уровня, levels.ssot);
+#                     должен соответствовать criticality по маппингу критериев
+#   extra_criteria  — дополнительные критерии (список; пусто — [])
+#   criticality_source_page_id — page_id страницы-источника критичности
+#   confluence_page_id      — page_id страницы ИС в Confluence
+#   architecture_page_id    — page_id страницы архитектуры ИС; используется как
+#                     ссылка вместо АДР, когда АДР не найден (в публикации —
+#                     с пометкой «архитектура ИС; АДР не найден»). Заполняется
+#                     `make prepare` из SSoT `links.yaml` карточки ИС (первая
+#                     запись `type: page`); непустое значение не перезаписывается
+#   architecture_page_title  — название страницы архитектуры ИС (заголовок в
+#                     Confluence): по правилу confluence-links ссылка в публикации
+#                     печатается как «название» [page_id] url, а не голым pageId=
+#   product_scope_page_id   — необязательное переопределение страницы Product
+#                     scope для этой ИС (по умолчанию — верхнеуровневое поле)
+#   dr_page_id              — page_id страницы DR-плана
+#   decision_log_page_id    — page_id журнала решений
+#   gitlab_group    — ссылка на группу GitLab ИС
+#   dochub_object   — объект оценки в dochub: sber.ecom.<контур>.<name_is>
+#   assigned_date   — дата первой оценки критичности (YYYY-MM-DD); null = нет
+#   review_date     — дата текущей оценки (YYYY-MM-DD); null = нет. По ней
+#                     считается переоценка: due_date = review_date + период
+#   approve_link    — ссылка на тред СОГЛАСОВАНИЯ (её пишет handoff =
+#                     thread_link); подтверждение фиксируется мержем MR,
+#                     отдельного ответа SRE не ждём. null = треда ещё нет
+#   status          — draft (не подтверждено SRE) | confirmed
+#   ssot_status     — статус этапа SSoT, выставляется командой `make ssot`
+#                     (руками не править): no_change (severity уже совпадает,
+#                     MR не требуется) | mr_pending (коммит есть, MR не запушен)
+#                     | mr_created (MR создан). В публикации `no_change`
+#                     печатается как «не требуется», а не `⛔ не заполнено`
+#   notes           — свободные заметки по записи (основания, расхождения)
+#   handoff_mode    — режим этапа handoff, выставляется `make handoff`
+#                     (руками не править): auto (отправлять автоматически —
+#                     MCP, при отказе REST API) | manual (оставить пакет для
+#                     ручной отправки)
+#   handoff_status  — статус отправки треда, выставляется `make handoff` /
+#                     `make handoff-result`: not_started | mcp_requested
+#                     (запрос для MCP создан, ждём handoff-result) | published
+#                     | failed (оба транспорта отказали — причина в
+#                     handoff_error, пакет остаётся pending_manual)
+#   thread_link     — ссылка на НАШЕ сообщение в #Criticality_assessment;
+#                     заполнена — повторная отправка запрещена (идемпотентность;
+#                     `--force-resend` — осознанный обход). Не путать с
+#                     approve_link: approve_link — подтверждение SRE в треде
+#   published_at    — дата отправки треда (YYYY-MM-DD)
+#   handoff_error   — причина последнего отказа транспорта (MCP/REST)
+#   handoff_deadline — ISO-время, до которого ждём ответ MCP; истёк —
+#                     автоматический фолбэк на API (fallback_reason: mcp_timeout)
+#   fallback_reason — почему MCP уступил API: mcp_unavailable | mcp_failed |
+#                     mcp_timeout | mcp_invalid_response | mcp_format_error
+#   transport_used  — транспорт, который реально дал результат: mcp | api | manual
+#   review_period_months — опционально: период переоценки ИС (переопределяет
+#                     review_period_months_default)
+#   excluded        — true: ИС исключена из расчёта (вердикт SKIPPED);
+#                     приоритет у is.yaml (локально) > catalog.yaml
+#   reason          — причина исключения; обязательна при excluded: true
+#
+# Чего в реестре НЕТ (это данные ИС, а не реестра): компоненты и их
+# git-репозитории (`components[]`), входы расчёта (`criteria_inputs`), факты
+# (`facts`) — они живут в is/<код ИС>/INFORMATION.yaml. Страница ИС в
+# Confluence — это confluence_page_id (прежнее имя ключа page_id схемой не
+# используется).
+#
+# Пример записи (образец, НЕ активная запись):
+#   - code: example.mm
+#     name: Пример
+#     contour: mm
+#     asset: ММ
+#     path: is/example.mm
+#     product: E001
+#     arch_code: E001.A<TODO>
+#     team: T<TODO>
+#     criticality: null
+#     criticality_ssot: null
+#     extra_criteria: []
+#     confluence_page_id: null
+#     architecture_page_id: null
+#     architecture_page_title: null
+#     status: draft
+#     excluded: false
+#     handoff_mode: null
+#     handoff_status: not_started
+#     thread_link: null
+#     published_at: null
+#     handoff_error: null
+#
+# Пример записи с исключением (образец, НЕ активная запись):
+#   - code: legacy.mm
+#     name: Выведенная из эксплуатации
+#     contour: mm
+#     path: is/legacy.mm
+#     excluded: true
+#     reason: "нет владельца данных — решение команды"
+
+version: 1
+product: E001                    # код продукта — замените на свой
+product_name: Инструменты оператора
+product_confluence_page_id: null
+product_scope_page_id: null      # page_id страницы Product scope продукта (E2E-процессы)
+review_period_months_default: 12   # конвенция репозитория для напоминаний
+dochub_url: null                   # URL репозитория dochub (подсказка git clone)
+
+# Кеш резолва логинов RocketChat (заполняется автоматически, править не нужно)
+# rocketchat_users:
+#   dkozlov:
+#     username: dkozlov@ecom.tech
+#     user_id: GwgGRv8NXERkCtkBd
+#     resolved_at: 2026-11-19
+
+# Список ИС. Пустой реестр валиден: `make init` создаёт его пустым, первая ИС
+# появляется через `make scaffold CONTOUR=<mm|smkt> NAME=<name_is>`.
+systems:

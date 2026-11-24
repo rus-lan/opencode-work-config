@@ -1,0 +1,683 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "schema version 1.6 — estimation.resources: дополнительные ресурсы задачи (allure, e2e, …) — надбавка +1 SP за ресурс либо верхняя граница диапазона (правило RS-01). schema version 1.5 — storage.sqlite: локальное SQLite-зеркало артефактов, метрик и векторов (необязательный блок, по умолчанию включено). schema version 1.4 — estimation.params: эвристические параметры weight/heat/connectivity (необязательный блок; множитель входит в формулу оценки третьим сомножителем base × factor × params_multiplier). schema version 1.3 — estimation.vector: поиск похожих задач по векторам текста (по умолчанию включено, adjust_range — выключено). schema version 1.2 — sources.reference и sources.sprints принимают string | array: свободный текст и URL допустимы, резолв выполняет ИИ на этапе init и фиксирует результат в resolved-sources.json. Источником может быть page_id, page_url (URL Confluence с pageId или /display/SPACE/Title), свободный text; спринт — board_id+sprint_ids, board_labels (названия как в UI) или text. Командных значений по умолчанию в схеме нет.",
+  "title": "Конфигурация task-readiness-review",
+  "description": "Схема файла task-readiness-review.yaml. Секреты в конфиге запрещены: токены берутся только из переменных окружения JIRA_TOKEN / CONFLUENCE_TOKEN / GITLAB_TOKEN. Расширяемость не предусмотрена: дополнительных ключей быть не может.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill",
+    "sources",
+    "templates_dir",
+    "validation",
+    "estimation",
+    "jira",
+    "output"
+  ],
+  "properties": {
+    "skill": {
+      "type": "string",
+      "const": "task-readiness-review",
+      "description": "Маркер файла: всегда строка task-readiness-review."
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Источники данных: эталон оценки в SP и спринты для статистики. Каждый из двух ключей принимает либо строку со свободным текстом, либо структуру. Свободный текст допустим: резолв выполняет ИИ на этапе init, результат фиксируется в resolved-sources.json. Пустой список допустим по схеме, но гейт init/train требует минимум один эталон и один спринт.",
+      "required": [
+        "reference",
+        "sprints"
+      ],
+      "properties": {
+        "reference": {
+          "type": [
+            "string",
+            "array"
+          ],
+          "pattern": "\\S",
+          "minItems": 0,
+          "description": "Эталоны оценки. Либо строка со свободным текстом (ссылки на Confluence/Obsidian, название страницы), либо массив объектов. У объекта обязателен хотя бы один из ключей page_id / page_url / text (проверяется config.py). page_id — прямой id страницы; page_url — URL Confluence (с pageId или /display/SPACE/Title); text — свободный текст, который резолвит ИИ.",
+          "items": {
+            "type": [
+              "object",
+              "string"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "system": {
+                "enum": [
+                  "confluence",
+                  "jira",
+                  "obsidian",
+                  "file"
+                ],
+                "description": "Система, в которой лежит эталон. Необязателен: для page_url это всегда confluence, для text система определяется по упоминаниям."
+              },
+              "page_id": {
+                "type": [
+                  "string",
+                  "integer"
+                ],
+                "pattern": "\\S",
+                "description": "Прямой идентификатор страницы/заметки/файла в системе-источнике."
+              },
+              "page_url": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "URL страницы Confluence: viewpage.action?pageId=N или /display/SPACE/Title. Резолвится детерминированно (sources.parse_confluence_url), сеть не нужна."
+              },
+              "text": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Свободный текст: упоминание источника словами, URL, название страницы. Резолвит ИИ на этапе init."
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Ожидаемый заголовок источника; null — заголовок неизвестен."
+              }
+            }
+          }
+        },
+        "sprints": {
+          "type": [
+            "string",
+            "array"
+          ],
+          "pattern": "\\S",
+          "minItems": 0,
+          "description": "Спринты для статистики. Либо строка со списком названий/ID через запятую (например «T100-T102 26.18, 20367»), либо массив объектов. У объекта обязателен хотя бы один из вариантов: board_id + sprint_ids, board_labels, text (проверяется config.py). board_labels — названия спринтов как в UI Jira через запятую; id резолвит `trr match-sprints`.",
+          "items": {
+            "type": [
+              "object",
+              "string"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "board_id": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Идентификатор борда Jira."
+              },
+              "sprint_ids": {
+                "type": [
+                  "array",
+                  "string"
+                ],
+                "minItems": 1,
+                "description": "Идентификаторы спринтов этого борда. Допустима и строка с ID через запятую — свободный текст резолвит ИИ на этапе init.",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "board_labels": {
+                "type": [
+                  "string",
+                  "array"
+                ],
+                "pattern": "\\S",
+                "minItems": 1,
+                "description": "Названия спринтов как в UI Jira: строка через запятую или массив строк. Резолвятся в id командой `trr match-sprints`.",
+                "items": {
+                  "type": "string",
+                  "pattern": "\\S"
+                }
+              },
+              "text": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Свободный текст: названия и/или ID спринтов, которые резолвит ИИ."
+              }
+            }
+          }
+        },
+        "confluence": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Обход дерева страниц Confluence. По умолчанию выключен: recursive=false, max_depth=1 (только сама страница эталона), max_pages=20. Дочерние страницы агент складывает в --pages-json, Python добавляет их в resolved-sources.json.",
+          "required": [
+            "recursive",
+            "max_depth",
+            "max_pages"
+          ],
+          "properties": {
+            "recursive": {
+              "type": "boolean",
+              "description": "Обходить ли дочерние страницы эталона."
+            },
+            "max_depth": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Глубина обхода: 1 — только сама страница эталона, 2 — плюс её прямые дочерние страницы."
+            },
+            "max_pages": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Максимум страниц, добавляемых из дерева. Превышение — [WARN] и обрезка."
+            }
+          }
+        },
+        "override_template": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "УСТАРЕЛО. Канонический путь — верхнеуровневый override_template; здесь ключ принимается только для обратной совместимости, config.py переносит значение наверх и печатает [WARN] sources.override_template устарел — используйте override_template."
+        }
+      }
+    },
+    "templates_dir": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Каталог шаблонов относительно корня скилла."
+    },
+    "override_template": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Свой шаблон описания задачи вместо встроенного; null — использовать встроенный."
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "with_dependencies",
+        "min_sample_n",
+        "role_map"
+      ],
+      "properties": {
+        "with_dependencies": {
+          "type": "boolean",
+          "description": "Проверять ли связанные задачи (зависимости) при check."
+        },
+        "min_sample_n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Минимальный размер бакета, при котором статистика считается достаточной."
+        },
+        "qa_required_issue_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Типы задач, для которых требуется оценка QA. Типы вне списка (Задача, Tech Debt, ADR, Релиз, Дизайн) QA-оценки не требуют: проверку результата выполняет исполнитель."
+        },
+        "template_url": {
+          "type": "string",
+          "description": "Ссылка на целевой шаблон описания задачи для компактных блоков отчёта («Что заполнить» / «Что стоит уточнить»). Пустая строка означает «печатать путь к templates/task-description.md вместо ссылки»."
+        },
+        "role_map": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": [
+              "BA",
+              "SA",
+              "BE",
+              "FE",
+              "QA",
+              "DEVOPS",
+              "OTHER"
+            ]
+          },
+          "description": "Отображение значения роли из Jira в enum role. Здесь additionalProperties разрешены намеренно: ключи — произвольные значения из Jira, значения ограничены enum role."
+        }
+      }
+    },
+    "estimation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scale",
+        "factor_clamp"
+      ],
+      "properties": {
+        "scale": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "description": "Шкала Story Points: ровно 7 элементов, строго возрастающая.",
+          "items": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              5,
+              8,
+              13,
+              21
+            ]
+          }
+        },
+        "factor_clamp": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Границы коэффициента калибровки [min, max], 0 < min < max.",
+          "items": {
+            "type": "number"
+          }
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Три эвристических параметра задачи — weight (сложность), heat (необходимость проработки), connectivity (внешние интеграции), каждое 0.0…1.0. Полей в Jira под них нет: значения выводит `trr params` / `params.derive` из снимка задачи, ручной override — число weight/heat/connectivity в context. Блок НЕОБЯЗАТЕЛЕН; задаёт множитель формулы оценки — третий сомножитель `base × factor × params_multiplier` (база сравнения — профиль параметров бакета модели, иначе defaults).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Выводить ли параметры эвристикой. false — все три равны defaults, source=disabled."
+            },
+            "clamp": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Границы множителя [min, max]: 0 < min <= 1.0 <= max <= 4.0.",
+              "items": {
+                "type": "number"
+              }
+            },
+            "coefficients": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Коэффициенты множителя при отклонении параметра от default, каждое 0…2.",
+              "properties": {
+                "weight": {
+                  "type": "number"
+                },
+                "heat": {
+                  "type": "number"
+                },
+                "connectivity": {
+                  "type": "number"
+                }
+              }
+            },
+            "defaults": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Значения по умолчанию (0…1), когда сигналов нет или вывод выключен.",
+              "properties": {
+                "weight": {
+                  "type": "number"
+                },
+                "heat": {
+                  "type": "number"
+                },
+                "connectivity": {
+                  "type": "number"
+                }
+              }
+            },
+            "signals": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Переопределение весов сигналов: «имя сигнала → вес 0…1». Пустой объект — веса по умолчанию. Неизвестные имена игнорируются."
+            }
+          }
+        },
+        "vector": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Поиск похожих задач по векторам текста. По умолчанию ВКЛЮЧЕНО: векторы строятся на train (norm/task-vectors.json) и работают как справка. На expected/range не влияют, пока adjust_range: false (этап A — только справка). Пороги похожести не задаются числом — берутся из calibration артефакта norm/task-vectors.json.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Включить поиск похожих задач при estimate. По умолчанию true (значение берётся из DEFAULTS в config.py)."
+            },
+            "adjust_range": {
+              "type": "boolean",
+              "description": "Разрешить коррекцию range/confidence по соседям (этап B). По умолчанию false: числа не меняются, в отчёт попадает только справка."
+            },
+            "top_k": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Сколько похожих задач показывать/использовать."
+            },
+            "min_corpus": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Минимальный размер корпуса: меньше — механизм отключается с [WARN]. 30 — нижняя граница, комфортно от 100."
+            },
+            "top_terms": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Сколько термов хранить на вектор при build."
+            },
+            "weight_word": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Вес словесного TF-IDF в гибридном векторе (остаток — символьные n-граммы)."
+            }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Дополнительные ресурсы задачи (правило RS-01): allure для тест-кейсов, e2e-сервис автотестирования для автотестов. За каждый распознанный ресурс +sp_per_resource SP к оценке основного исполнителя либо (mode: upper_bound) оценка по верхней границе диапазона. Особенно важно для задач, которые фактически на написание тестов. Блок необязателен: без него действуют дефолты.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Распознавать ли ресурсы. false — надбавка не применяется, блок resources в estimate.json не появляется."
+            },
+            "sp_per_resource": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Надбавка за один ресурс в Story Points (по умолчанию 1). 0 — ресурсы распознаются, но оценку не меняют."
+            },
+            "mode": {
+              "enum": [
+                "add",
+                "upper_bound"
+              ],
+              "description": "add — прибавить sp_per_resource за каждый ресурс; upper_bound — взять верхнюю границу уже посчитанного диапазона."
+            },
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "\\S"
+                }
+              },
+              "description": "Каталог ресурсов: имя ресурса → алиасы (подстроки, сравнение через casefold). Своё имя добавляет ресурс, пустой список алиасов выключает существующий. Ключи произвольны намеренно — здесь additionalProperties разрешены."
+            }
+          }
+        }
+      }
+    },
+    "jira": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project",
+        "fields",
+        "field_names",
+        "resolve_fields_by_name",
+        "comment_mode"
+      ],
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Ключ проекта Jira, например E001. Заполняет пользователь: командного значения по умолчанию нет, пустая строка означает «не задан» и блокирует doctor/train."
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "story_points",
+            "qa_estimation",
+            "role"
+          ],
+          "description": "Идентификаторы полей Jira. Пустая строка — поле не задано: id резолвится по имени из jira.field_names при resolve_fields_by_name: true.",
+          "properties": {
+            "story_points": {
+              "type": "string",
+              "description": "Идентификатор поля Story Points (например customfield_10004); пустая строка — резолвить по имени."
+            },
+            "qa_estimation": {
+              "type": "string",
+              "description": "Идентификатор поля QA Estimation; пустая строка — резолвить по имени."
+            },
+            "role": {
+              "type": "string",
+              "description": "Идентификатор поля Роль; пустая строка — резолвить по имени."
+            }
+          }
+        },
+        "field_names": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "story_points",
+            "qa_estimation",
+            "role"
+          ],
+          "description": "Имена полей Jira для резолва id по имени. Используются, когда fields.* пусто и resolve_fields_by_name: true.",
+          "properties": {
+            "story_points": {
+              "type": "string",
+              "pattern": "\\S",
+              "description": "Имя поля Story Points в UI Jira."
+            },
+            "qa_estimation": {
+              "type": "string",
+              "pattern": "\\S",
+              "description": "Имя поля QA Estimation в UI Jira."
+            },
+            "role": {
+              "type": "string",
+              "pattern": "\\S",
+              "description": "Имя поля Роль в UI Jira."
+            }
+          }
+        },
+        "resolve_fields_by_name": {
+          "type": "boolean",
+          "description": "Разрешать пустые fields.* по именам из field_names. true — агент резолвит id через MCP, Python проверяет консистентность; false — все три id обязаны быть заполнены."
+        },
+        "comment_mode": {
+          "enum": [
+            "draft",
+            "post"
+          ],
+          "description": "Режим работы с комментарием Jira: draft — только черновик, post — постинг по явному флагу."
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "confluence",
+        "obsidian"
+      ],
+      "properties": {
+        "target": {
+          "enum": [
+            "none",
+            "confluence",
+            "obsidian"
+          ],
+          "description": "Куда публиковать отчёт: none — только stdout."
+        },
+        "confluence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "space"
+          ],
+          "properties": {
+            "space": {
+              "type": "string",
+              "description": "Ключ пространства Confluence; пустая строка — не задано."
+            },
+            "page_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Идентификатор страницы публикации; null — не задано."
+            }
+          }
+        },
+        "obsidian": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Путь заметки в хранилище Obsidian; пустая строка — не задано."
+            }
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Локальное SQLite-зеркало артефактов, метрик и векторов. Необязательный блок: отсутствие = дефолты (включено, .task-readiness/trr.sqlite3). Файлы остаются источником истины, БД — второй адрес тех же данных; публикация в Confluence — отдельная ось.",
+      "properties": {
+        "sqlite": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Настройки зеркала. Путь относительный разрешается от корня проекта; абсолютный допустим, но config-check предупреждает.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Вести ли зеркало. false — ни один шаг не пишет в БД и файл не создаётся."
+            },
+            "path": {
+              "type": "string",
+              "description": "Файл БД: относительный путь от корня проекта (по умолчанию .task-readiness/trr.sqlite3) или абсолютный (будет [WARN]). Расширение .sqlite3/.db рекомендуется."
+            },
+            "keep_vectors": {
+              "type": "boolean",
+              "description": "Хранить ли векторы задач (BLOB float32). false — таблица vectors остаётся пустой, метаданные модели пишутся."
+            },
+            "keep_payloads": {
+              "type": "boolean",
+              "description": "Хранить ли полные JSON-снимки (payload модели, валидации, оценки, термы векторов). false — только скалярные поля, payload/terms = NULL."
+            },
+            "vacuum_on_pack": {
+              "type": "boolean",
+              "description": "Выполнять VACUUM при `trr db export` (сжимает файл после массовых удалений)."
+            }
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Экспорт и импорт обученных артефактов (`trr artifact …`). Дефолты — «не публиковать»: export_target: none. Если export_target != none, место публикации обязано быть заполнено (проверяется config.py), иначе config-check печатает [MISSING] с инструкцией, а doctor — [WARN].",
+      "required": [
+        "include_sprint_sample",
+        "export_target",
+        "local",
+        "confluence",
+        "gitlab",
+        "obsidian"
+      ],
+      "properties": {
+        "include_sprint_sample": {
+          "type": "boolean",
+          "description": "Класть ли в бандл norm/sprint-sample.json (сырую выборку спринтов). true — бандл самодостаточен для повторного stats/calibrate; false — только производные артефакты (меньше размер, меньше данных о задачах)."
+        },
+        "export_target": {
+          "enum": [
+            "none",
+            "local",
+            "confluence",
+            "gitlab",
+            "obsidian"
+          ],
+          "description": "Куда публиковать бандл после обучения. none — не публиковать (только `trr artifact pack` вручную)."
+        },
+        "local": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "description": "Локальная/public-папка, куда складывается бандл (export_target: local).",
+          "properties": {
+            "path": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Путь к файлу бандла или каталогу; null — не задано."
+            }
+          }
+        },
+        "confluence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "space",
+            "parent_page_id",
+            "title_template"
+          ],
+          "description": "Страница Confluence для бандла (export_target: confluence).",
+          "properties": {
+            "space": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Ключ пространства Confluence; null или пустая строка — не задано."
+            },
+            "parent_page_id": {
+              "type": [
+                "string",
+                "integer",
+                "null"
+              ],
+              "description": "id родительской страницы, под которой создаётся страница бандла; null — не задано."
+            },
+            "title_template": {
+              "type": "string",
+              "pattern": "\\S",
+              "description": "Шаблон заголовка страницы. Поддерживаются подстановки {{model_version}} и {{project}}."
+            }
+          }
+        },
+        "gitlab": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "project",
+            "path",
+            "branch"
+          ],
+          "description": "Файл бандла в репозитории GitLab (export_target: gitlab). Коммит делает агент через MCP: скилл никогда не пишет git.",
+          "properties": {
+            "project": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "id или путь проекта GitLab (group/project); null — не задано."
+            },
+            "path": {
+              "type": "string",
+              "description": "Каталог в репозитории, куда кладётся бандл (со слэшем на конце)."
+            },
+            "branch": {
+              "type": "string",
+              "pattern": "\\S",
+              "description": "Ветка, в которую публикуется бандл."
+            }
+          }
+        },
+        "obsidian": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "description": "Заметка/вложение в хранилище Obsidian (export_target: obsidian).",
+          "properties": {
+            "path": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Путь заметки в хранилище; null — не задано."
+            }
+          }
+        }
+      }
+    }
+  }
+}

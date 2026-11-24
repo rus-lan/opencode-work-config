@@ -1,0 +1,170 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Выборка задач из спринтов",
+  "description": "Артефакт .task-readiness/norm/sprint-sample.json: строки задач из закрытых спринтов. sp и qa_estimation — число или null, никогда не строка и не 0 вместо «нет данных». Текст задачи не хранится, только summary_sha256.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source",
+    "rows"
+  ],
+  "properties": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "board_id",
+        "sprints",
+        "retrieved_at",
+        "transport"
+      ],
+      "properties": {
+        "board_id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Идентификатор борда Jira."
+        },
+        "sprints": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Спринты, из которых взята выборка.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "id",
+              "state",
+              "start",
+              "end"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Имя спринта, например T100-T102 26.18."
+              },
+              "id": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Идентификатор спринта в Jira."
+              },
+              "state": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Состояние спринта в Jira, например closed."
+              },
+              "start": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Дата начала спринта, YYYY-MM-DD."
+              },
+              "end": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Дата окончания спринта, YYYY-MM-DD."
+              }
+            }
+          }
+        },
+        "retrieved_at": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Момент выгрузки выборки в UTC."
+        },
+        "transport": {
+          "enum": [
+            "mcp",
+            "rest"
+          ],
+          "description": "Канал, которым данные получены: MCP или REST fallback."
+        }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Строки задач выборки.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sprint",
+          "key",
+          "issue_type",
+          "role",
+          "sp",
+          "qa_estimation",
+          "has_testing",
+          "status",
+          "labels",
+          "summary_sha256"
+        ],
+        "properties": {
+          "sprint": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Имя спринта, совпадает с source.sprints[].name."
+          },
+          "key": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Ключ задачи Jira как есть, например E001-1234."
+          },
+          "issue_type": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Тип задачи в Jira: Feature, Задача, Ошибка, Tech Debt, ADR и т.п."
+          },
+          "role": {
+            "enum": [
+              "BA",
+              "SA",
+              "BE",
+              "FE",
+              "QA",
+              "DEVOPS",
+              "OTHER"
+            ],
+            "description": "Роль после нормализации через validation.role_map."
+          },
+          "sp": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Story Points: число или null, если поле не заполнено."
+          },
+          "qa_estimation": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "QA Estimation: число или null, если поле не заполнено."
+          },
+          "has_testing": {
+            "type": "boolean",
+            "description": "Признак того, что задача содержит тестирование."
+          },
+          "status": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Статус задачи в Jira."
+          },
+          "labels": {
+            "type": "array",
+            "description": "Метки задачи, отсортированы по возрастанию.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary_sha256": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "sha256 от summary задачи в UTF-8 (шестнадцатеричная строка), чтобы хранить статистику без текста задачи."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Статистика спринтов по бакетам",
+  "description": "Артефакт .task-readiness/norm/sprint-stats.json: агрегаты по бакетам (role, issue_type, work_kind). Порядок buckets — (role, issue_type, work_kind); порядок проверяется тестами, а не схемой.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "computed_at",
+    "sample_rows",
+    "buckets",
+    "insufficient"
+  ],
+  "properties": {
+    "computed_at": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Момент расчёта статистики в UTC."
+    },
+    "sample_rows": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Сколько строк выборки попало в расчёт."
+    },
+    "buckets": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Бакеты статистики, отсортированы по (role, issue_type, work_kind).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "issue_type",
+          "work_kind",
+          "n",
+          "mean",
+          "median",
+          "p25",
+          "p75",
+          "min",
+          "max",
+          "coverage"
+        ],
+        "properties": {
+          "role": {
+            "enum": [
+              "BA",
+              "SA",
+              "BE",
+              "FE",
+              "QA",
+              "DEVOPS",
+              "OTHER"
+            ],
+            "description": "Роль бакета."
+          },
+          "issue_type": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Тип задачи Jira, как в выборке."
+          },
+          "work_kind": {
+            "enum": [
+              "implementation",
+              "research",
+              "bugfix",
+              "tech_debt",
+              "analysis",
+              "testing",
+              "unknown"
+            ],
+            "description": "Вид работ бакета."
+          },
+          "n": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Размер бакета (число задач с заполненными SP)."
+          },
+          "mean": {
+            "type": "number",
+            "description": "Среднее, округлено до 2 знаков."
+          },
+          "median": {
+            "type": "number",
+            "description": "Медиана (перцентиль p=0.5), округлена до 2 знаков."
+          },
+          "p25": {
+            "type": "number",
+            "description": "Первый квартиль, округлён до 2 знаков."
+          },
+          "p75": {
+            "type": "number",
+            "description": "Третий квартиль, округлён до 2 знаков."
+          },
+          "min": {
+            "type": "integer",
+            "description": "Минимальное значение SP в бакете."
+          },
+          "max": {
+            "type": "integer",
+            "description": "Максимальное значение SP в бакете."
+          },
+          "coverage": {
+            "enum": [
+              "sufficient",
+              "insufficient"
+            ],
+            "description": "sufficient при n >= min_sample_n, иначе insufficient."
+          }
+        }
+      }
+    },
+    "insufficient": {
+      "type": "array",
+      "description": "Бакеты с недостаточной выборкой в виде строк \"<role>/<work_kind>\".",
+      "items": {
+        "type": "string",
+        "pattern": "^[^/]+/[^/]+$"
+      }
+    }
+  }
+}

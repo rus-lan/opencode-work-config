@@ -1,0 +1,284 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Состояние скилла",
+  "description": "Артефакт .task-readiness/state.json: текущий этап, контрольные суммы конфига и модели, опубликованная страница модели, история публикаций отчётов и история прогонов. stage только растёт по цепочке installed → configured → trained → checked → estimated → published.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill_version",
+    "stage",
+    "config_sha256",
+    "model_checksum",
+    "model_page",
+    "runs",
+    "updated_at"
+  ],
+  "properties": {
+    "skill_version": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Версия скилла, создавшего состояние, формат X.Y.Z."
+    },
+    "stage": {
+      "enum": [
+        "installed",
+        "configured",
+        "trained",
+        "checked",
+        "estimated",
+        "published"
+      ],
+      "description": "Текущий этап жизненного цикла."
+    },
+    "config_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "sha256 нормализованного конфига (после подстановки дефолтов); null — конфиг ещё не читали."
+    },
+    "model_checksum": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Контрольная сумма действующей модели; null — модели ещё нет."
+    },
+    "model": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Действующая модель: версия и checksum. Пишется `trr calibrate` (train/enrich) и `trr state set model.version`. null или отсутствие ключа — версия не зафиксирована (doctor предупреждает, но не блокирует).",
+      "additionalProperties": false,
+      "required": [
+        "version"
+      ],
+      "properties": {
+        "version": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "Номер версии модели (как в model/estimation-model.json и model-history.jsonl)."
+        },
+        "checksum": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "sha256 модели на момент записи версии."
+        }
+      }
+    },
+    "model_page": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Опубликованная страница модели или null, если страница ещё не создана.",
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "id",
+        "url",
+        "hash",
+        "version"
+      ],
+      "properties": {
+        "system": {
+          "enum": [
+            "confluence",
+            "jira",
+            "obsidian",
+            "file"
+          ],
+          "description": "Система, где опубликована страница модели."
+        },
+        "id": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Идентификатор страницы/заметки."
+        },
+        "url": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Ссылка на страницу модели."
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "sha256 опубликованного текста страницы модели."
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Версия модели, опубликованная на странице."
+        }
+      }
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 0,
+      "description": "История прогонов, отсортирована по (task_key, run_dir).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "task_key",
+          "run_dir",
+          "verdict",
+          "checked_at"
+        ],
+        "properties": {
+          "task_key": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Ключ задачи Jira."
+          },
+          "run_dir": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Каталог прогона относительно корня проекта."
+          },
+          "verdict": {
+            "enum": [
+              "OK",
+              "BLOCKED",
+              "WARN"
+            ],
+            "description": "Вердикт проверки в этом прогоне."
+          },
+          "checked_at": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Момент проверки в UTC."
+          }
+        }
+      }
+    },
+    "updated_at": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Момент последнего изменения состояния в UTC."
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 0,
+      "description": "История публикаций обученного бандла (`trr artifact record`). Поле опционально: отсутствие ключа означает «бандл ещё не публиковался». Список дедуплицирован по (target, ref) и отсортирован по (target, ref). manifest_checksum — checksum модели с префиксом sha256: на момент публикации; doctor сравнивает его с текущим и предупреждает, если бандл старше модели.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "ref",
+          "url",
+          "published_at",
+          "artifact_sha256",
+          "manifest_checksum"
+        ],
+        "properties": {
+          "target": {
+            "enum": [
+              "confluence",
+              "gitlab",
+              "obsidian",
+              "local"
+            ],
+            "description": "Куда опубликован бандл: страница Confluence, файл в репозитории GitLab, заметка Obsidian или локальный путь."
+          },
+          "ref": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Идентификатор цели: id страницы Confluence, путь файла в GitLab (<path><имя бандла>), путь заметки Obsidian или локальный путь бандла."
+          },
+          "url": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Ссылка/путь, по которому бандл доступен команде."
+          },
+          "published_at": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Момент публикации в UTC."
+          },
+          "artifact_sha256": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "sha256 файла бандла (.tar.gz); null — файл не передан при записи."
+          },
+          "manifest_checksum": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "checksum модели на момент публикации с префиксом sha256: (manifest.model.checksum); null — модели не было. Используется doctor, чтобы отличить свежий бандл от устаревшего."
+          }
+        }
+      }
+    },
+    "published": {
+      "type": "array",
+      "minItems": 0,
+      "description": "История публикаций отчётов (и страниц модели) во внешние системы. Поле опционально: отсутствие ключа означает «публикаций ещё не было». Список дедуплицирован по (target, ref) и отсортирован по (target, ref): повторная публикация обновляет запись, а не добавляет вторую.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "ref",
+          "url",
+          "published_at",
+          "content_sha256"
+        ],
+        "properties": {
+          "target": {
+            "enum": [
+              "confluence",
+              "jira",
+              "obsidian"
+            ],
+            "description": "Куда опубликован артефакт. jira — комментарий в задаче (ref — ключ задачи)."
+          },
+          "ref": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Идентификатор цели публикации: id страницы Confluence, ключ задачи Jira (для комментария; у комментария с вопросами — <KEY>#questions) или путь заметки Obsidian."
+          },
+          "url": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Ссылка на опубликованный артефакт."
+          },
+          "published_at": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Момент публикации в UTC."
+          },
+          "content_sha256": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "sha256 опубликованного текста — чтобы отличить перепубликацию от повторной записи того же текста."
+          },
+          "comment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "id комментария Jira (только для target: jira). null или отсутствие — комментарий ещё не создан: агент ищет его по marker."
+          },
+          "marker": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Маркер идемпотентности в начале тела комментария (только для target: jira): <!-- task-readiness-review:report:<TASK-KEY> --> или <!-- task-readiness-review:questions:<TASK-KEY> -->."
+          }
+        }
+      }
+    }
+  }
+}

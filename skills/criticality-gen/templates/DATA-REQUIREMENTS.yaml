@@ -1,0 +1,50 @@
+# DATA-REQUIREMENTS.yaml — лист недостающих данных ИС {{ requirements.is_code }}.
+#
+# Зачем: без этих входов гейт `make check` держит ИС в BLOCKED, а паспорт
+# остаётся неполным. Файл генерируется `criticality.py requirements` и
+# принимается командой `make enrich-apply IS={{ requirements.is_code }}`.
+#
+# Как заполнить (3 шага):
+#   1. Впишите value вместо null (у составных входов — каждую под-ось).
+#   2. Замените source: null на блок:
+#        source:
+#          type: manual
+#          ref: "TL: Ivanov"
+#      type — ssot | is_yaml_override | catalog | confluence | gitlab | jira | grafana |
+#      attachment | ssot_links | manual.
+#   3. Поставьте status: confirmed. Значение без source и без confirmed не принимается.
+#
+# Ничего не выдумывать: нет данных — оставьте null и status: missing.
+schema_version: 1
+is: {{ requirements.is_code }}
+generated_at: {{ requirements.generated_at | or_missing: null }}
+scenario: {{ requirements.scenario }}
+scenario_title: "{{ requirements.scenario_title }}"
+method: {{ requirements.method }}
+status: {{ requirements.status }}
+blocking_count: {{ requirements.blocking_count }}
+advisory_count: {{ requirements.advisory_count }}
+inputs:
+{{#if requirements.advisory_switches_scenario}}  # ВНИМАНИЕ: заполнение любого detailed-входа (time_to_impact, axes_scores, cia)
+  # переключает ИС на сложный сценарий: обязательными станут все 7 входов. Фолбэк запрещён.
+{{/if}}{{#each requirements.items}}  # {{ .title }} ({{ .id }}) — {{ .blocking_label }}, метод {{ .method }}, обязателен в сценарии: {{#if .mandatory}}да{{else}}нет{{/if}}{{#if .switches_scenario}}; заполнение → сложный сценарий (потребуется time_to_impact){{/if}}
+  # что: {{ .definition }}
+  # где взять: {{ .where }} — у {{ .whom }}
+  # как подтвердить: {{ .confirm }}{{#if .is_load}}; пик RPS в Grafana → дашборд/панель/PromQL; peak_hour_load = peak_rps × 3600{{/if}}
+  # допустимо: {{ .acceptable }}; пример: {{ .example }}
+  {{ .id }}:
+{{ .value_yaml }}{{ .value_extra_yaml }}    source:{{ .source_yaml }}
+    status: {{ .status }}{{ .extra_yaml }}
+    switches_scenario: {{ .switches_scenario }}
+    scenario_note: "{{ .scenario_note }}"
+{{/each}}{{#if requirements.waived_items}}  # --- Явный отказ от данных (status: waived, R17) ---------------------------
+  # Вход закрыт осознанным решением, а не пропуском: значения нет и не будет.
+  # Оценка будет предварительной (диапазон уровней в CRITICALITY.md), поэтому
+  # блок waive обязателен — причина, кто решил, дата и режим допущения.
+  # Переносится в INFORMATION.yaml командой make enrich-apply; не удалять.
+{{#each requirements.waived_items}}{{ .yaml }}{{/each}}{{/if}}{{#if requirements.facts_yaml}}
+# --- Факты паспорта (facts) -------------------------------------------------
+# Ответ на факт-вопрос (e2e-процессы, зависимости, поддержка…): тот же путь,
+# что у входов — этот лист, затем make enrich-apply. Имена фактов — ключи
+# секции facts шаблона INFORMATION.yaml; опечатка в имени отклоняется.
+{{ requirements.facts_yaml }}{{/if}}

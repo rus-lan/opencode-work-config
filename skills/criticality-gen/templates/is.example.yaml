@@ -1,0 +1,21 @@
+# Шаблон конфигурации. Копируется в is.yaml командой `make init`.
+# is.yaml — локальный (gitignored) список ИС и адрес SSoT.
+# Шаблон пуст намеренно: первую ИС заводит `make scaffold IS=<код>`.
+is:
+  # Код ИС = <name_is>.<контур>, контур — mm или smkt.
+  # Допустимые ключи: product, teamName, excluded, reason; прочие — ERROR.
+  # product/teamName по умолчанию из SSoT; здесь — только переопределения.
+  # Приоритет: is.yaml > catalog.yaml (`excluded: false` включает ИС обратно).
+  #   demo.mm:
+  #   erm.mm:
+  #     product: E001
+  #     teamName: T100
+  # Исключение ИС (вердикт SKIPPED) только на этой машине; для общего —
+  #   make exclude IS=<код> REASON="<причина>" EXCLUDE_SCOPE=catalog
+  #   foo.mm:
+  #     excluded: true
+  #     reason: "нет владельца данных; вопрос на PdM"
+ssot:
+  # URL SSoT-репозитория; клонируется `make prepare-apply`.
+  # Схема обязательна: https://, ssh:// или git@host:path.
+  url: ""

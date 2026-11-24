@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "schema version 1.2 — у источника появились необязательные поля page_id, source_kind, parent_ref, board_id, depth: они фиксируют, как источник был найден (прямой id, URL, название спринта, свободный текст, рекурсивный обход). Старые файлы без этих полей остаются валидными.",
+  "title": "Разрешённые источники task-readiness-review",
+  "description": "Артефакт .task-readiness/resolved-sources.json: чем именно подтверждён каждый источник. Пустой evidence запрещён — без доказательства источник не считается разрешённым.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "resolved_at",
+    "sources"
+  ],
+  "properties": {
+    "resolved_at": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Момент разрешения источников в UTC, формат ISO-8601 с суффиксом Z."
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Разрешённые источники. Список сортируется по (kind, system, ref).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "system",
+          "ref",
+          "title",
+          "url",
+          "resolution_method",
+          "evidence",
+          "confidence"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "reference",
+              "sprint"
+            ],
+            "description": "Тип источника: эталон оценки или спринт."
+          },
+          "system": {
+            "enum": [
+              "confluence",
+              "jira",
+              "obsidian",
+              "file"
+            ],
+            "description": "Система-источник."
+          },
+          "ref": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Идентификатор внутри системы: page_id для эталона, id спринта для спринта."
+          },
+          "title": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Заголовок страницы или имя спринта."
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "\\S",
+            "description": "Ссылка на источник; null — ссылку собрать не удалось (например, заметка Obsidian найдена по пути). Поле обязательно, но может быть null."
+          },
+          "resolution_method": {
+            "enum": [
+              "confluence_search",
+              "confluence_url",
+              "obsidian_search",
+              "obsidian_path",
+              "jira_sprint_search",
+              "manual"
+            ],
+            "description": "Способ, которым источник был найден."
+          },
+          "evidence": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Короткая цитата или факт, доказывающий, что источник тот самый. Поле обязательно и непусто: пустая строка и строка из одних пробелов запрещены."
+          },
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "description": "Уверенность в том, что источник найден верно."
+          },
+          "page_id": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "pattern": "\\S",
+            "description": "Числовой id страницы, если он известен. Для эталона совпадает с ref; для рекурсивно найденной дочерней страницы — её собственный id."
+          },
+          "source_kind": {
+            "enum": [
+              "page_id",
+              "page_url",
+              "board_label",
+              "sprint_ids",
+              "text",
+              "agent"
+            ],
+            "description": "Как источник был задан в конфиге: page_id — прямой id, page_url — URL Confluence, board_label — название спринта из UI Jira, sprint_ids — числовые id спринтов, text — свободный текст, agent — источник принесён агентом."
+          },
+          "parent_ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "\\S",
+            "description": "ref родительской страницы для источника, найденного рекурсивным обходом дерева Confluence."
+          },
+          "board_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Идентификатор борда Jira, если он известен."
+          },
+          "depth": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "Глубина страницы в дереве Confluence: 1 — сам эталон, 2 — его прямые дочерние страницы."
+          }
+        }
+      }
+    }
+  }
+}

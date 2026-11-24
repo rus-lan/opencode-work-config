@@ -1,0 +1,121 @@
+# CANDIDATES.yaml — найденные кандидаты значений входов ИС <код>.
+#
+# Зачем: `ask` строит вопросы человеку, но не выдумывает значения. Этот файл —
+# шов между сбором (агент или человек) и вопросом: сюда записывается всё, что
+# удалось найти, вместе с провенансом. `make ask IS=<код>` читает его и
+# показывает кандидатов в блоке «Найденные кандидаты», `make ask-answers`
+# принимает ответ `choice: candidate` со ссылкой на номер кандидата.
+#
+# Кто пишет: шаг сбора (RESEARCH-PLAN.md / SERVICE-FINDINGS.md / SSoT /
+# Confluence / Grafana). Файл необязательный: нет его — `ask` работает по
+# критериям и §6 SERVICE-FINDINGS.md.
+#
+# Правила (проверяет `ask`):
+#   1. `value` — допустимое значение ЭТОГО входа: член enum дословно, целое
+#      число, объект осей/CIA или корзина времени. Недопустимое значение —
+#      WARN и кандидат пропускается.
+#   2. `value: null` — законная форма «основание найдено, значения нет»
+#      (например «RTO — часы, но числового SLA нет»): кандидат показывается
+#      человеку как **кандидат-основание**, из него нельзя «взять значение»
+#      (`choice: candidate` отклоняется) — по нему пишут `choice: manual`.
+#      `confidence: strong` у такого кандидата понижается до `weak` с WARN.
+#   3. `confidence: strong` требует `source: {type, ref}`. Значение без
+#      провенанса сильным не бывает (R1): `ask` печатает WARN и понижает до
+#      `weak`.
+#   4. `confidence: weak` — основание (цитата, упоминание, оценка «похоже»):
+#      требует подтверждения человеком.
+#   5. `source.type` — ssot | is_yaml_override | catalog | confluence | gitlab |
+#      jira | grafana | attachment | ssot_links | manual (как в DATA-REQUIREMENTS.yaml).
+#   6. Значения enum — дословно из criteria.enum_selection.<вход>.values;
+#      латиница в прозе запрещена (R16), идентификаторы (uid, page_id, PromQL)
+#      допустимы.
+#   7. `is` — код ИС: если он не совпадает с запрошенной ИС, `ask` печатает
+#      WARN и кандидатов не читает (чужой файл не подмешивается).
+#
+# Секция `search:` — протокол поиска (references/search.md), необязательная.
+# Зачем: «не найдено» доказывается списком выполненных запросов, а не
+# молчанием. Tier 1 — точные идентификаторы, tier 2 — комбинации значений.
+#   search.<вход>.shallow — запросы tier 1 (код ИС, имя ИС, продукт, команда)
+#   search.<вход>.deep    — запросы tier 2 (код + процесс, имя + e2e, продукт +
+#                           Product scope, команда + подразделение, логины
+#                           владельцев, дерево страниц, CQL и text ~, Grafana по
+#                           namespace и заголовку, GitLab по группе и репозиторию,
+#                           цепочки links.yaml, DR, журнал решений, FA продукта)
+#   search.<вход>.done    — true: tier 2 выполнен и зафиксирован. Пока не true,
+#                           `ask` ставит WARN «глубокий поиск не зафиксирован»
+#                           и `deep_search_missing: true` в --json, а `validate`
+#                           предупреждает о blocking-входе без кандидатов
+#   search.<вход>.result  — что именно дал поиск («не найдено — …» тоже результат)
+#
+# Пример ниже — образец формы, а не данные проекта: замените на найденное.
+schema_version: 1
+is: <код>
+generated_at: null
+candidates:
+  peak_hour_load:
+    - value: 44168
+      unit: запросов/час
+      label: "Пик запросов GraphQL-шлюза за час, окно 30 дней"
+      confidence: strong
+      source:
+        type: grafana
+        ref: 'dashboard uid=<uid>, panel <id>, datasource uid=<uid>, expr: sum(increase(<метрика>{namespace="<ns>"}[1h])), окно 30d'
+  consumers_type:
+    - value: 'Сотрудники компаний Группы (Внутренние клиенты)'
+      label: "Больше 1000 внутренних пользователей, внешних клиентов нет"
+      confidence: strong
+      source:
+        type: confluence
+        ref: 'page_id=<page_id>, раздел «Пользователи ИС»'
+  outage_impact:
+    - value: 'Не оказана услуга в ожидаемый срок, без нарушения SLA (Внутренние и внешние клиенты)'
+      label: "Операторы работают в системе весь день; простой останавливает оформление"
+      confidence: weak
+      source:
+        type: confluence
+        ref: 'page_id=<page_id>, раздел «Влияние при простое»'
+  object_sla:
+    - value: 60
+      unit: мин
+      label: "SLA решения 1 час в Support-странице"
+      confidence: weak
+      source:
+        type: confluence
+        ref: 'page_id=<page_id>, таблица «Классификация инцидентов»'
+  axes_scores:
+    - value: null
+      label: "экспертная оценка — из документов не выводится (только протокол TL + ИБ + финансы)"
+      confidence: weak
+      source: null
+  time_to_impact:
+    - value: '<1h'
+      label: "Кеша и очереди нет: последствия наступают сразу"
+      confidence: weak
+      source:
+        type: confluence
+        ref: 'page_id=<page_id>, сценарий «отказ БД»'
+  cia:
+    - value: {c: high, i: medium, a: low}
+      label: "Классификация ИБ по модели угроз"
+      confidence: weak
+      source:
+        type: manual
+        ref: 'ИБ: <логин>'
+
+# --- Протокол поиска (references/search.md) ---------------------------------
+# Заполняется по каждому входу, который не закрыт. `done: true` ставится только
+# после того, как tier 2 отработан (или после ответа человека — тогда это уже
+# ANSWERS.yaml). Пустой `search: {}` — поиск не зафиксирован.
+search: {}
+# Пример (образец формы, НЕ активная запись):
+#   object_sla:
+#     shallow:
+#       - 'confluence: "object_sla" opercrm.smkt'
+#       - "grafana: namespace=opercrm"
+#       - 'ssot: grep -r "opercrm.smkt" ssot/entities/'
+#     deep:
+#       - 'confluence CQL: label = "functional-area" and ancestor = <product_scope_page_id>'
+#       - 'confluence: "opercrm" and "RTO"'
+#       - 'confluence: page_id=<dr_page_id> + "SLA" (DR: влияние, RTO/RPO)'
+#     done: true
+#     result: "не найдено — норматив в минутах отсутствует"

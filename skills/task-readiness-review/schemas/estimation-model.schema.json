@@ -1,0 +1,573 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Модель оценки",
+  "description": "Артефакт .task-readiness/model/estimation-model.json: правила оценки как данные. checksum = sha256 канонического JSON без поля checksum. Порядок buckets — (role, issue_type, work_kind), gap_rules — по rule_id; порядок проверяется тестами, а не схемой.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "generated_at",
+    "checksum",
+    "scale",
+    "buckets",
+    "gap_rules",
+    "absent_roles",
+    "sources"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Версия модели. Только растёт: enrich даёт +1, train без изменений входа версию не меняет."
+    },
+    "generated_at": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Момент генерации модели в UTC."
+    },
+    "checksum": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "sha256 канонического JSON модели без самого поля checksum."
+    },
+    "scale": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "description": "Шкала Story Points: ровно 7 элементов, строго возрастающая.",
+      "items": {
+        "type": "integer",
+        "enum": [
+          1,
+          2,
+          3,
+          5,
+          8,
+          13,
+          21
+        ]
+      }
+    },
+    "buckets": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Бакеты модели, отсортированы по (role, issue_type, work_kind).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "issue_type",
+          "work_kind",
+          "base",
+          "factor",
+          "expected",
+          "range",
+          "n",
+          "confidence",
+          "reference",
+          "provenance"
+        ],
+        "properties": {
+          "role": {
+            "enum": [
+              "BA",
+              "SA",
+              "BE",
+              "FE",
+              "QA",
+              "DEVOPS",
+              "OTHER"
+            ],
+            "description": "Роль бакета."
+          },
+          "issue_type": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Тип задачи Jira."
+          },
+          "work_kind": {
+            "enum": [
+              "implementation",
+              "research",
+              "bugfix",
+              "tech_debt",
+              "analysis",
+              "testing",
+              "unknown"
+            ],
+            "description": "Вид работ бакета."
+          },
+          "base": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              5,
+              8,
+              13,
+              21
+            ],
+            "description": "База: значение из эталона, а при его отсутствии — из статистики спринтов."
+          },
+          "factor": {
+            "type": "number",
+            "description": "Коэффициент калибровки, округлён до 4 знаков."
+          },
+          "expected": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              5,
+              8,
+              13,
+              21
+            ],
+            "description": "Ожидаемое значение: nearest_scale(base * factor)."
+          },
+          "range": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Диапазон [нижняя, верхняя] граница в значениях шкалы.",
+            "items": {
+              "type": "integer",
+              "enum": [
+                1,
+                2,
+                3,
+                5,
+                8,
+                13,
+                21
+              ]
+            }
+          },
+          "n": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Размер выборки бакета."
+          },
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "description": "high — reference=yes и n >= 2*min_sample_n; medium — reference=yes и n >= min_sample_n либо reference=fallback и n >= min_sample_n; low — иначе. Фолбэк (база другого вида работ) не даёт высокой уверенности никогда."
+          },
+          "reference": {
+            "enum": [
+              "yes",
+              "none",
+              "fallback"
+            ],
+            "description": "Откуда база: yes — эталон точной пары (role, work_kind); fallback — эталона пары нет, взята пара (role, implementation); none — эталона нет вовсе, база из статистики спринтов. Для BA/SA всегда none."
+          },
+          "params_profile": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Профиль эвристических параметров бакета (weight/heat/connectivity), от которого считается params_multiplier. Необязателен: старые модели без него остаются валидными.",
+            "properties": {
+              "weight": {
+                "type": "number"
+              },
+              "heat": {
+                "type": "number"
+              },
+              "connectivity": {
+                "type": "number"
+              }
+            }
+          },
+          "params_multiplier": {
+            "type": "number",
+            "description": "Множитель параметров бакета: clamp(1 + Σ coef*(profile - defaults), clamp). Необязателен; отсутствует в моделях до этапа C."
+          },
+          "params_profile_source": {
+            "enum": [
+              "bucket",
+              "defaults",
+              "sample_limited"
+            ],
+            "description": "Откуда профиль: bucket — все сигналы параметров покрыты строками спринта; sample_limited — часть сигналов отсутствует в выборке (строки содержат только labels и issue_type), непокрытые параметры взяты из defaults; defaults — строк мало или сигналов нет."
+          },
+          "provenance": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Провенанс каждого числа бакета: минимум записи для base, factor и expected.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "field",
+                "kind",
+                "source",
+                "detail"
+              ],
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "pattern": "\\S",
+                  "description": "Имя поля бакета, к которому относится запись: base, factor, expected."
+                },
+                "kind": {
+                  "type": "string",
+                  "pattern": "\\S",
+                  "description": "Тип источника провенанса: reference, sprint_stats, rule."
+                },
+                "source": {
+                  "type": "string",
+                  "pattern": "\\S",
+                  "description": "Идентификатор источника, например confluence:4278391451 или sprint-stats:BE/Задача/implementation."
+                },
+                "detail": {
+                  "type": "string",
+                  "pattern": "\\S",
+                  "description": "Пояснение расчёта."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "gap_rules": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Правила штрафа за пробелы, отсортированы по rule_id.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rule_id",
+          "condition",
+          "penalty_steps",
+          "applies_to"
+        ],
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Идентификатор правила, совпадает с id правила проверки или с условием контекста."
+          },
+          "condition": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Условие применения в мини-DSL, например handoff.acceptance_criteria=FAIL."
+          },
+          "penalty_steps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2,
+            "description": "Сколько шагов шкалы добавляется к верхней границе и expected."
+          },
+          "applies_to": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Роли, к которым применяется правило.",
+            "items": {
+              "enum": [
+                "BA",
+                "SA",
+                "BE",
+                "FE",
+                "QA",
+                "DEVOPS",
+                "OTHER"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "absent_roles": {
+      "type": "array",
+      "description": "Роли, отсутствующие в эталоне (сейчас всегда BA и SA).",
+      "items": {
+        "enum": [
+          "BA",
+          "SA",
+          "BE",
+          "FE",
+          "QA",
+          "DEVOPS",
+          "OTHER"
+        ]
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "sprints"
+      ],
+      "properties": {
+        "reference": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "system",
+            "page_id",
+            "url",
+            "retrieved_at"
+          ],
+          "properties": {
+            "system": {
+              "enum": [
+                "confluence",
+                "jira",
+                "obsidian",
+                "file"
+              ],
+              "description": "Система эталона."
+            },
+            "page_id": {
+              "type": "string",
+              "pattern": "\\S",
+              "description": "Идентификатор страницы эталона."
+            },
+            "url": {
+              "type": "string",
+              "pattern": "\\S",
+              "description": "Ссылка на эталон."
+            },
+            "retrieved_at": {
+              "type": "string",
+              "pattern": "\\S",
+              "description": "Момент чтения эталона в UTC."
+            }
+          }
+        },
+        "sprints": {
+          "type": "array",
+          "minItems": 0,
+          "description": "Спринты, на которых калибровалась модель.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "state"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Идентификатор спринта."
+              },
+              "name": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Имя спринта."
+              },
+              "state": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Состояние спринта в Jira."
+              }
+            }
+          }
+        }
+      }
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Настройки множителя эвристических параметров (weight/heat/connectivity), с которыми обучена модель. Необязателен: старые модели без него остаются валидными. Профиль бакета — медиана derive() по строкам спринта; строки выборки содержат только labels и issue_type, поэтому профиль обычно sample_limited, а множитель ≈ 1.0.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Включены ли параметры (estimation.params.enabled)."
+        },
+        "clamp": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Границы множителя [min, max]; 1.0 обязана быть внутри."
+        },
+        "coefficients": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Коэффициенты a, b, c множителя: 1 + a*(w-w0) + b*(h-h0) + c*(k-k0).",
+          "properties": {
+            "weight": {
+              "type": "number"
+            },
+            "heat": {
+              "type": "number"
+            },
+            "connectivity": {
+              "type": "number"
+            }
+          }
+        },
+        "coefficients_source": {
+          "type": "string",
+          "enum": [
+            "prior",
+            "regression"
+          ],
+          "description": "prior — коэффициенты из конфига (данных для регрессии мало); regression — оценены регрессией log(sp/base) по строкам спринта."
+        },
+        "defaults": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "База множителя: значения параметров, при которых множитель равен 1.0.",
+          "properties": {
+            "weight": {
+              "type": "number"
+            },
+            "heat": {
+              "type": "number"
+            },
+            "connectivity": {
+              "type": "number"
+            }
+          }
+        },
+        "profile_source": {
+          "type": "string",
+          "enum": [
+            "bucket",
+            "defaults"
+          ],
+          "description": "bucket — профили бакетов считались по строкам спринта (в том числе ограниченные); defaults — профилей нет, все бакеты на defaults."
+        },
+        "provenance": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Провенанс коэффициентов и профилей: почему выбран prior/regression, сколько строк, r2.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "field",
+              "kind",
+              "source",
+              "detail"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Имя поля блока params: coefficients, profile."
+              },
+              "kind": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Тип источника: rule, sprint_stats."
+              },
+              "source": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Идентификатор источника."
+              },
+              "detail": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Пояснение расчёта."
+              }
+            }
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Настройки надбавки за дополнительные ресурсы (правило RS-01): allure для тест-кейсов, e2e-сервис автотестирования для автотестов. Необязателен: старые модели без него остаются валидными. Блок — данные из config.estimation.resources, а не расчёт по выборке, поэтому изменение настроек даёт новую версию модели.",
+      "required": [
+        "rule_id",
+        "enabled",
+        "sp_per_resource",
+        "mode",
+        "items",
+        "provenance"
+      ],
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "enum": [
+            "RS-01"
+          ],
+          "description": "Идентификатор правила надбавки."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Включено ли правило (estimation.resources.enabled)."
+        },
+        "sp_per_resource": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Надбавка за один распознанный ресурс, SP."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "add",
+            "upper_bound"
+          ],
+          "description": "add — прибавить sp_per_resource за ресурс; upper_bound — взять верхнюю границу уже посчитанного диапазона."
+        },
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "description": "Алиасы ресурса: подстроки в тексте задачи (сравнение через casefold)."
+          },
+          "description": "Каталог ресурсов: имя ресурса → алиасы."
+        },
+        "provenance": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Провенанс настроек надбавки: откуда взяты sp_per_resource, mode и каталог ресурсов.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "field",
+              "kind",
+              "source",
+              "detail"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Имя поля блока resources."
+              },
+              "kind": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Тип источника: rule."
+              },
+              "source": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Идентификатор источника."
+              },
+              "detail": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Пояснение расчёта."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

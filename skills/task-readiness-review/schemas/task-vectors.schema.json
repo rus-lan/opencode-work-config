@@ -1,0 +1,254 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Векторы текстов задач",
+  "description": "Артефакт .task-readiness/norm/task-vectors.json: гибрид word TF-IDF (вес weight_word) + char 3–5-граммы (вес weight_char), разреженное хранение top_terms термов на вектор. Пороги похожести не задаются числом, а калибруются по корпусу: similar_threshold = p90 сходств пар из разных бакетов (role, work_kind), dissimilar_threshold = p50. vectors отсортированы по key, terms — по убыванию веса, при равенстве по терму. Артефакт git-ignored и наружу не публикуется: отдаются только ключи, термы и числа.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "built_at",
+    "normalizer",
+    "top_terms",
+    "weight_word",
+    "weight_char",
+    "idf",
+    "calibration",
+    "vectors"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Версия формата артефакта."
+    },
+    "built_at": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Момент сборки векторов в UTC."
+    },
+    "normalizer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "lang",
+        "truncate",
+        "char_ngrams",
+        "stopwords_sha256"
+      ],
+      "description": "Нормализатор, которым построены векторы. Чужая версия нормализатора — повод пересобрать артефакт, а не считать запрос «как-нибудь».",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Идентификатор нормализатора, например ru-lower-e-strip-truncate-v1."
+        },
+        "lang": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Язык нормализатора (в v0.2 только ru)."
+        },
+        "truncate": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Длина усечения терма (детерминированное подобие стемминга)."
+        },
+        "char_ngrams": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Границы символьных n-грамм [min, max].",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "stopwords_sha256": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "sha256 списка стоп-слов: видно, менялся ли нормализатор."
+        }
+      }
+    },
+    "top_terms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Сколько термов хранится на вектор."
+    },
+    "weight_word": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Вес словесной части гибрида."
+    },
+    "weight_char": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Вес символьной части гибрида."
+    },
+    "idf": {
+      "type": "array",
+      "minItems": 0,
+      "description": "idf по корпусу, отсортирован по терму. Пара [терм, idf]; термы с префиксом пространства: w: (слово) и c: (n-грамма).",
+      "items": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "description": "Пара [терм, idf].",
+        "items": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "similar_threshold",
+        "dissimilar_threshold",
+        "corpus_rows",
+        "method",
+        "dissimilar_method",
+        "pairs",
+        "confidence"
+      ],
+      "description": "Пороги, откалиброванные по корпусу. Абсолютные 0.5/0.2 не используются: на коротких русских текстах они дают ложные срабатывания. Процентили считаются по ненулевым межбакетным сходствам: нули означают «общих термов нет» и вырождают порог в 0.",
+      "properties": {
+        "similar_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "description": "p90 ненулевых косинусов пар из разных бакетов: выше — «близкий аналог»."
+        },
+        "dissimilar_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "description": "p50 ненулевых косинусов пар из разных бакетов: ниже — «аналогов нет»."
+        },
+        "corpus_rows": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Сколько задач в корпусе."
+        },
+        "method": {
+          "enum": [
+            "p90_inter",
+            "p90_inter_all"
+          ],
+          "description": "Откуда взят similar_threshold: p90 ненулевых межбакетных сходств (p90_inter_all — ненулевых пар мало, процентиль по всем парам)."
+        },
+        "dissimilar_method": {
+          "enum": [
+            "p50_inter",
+            "p50_inter_all"
+          ],
+          "description": "Откуда взят dissimilar_threshold: p50 ненулевых межбакетных сходств (p50_inter_all — ненулевых пар мало, процентиль по всем парам)."
+        },
+        "pairs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Сколько межбакетных пар посчитано (включая нулевые)."
+        },
+        "pairs_nonzero": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Сколько межбакетных пар дали косинус > 0: по ним и считаются процентили."
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "low"
+          ],
+          "description": "low, если ненулевых пар меньше 50: калибровка ненадёжна, процентили считаются по всем парам."
+        }
+      }
+    },
+    "vectors": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Векторы задач, отсортированы по key.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "role",
+          "work_kind",
+          "sp",
+          "qa_estimation",
+          "terms",
+          "norm"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Ключ задачи Jira."
+          },
+          "role": {
+            "enum": [
+              "BA",
+              "SA",
+              "BE",
+              "FE",
+              "QA",
+              "DEVOPS",
+              "OTHER"
+            ],
+            "description": "Роль задачи."
+          },
+          "work_kind": {
+            "enum": [
+              "implementation",
+              "research",
+              "bugfix",
+              "tech_debt",
+              "analysis",
+              "testing",
+              "unknown"
+            ],
+            "description": "Вид работ задачи."
+          },
+          "sp": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Story Points: число или null."
+          },
+          "qa_estimation": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "QA Estimation: число или null."
+          },
+          "terms": {
+            "type": "array",
+            "minItems": 0,
+            "description": "top-N термов: [терм, вес], по убыванию веса, при равенстве по терму.",
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              }
+            }
+          },
+          "norm": {
+            "type": "number",
+            "minimum": 0,
+            "description": "L2-норма сохранённого (усечённого) вектора: нужна, чтобы честно считать косинус."
+          }
+        }
+      }
+    }
+  }
+}

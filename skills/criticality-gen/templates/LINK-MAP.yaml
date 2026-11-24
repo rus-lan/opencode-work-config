@@ -1,0 +1,40 @@
+# LINK-MAP.yaml — машиночитаемая карта обхода ссылок ИС {{ link_map.is_code }}.
+# Генерируется `criticality.py links`; руками не правится. Обход делает MCP-агент
+# по LINK-MAP.md, результаты — в SOURCES-FINDINGS.yaml (`criticality.py sources`).
+#
+# Поля узла: id (n001…) · kind (confluence|grafana|gitlab|jira|external) ·
+# ref (page_id|dashboard_uid|issue_key|url) · origin (ssot_links|catalog|information|ssot) ·
+# subject (is|component:<name>) · expand (что прочитать) · candidate_for (входы) ·
+# status (pending|visited|found|not_found|skipped|truncated).
+code: {{ link_map.is_code }}
+generated_at: {{ link_map.generated_at | or_missing: null }}
+source:
+  type: {{ link_map.source.type }}
+  ref: {{ link_map.source.ref | yaml }}
+limits:
+  max_nodes: {{ link_map.limits.max_nodes }}
+  max_depth: {{ link_map.limits.max_depth | or_missing: null }}
+counts:
+  nodes: {{ link_map.counts.nodes }}
+  truncated: {{ link_map.counts.truncated }}
+  by_kind:
+{{#each link_map.counts.by_kind}}    {{ @key }}: {{ . }}
+{{/each}}nodes:
+{{#each link_map.nodes}}  - id: {{ .id }}
+    kind: {{ .kind }}
+    ref:
+{{ .ref_yaml }}    origin:
+{{ .origin_yaml }}    subject: {{ .subject | yaml }}
+    title: {{ .title | yaml }}
+    url: {{ .url | yaml }}
+    depth: {{ .depth }}
+    parent: {{ .parent | or_missing: null }}
+    expand: [{{ .expand }}]
+    candidate_for: [{{ .candidate_for }}]
+    status: {{ .status }}
+{{/each}}inputs:
+{{#each link_map.inputs}}  {{ @key }}:
+    blocking: {{ .blocking }}
+    candidates: [{{ .candidates }}]
+    rule: {{ .rule | yaml }}
+{{/each}}

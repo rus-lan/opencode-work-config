@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Вопросы по пробелам задачи",
+  "description": "Артефакт прогона questions.json: список вопросов, которые нужно задать, чтобы закрыть пробелы. id = \"q.\" + id пробела; вопросы отсортированы по id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_key",
+    "generated_at",
+    "questions",
+    "comment_draft_path"
+  ],
+  "properties": {
+    "task_key": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Ключ задачи Jira как есть."
+    },
+    "generated_at": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Момент формирования списка вопросов в UTC."
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Вопросы, отсортированы по id.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "text",
+          "why",
+          "target_role",
+          "where_to_find",
+          "blocking"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^q\\.\\S+$",
+            "description": "Идентификатор вопроса: \"q.\" + id пробела."
+          },
+          "text": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Текст вопроса."
+          },
+          "why": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Зачем нужен ответ: как он влияет на оценку."
+          },
+          "target_role": {
+            "enum": [
+              "BA",
+              "SA",
+              "BE",
+              "FE",
+              "QA",
+              "DEVOPS",
+              "OTHER"
+            ],
+            "description": "Кому адресован вопрос."
+          },
+          "where_to_find": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Где искать ответ."
+          },
+          "blocking": {
+            "type": "boolean",
+            "description": "true для REQUIRED-пробелов, false иначе."
+          }
+        }
+      }
+    },
+    "comment_draft_path": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Путь к черновику комментария относительно корня проекта."
+    }
+  }
+}

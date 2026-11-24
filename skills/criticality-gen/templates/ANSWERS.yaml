@@ -1,0 +1,78 @@
+# ANSWERS.yaml — ответы человека на вопросы `make ask` по ИС <код>.
+#
+# Зачем: `ask` задаёт вопросы, но ответы должны попасть в лист требований
+# детерминированно. Этот файл — вход команды
+# `make ask-answers IS=<код> ANSWERS=<файл>`: она валидирует каждое значение
+# теми же правилами, что гейт, и пишет принятые в DATA-REQUIREMENTS.yaml.
+# В INFORMATION.yaml пишет только `make enrich-apply` (инвариант «факт-или-null»).
+#
+# Номера кандидатов — из блока «Найденные кандидаты» файла ASK.md (нумерация
+# с 1). Ответы принимаются только на русском (R16).
+#
+# choice:
+#   candidate  — взять найденного кандидата (source наследуется от кандидата);
+#   manual     — своё значение; source ОБЯЗАТЕЛЕН;
+#   source_url — человек дал ссылку на страницу/дерево страниц: укажите
+#                source_url и дословную цитату в extracted.quote; для ссылки
+#                Confluence провенанс станет
+#                {type: confluence, ref: 'page_id=<id>; «<цитата>»'}, для
+#                остальных http(s) — {type: manual, ref: '<url>; «<цитата>»'};
+#   freeform   — человек написал данные текстом: text + extracted {value,
+#                quote}; source ОБЯЗАТЕЛЕН (без него значение не принимается);
+#   waive      — осознанный отказ от данных (R17): reason (>= 10 символов) и
+#                fallback.mode (assume_worst | assume_best | assume_value;
+#                assume_value требует fallback.value). Вход закрывается,
+#                значения нет, оценка становится предварительной (диапазон);
+#   deferred   — оставить advisory-вход незакрытым (blocking-вход оставит ИС
+#                в BLOCKED);
+#   exclude    — исключить ИС из расчёта; нужна причина (excluded.reason).
+#
+# `is` — код ИС: проверяется при приёме ответов, чужой файл не применяется.
+# `status` в ответах не пишется — проставляется автоматически (`confirmed`;
+# для waive — `waived`). `decided_by`/`date` берутся из ответа, иначе
+# «пользователь» и дата прогона.
+# `excluded.reason` и непустые `answers` в одном файле несовместимы: исключение
+# и приём ответов — два разных прогона.
+#
+# Пример ниже — образец формы, а не данные проекта.
+is: <код>
+answers:
+  peak_hour_load:
+    choice: candidate
+    candidate: 1
+  consumers_type:
+    choice: candidate
+    candidate: 1
+  object_sla:
+    choice: manual
+    value: 60
+    unit: мин
+    source:
+      type: confluence
+      ref: 'page_id=<page_id>, таблица «Классификация инцидентов»'
+  outage_impact:
+    choice: source_url
+    source_url: 'https://space.samokat.ru/pages/viewpage.action?pageId=<page_id>'
+    extracted:
+      value: 'Не оказана услуга в заявленный SLA срок (Внутренние и Внешние клиенты)'
+      quote: 'Не оказана услуга в заявленный SLA срок'
+  time_to_impact:
+    choice: freeform
+    text: 'Последствия наступают через 2–3 часа, подтвердил SRE'
+    extracted:
+      value: '1-12h'
+      quote: 'последствия через 2–3 часа'
+    source:
+      type: manual
+      ref: 'SRE: Иванов, сессия <дата>'
+  cia:
+    choice: waive
+    reason: 'ИБ не дала оценки C/I/A до срока'
+    decided_by: пользователь
+    date: '2026-11-18'
+    fallback:
+      mode: assume_worst
+  axes_scores:
+    choice: deferred
+excluded:
+  reason: null

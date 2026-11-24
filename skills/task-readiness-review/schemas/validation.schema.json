@@ -1,0 +1,306 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Результат проверки готовности задачи",
+  "description": "Артефакт прогона validation.json: по одной записи на правило проверки плюс итоговый вердикт. checks отсортированы по id, gaps — по id; порядок проверяется тестами, а не схемой.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_key",
+    "checked_at",
+    "template",
+    "checks",
+    "verdict",
+    "gaps",
+    "with_dependencies"
+  ],
+  "properties": {
+    "task_key": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Ключ задачи Jira как есть."
+    },
+    "checked_at": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Момент проверки в UTC."
+    },
+    "template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "sha256"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Имя файла шаблона, по которому проверяли."
+        },
+        "version": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Версия шаблона."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "sha256 файла шаблона."
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Результаты правил, отсортированы по id.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "section",
+          "severity",
+          "status",
+          "evidence",
+          "message"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Стабильный идентификатор правила, уникальный в файле."
+          },
+          "section": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Раздел шаблона, к которому относится правило."
+          },
+          "severity": {
+            "enum": [
+              "REQUIRED",
+              "RECOMMENDED",
+              "OPTIONAL"
+            ],
+            "description": "Важность правила."
+          },
+          "status": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "NA",
+              "UNKNOWN"
+            ],
+            "description": "Результат проверки: NA — правило неприменимо, UNKNOWN — данных для проверки нет."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Факт из задачи, на котором основан вывод. Пустая строка допустима для PASS/NA."
+          },
+          "why": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Почему правило важно: влияние на объём, проверяемость или риск. Необязательное поле — отчёт печатает его второй половиной пункта «что не хватает — почему это влияет»."
+          },
+          "message": {
+            "type": "string",
+            "description": "Человекочитаемое пояснение результата."
+          }
+        }
+      }
+    },
+    "verdict": {
+      "enum": [
+        "OK",
+        "BLOCKED",
+        "WARN"
+      ],
+      "description": "BLOCKED — есть REQUIRED+FAIL; WARN — есть FAIL у RECOMMENDED/OPTIONAL или UNKNOWN у REQUIRED; иначе OK."
+    },
+    "gaps": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Пробелы по одной записи на FAIL/UNKNOWN с severity != OPTIONAL, отсортированы по id.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "severity",
+          "question",
+          "target_role",
+          "where_to_find"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Идентификатор правила, породившего пробел."
+          },
+          "severity": {
+            "enum": [
+              "REQUIRED",
+              "RECOMMENDED",
+              "OPTIONAL"
+            ],
+            "description": "Важность пробела."
+          },
+          "question": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Вопрос, который нужно задать, чтобы закрыть пробел."
+          },
+          "target_role": {
+            "enum": [
+              "BA",
+              "SA",
+              "BE",
+              "FE",
+              "QA",
+              "DEVOPS",
+              "OTHER"
+            ],
+            "description": "Кому адресован вопрос."
+          },
+          "where_to_find": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Где искать ответ."
+          },
+          "why": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Почему пробел важен: влияние на объём, проверяемость или риск. Необязательное поле — отчёт печатает его второй половиной компактного пункта «что не хватает — почему это влияет»."
+          }
+        }
+      }
+    },
+    "with_dependencies": {
+      "type": "boolean",
+      "description": "Учитывались ли связанные задачи при проверке."
+    },
+    "work_intent": {
+      "type": "array",
+      "description": "Что делается по задаче (analysis.work_intent): вид работ, определённый по заголовку и тексту в совокупности. Ось смысла, отдельная от метрик: на вердикт и на числа оценки не влияет. Необязательное поле — артефакты до появления оси остаются валидными.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["intent", "confidence", "evidence", "source"],
+        "properties": {
+          "intent": {
+            "enum": [
+              "schema_migration",
+              "data_migration",
+              "data_export",
+              "dashboard",
+              "integration",
+              "refactor",
+              "test_coverage",
+              "research"
+            ],
+            "description": "Вид работ: миграция структуры БД, перенос данных, выгрузка, дашборд, интеграция, рефакторинг, тесты, исследование."
+          },
+          "confidence": {
+            "enum": ["high", "medium", "low"],
+            "description": "Сила сигнала: заголовок важнее текста, сильный признак — слабого."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Цитата из задачи (до 120 символов), на которой основан вывод."
+          },
+          "source": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Где найдено: summary, description или sections.<key>."
+          }
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Содержательный анализ задачи (analysis.analyze): метрики, по которым работают правила CL-*. Необязательное поле — артефакты до появления анализа остаются валидными.",
+      "properties": {
+        "clarity": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "score": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence": {"type": "array"},
+            "notes": {"type": "array"}
+          }
+        },
+        "testability": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "score": {"type": "number", "minimum": 0, "maximum": 1},
+            "measurable_criteria": {"type": "integer", "minimum": 0},
+            "expected_actual": {"type": "boolean"}
+          }
+        },
+        "reproduction": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "score": {"type": "number", "minimum": 0, "maximum": 1},
+            "steps": {"type": "integer", "minimum": 0},
+            "applicable": {"type": "boolean"}
+          }
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "score": {"type": "number", "minimum": 0, "maximum": 1},
+            "components": {"type": "integer", "minimum": 0},
+            "out_of_scope": {"type": "boolean"}
+          }
+        },
+        "dependencies": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "score": {"type": "number", "minimum": 0, "maximum": 1},
+            "links": {"type": "integer", "minimum": 0},
+            "integrations": {"type": "integer", "minimum": 0},
+            "link_types": {"type": "object"}
+          }
+        },
+        "scenarios": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "count": {"type": "integer", "minimum": 0}
+          }
+        },
+        "area": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "name": {"type": "string"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        },
+        "ambiguity": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "markers": {"type": "integer", "minimum": 0},
+            "ratio": {"type": "number", "minimum": 0}
+          }
+        },
+        "signals": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "numbers": {"type": "integer", "minimum": 0},
+            "dates": {"type": "integer", "minimum": 0},
+            "systems": {"type": "integer", "minimum": 0},
+            "vague_ratio": {"type": "number", "minimum": 0}
+          }
+        }
+      }
+    }
+  }
+}

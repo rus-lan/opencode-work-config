@@ -120,7 +120,6 @@
     "servers": {
       "grafana": {
         "type": "local",
-        "enabled": true,
         "command": ["bash", "/home/ruslan/.local/bin/run-grafana-mcp.sh"],
         "timeout": 10000
       },
@@ -147,6 +146,15 @@
       "holst": {
         "type": "remote",
         "url": "http://127.0.0.1:47641/mcp"
+      },
+      "cedrus": {
+        "type": "local",
+        "command": [
+          "uvx",
+          "cedrus-mcp",
+          "--save-dir",
+          "~/cedrus-maps"
+        ]
       },
       "confluence_samokat_read_only": {
         "type": "remote",
@@ -211,6 +219,30 @@
           "Authorization": "Bearer {env:OBSIDIAN_TOKEN}"
         },
         "oauth": false
+      },
+      "mcp-gitsearch": {
+        "type": "local",
+        "command": ["/home/ruslan/.local/share/gitsearch-mcp/run-gitsearch-ecom-mcp.sh", "--stdio"]
+      },
+      "ssot-mcp": {
+        "type": "local",
+        "command": ["/home/ruslan/.local/share/ssot-mcp/run-ssot-ecom-mcp.sh", "--stdio"],
+        // state вынесен из каталога установки: сервер падает, если SSOT_STATE_DIR внутри REPO_ROOT
+        "environment": {
+          "SSOT_STATE_DIR": "/home/ruslan/.local/share/ssot-mcp-state"
+        },
+        // wait-инструменты ждут до 1140000 мс (MAX_WAIT_MS); клиент должен давать больше
+        "timeout": 1200000
+      },
+      "duck-harness": {
+        "type": "local",
+        "command": ["/home/ruslan/.local/share/duck-harness/bin/duck-harness", "-stdio", "-ext", "/home/ruslan/.local/share/duck-harness/ext/sqlite_scanner.duckdb_extension"],
+        // холодный старт на opencode.db (5.7 ГБ) ~10.6 с — даём запас
+        "timeout": 60000
+      },
+      "watcher": {
+        "type": "local",
+        "command": ["/home/ruslan/bin/watcher-mcp", "--db", "/home/ruslan/memory/watcher.db"]
       }
     }
   },

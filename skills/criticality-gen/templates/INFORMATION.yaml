@@ -1,0 +1,180 @@
+# INFORMATION.yaml — слой данных между SSoT и паспортом критичности.
+#
+# Путь: is/{{ is_code }}/INFORMATION.yaml  (legacy: is/<контур>/<name_is>/INFORMATION.yaml)
+# Кто пишет: `make prepare` (python3 scripts/criticality.py prepare --apply).
+# Процесс: INFORMATION.md, docs/09-pipeline.md.
+#
+# ЧТО ЗАПОЛНЯЕТСЯ АВТОМАТИЧЕСКИ (перезаписывается при каждом `make prepare`):
+#   meta, identity, components, resources, duties, links, roles, ssot_snapshot.
+#   Источник — ssot/entities/information-systems/<код ИС>/*.yaml и catalog.yaml,
+#   переопределения — is.yaml (product, teamName).
+#
+# ЧТО ЗАПОЛНЯЕТСЯ РУКАМИ (prepare никогда не перезаписывает эти секции):
+#   criteria_inputs, facts, conflicts, notes, publication.
+#   Эти данные переживают повторный `make prepare`; их не нужно восстанавливать.
+#
+# Секция facts — обогащение паспорта (влияние, E2E, зависимости, данные, риски,
+# поддержка, ADR). `make start` рендерит из неё разделы CRITICALITY.md и
+# action-пакеты. Пустой список/null — это «данных нет», а не «нет раздела».
+#
+# ЧТО НИКОГДА НЕ ВЫДУМЫВАЕТСЯ:
+#   любое число или факт без источника остаётся null, а status — missing.
+#   Нет источника -> null + status: missing, а не «примерное значение».
+#   Допустимые status: missing | derived | confirmed.
+#     missing   — значения нет, расчёт блокируется (make check -> BLOCKED);
+#     derived   — значение выведено из другого поля/источника, нужно подтверждение;
+#     confirmed — значение подтверждено владельцем (PdM/TL/SRE).
+#
+# Плейсхолдеры {{ ... }} подставляет генератор этапа 2b. Сейчас файл — ориентир
+# структуры и источник скелета criteria_inputs для `prepare`.
+
+schema_version: 1
+is: "{{ is_code }}"
+
+meta:
+  generated_by: criticality-gen
+  layout: "is/{{ is_code }}"
+  sources:
+    - type: ssot
+      ref: "ssot/entities/information-systems/{{ is_code }}/base.yaml"
+    - type: ssot
+      ref: "ssot/entities/information-systems/{{ is_code }}/components.yaml"
+    - type: is_yaml_override
+      ref: "is.yaml#is.{{ is_code }}"
+
+identity:
+  # code и contour — производные идентификаторы (split_is_code), провенанса не имеют.
+  code: "{{ is_code }}"
+  name: null                # base.yaml -> title
+  name_source: null         # { type: ssot, ref: .../base.yaml#title }
+  contour: "{{ contour }}"
+  asset: null               # catalog.yaml -> asset
+  asset_source: null        # { type: catalog, ref: catalog.yaml#systems.<код>.asset }
+  type: null                # base.yaml -> other.type
+  type_source: null         # { type: ssot, ref: .../base.yaml#other.type }
+  status: null
+  lifecycle: null           # base.yaml -> lifecycle (НЕ status паспорта)
+  lifecycle_source: null    # { type: ssot, ref: .../base.yaml#lifecycle }
+  product: null             # base.yaml -> other.product, переопределяется is.yaml
+  product_source: null      # { type: ssot|is_yaml_override, ref: ... }
+  team: null                # base.yaml -> teamName, переопределяется is.yaml
+  team_source: null         # { type: ssot|is_yaml_override, ref: ... }
+  criticality_ssot: null    # base.yaml -> severity.type (нормализация)
+  criticality_source: null  # { type: ssot, ref: .../base.yaml#severity.type }
+  arch_code: null           # catalog.yaml, если ИС там есть
+  arch_code_source: null    # { type: catalog, ref: catalog.yaml#systems.<код> }
+
+# contacts — контакты команды-владельца (TA/TL/SRE и др.).
+# contacts: сгенерировано make contacts из ssot/entities/teams/<team>/team.yaml; вручную не править.
+# contacts: упоминание в RocketChat — @<login> (соответствия login -> ФИО в SSoT нет).
+contacts:
+  team: null                # код команды из catalog.yaml -> team (нижний регистр)
+  source: null              # { type: ssot, ref: entities/teams/<team>/team.yaml }
+  groups: {}                # { <роль>: [<login>, ...] }, например { ta: [dkozlov], tl: [ipilyaev] }
+
+components:
+  - name: null
+    description: null
+    language: null             # components.yaml -> programmingLanguage
+    language_source: null      # { type: ssot, ref: .../components.yaml#<name>.programmingLanguage }
+    status: null               # components.yaml -> lifecycle
+    status_source: null        # { type: ssot, ref: .../components.yaml#<name>.lifecycle }
+    git_repository: null
+    cloned_to: null
+    clone_status: not_cloned   # not_cloned | cloned | updated | error
+
+resources: []                  # resources.yaml -> sites/k8sClusters/netboxRoles/infraResources
+duties: []                     # duty.yaml -> onCallSchedule (startTime — HH:MM)
+links: {}
+roles: []
+
+# Дословно распарсенные файлы SSoT (провенанс; prepare перезаписывает).
+ssot_snapshot: {}
+
+# --- РУЧНЫЕ ДАННЫЕ: prepare не перезаписывает ------------------------------
+criteria_inputs:
+  peak_hour_load:
+    value: null
+    unit: "клиентов/час"
+    source: null
+    status: missing
+  consumers_type:
+    value: null
+    source: null
+    status: missing
+  outage_impact:
+    value: null
+    source: null
+    status: missing
+  object_sla:
+    value: null
+    unit: "мин"
+    source: null
+    status: missing
+  time_to_impact:
+    value: null
+    bucket: null
+    source: null
+    status: missing
+  axes_scores:
+    legal: null
+    economic: null
+    reputational: null
+    client: null
+    source: null
+    status: missing
+  cia:
+    c: null
+    i: null
+    a: null
+    source: null
+    status: missing
+
+# --- facts: обогащение паспорта (prepare не перезаписывает) -----------------
+facts:
+  impact_chain: []            # [{ what_breaks, who_notices, source, status }]
+  # E2E-процессы ИС: строка (просто название) или { name, page_id, url,
+  # evidence, steps, total_steps, source_version_page_id, source: { type:
+  # confluence, ref: "page_id=<версия>" } }. Источник — Product scope продукта
+  # (catalog.yaml → product_scope_page_id), функциональные области с меткой
+  # functional-area; колонка «Сквозной бизнес-процесс (e2e)*», либо каталог
+  # сквозных процессов (`make research` → RESEARCH.md).
+  # `name` в артефактах берётся из кеша проверенных заголовков (R19), не отсюда.
+  # `evidence` — direct | indirect; `steps`/`total_steps` — «шагов N из M».
+  e2e_processes: []
+  # Страница функциональной области Product scope, которая называет эту ИС
+  # (колонка «Код мастер-системы (опционально)»). Нет данных — null.
+  # ВНИМАНИЕ: поле `title` НЕ печатается в артефактах и здесь не нужно —
+  # название берётся только из проверенного кеша catalog.yaml → page_titles
+  # (make verify-titles FIX=1). Вписанный руками title игнорируется (R19).
+  e2e_source_page: null       # { page_id, url }
+  # filled | not_filled | not_found:
+  #   filled     — процессы перечислены в e2e_processes;
+  #   not_filled — область ИС называет, но колонка e2e у неё пуста;
+  #   not_found  — ни одна область Product scope не указывает ИС.
+  e2e_status: null
+  dependencies:
+    upstream: []              # [{ name, type, source, status }]
+    downstream: []            # [{ name, type, source, status }]
+  data_classification: []     # [{ kind, value, source, status }]  # ПДн, КТ, SORM...
+  risks: []                   # [{ title, description, owner, source, status }]
+  support:
+    sla_incidents: null
+    availability: null
+    hours: null
+    source: null
+    status: missing
+  adr: []                     # [{ id, title, status, link }]
+  decision_log: null
+
+# [{ field, values: [...], chosen, rule, status }]
+conflicts: []
+
+notes: []
+
+# publication — свободный текст для треда #Criticality_assessment (необязательно).
+# extra_info — «Дополнительная информация по оценке»: пусто/нет ключа -> буллет
+# в публикации не рендерится (никакого ⛔ и блокировки отправки). Источник:
+# publication.extra_info; fallback на строковый notes — только для legacy.
+publication:
+  extra_info: null

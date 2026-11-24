@@ -1,0 +1,249 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Манифест бандла обученных артефактов",
+  "description": "Файл manifest.json внутри переносимого бандла (.tar.gz), который собирает `trr artifact pack`. Описывает происхождение модели (проект, борд, спринты, страница эталона), состав корпуса, версию и checksum модели и контрольные суммы каждого файла бандла. Манифест читается `trr artifact inspect` и проверяется `trr artifact unpack`: artifact_version, sha256 файлов и model.checksum обязаны сойтись, иначе импорт блокируется. Сам manifest.json в files[] не входит — он не может содержать свой собственный sha256.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_version",
+    "created_at",
+    "skill_version",
+    "model",
+    "origin",
+    "corpus",
+    "files"
+  ],
+  "properties": {
+    "artifact_version": {
+      "type": "integer",
+      "enum": [
+        1
+      ],
+      "description": "Версия формата бандла. Сейчас ровно 1; неизвестная версия при распаковке — SCHEMA_ERROR (5), а не молчаливый импорт."
+    },
+    "created_at": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Момент сборки бандла в UTC. Единственное недетерминированное поле; при TASK_READINESS_FIXED_TIME=1 подставляется 1970-01-01T00:00:00Z, чтобы два pack давали побайтово одинаковый архив."
+    },
+    "skill_version": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Версия скилла, собравшего бандл (файл VERSION), формат X.Y.Z."
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "checksum",
+        "scale",
+        "buckets",
+        "absent_roles"
+      ],
+      "description": "Сводка модели оценки: версия, контрольная сумма и ключевые параметры. Полная модель лежит в model/estimation-model.json.",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Версия модели (estimation-model.json → version)."
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "sha256 канонического JSON модели без поля checksum, с префиксом sha256: (например sha256:0a2162f0…). Сверяется при распаковке с пересчитанным значением."
+        },
+        "scale": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "description": "Шкала Story Points модели.",
+          "items": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              5,
+              8,
+              13,
+              21
+            ]
+          }
+        },
+        "buckets": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Сколько бакетов в модели."
+        },
+        "absent_roles": {
+          "type": "array",
+          "description": "Роли, которых нет в эталоне (сейчас BA и SA).",
+          "items": {
+            "enum": [
+              "BA",
+              "SA",
+              "BE",
+              "FE",
+              "QA",
+              "DEVOPS",
+              "OTHER"
+            ]
+          }
+        }
+      }
+    },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project",
+        "board_id",
+        "sprints",
+        "reference_page_id",
+        "reference_url"
+      ],
+      "description": "Откуда модель обучена. project сверяется при распаковке с jira.project конфига: чужой проект требует --allow-foreign-project, иначе оценка будет смещена.",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Ключ проекта Jira, на данных которого обучена модель (jira.project). Пустая строка — проект не был задан."
+        },
+        "board_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "Борд Jira, из которого взята выборка спринтов; null — борд не зафиксирован."
+        },
+        "sprints": {
+          "type": "array",
+          "minItems": 0,
+          "description": "Названия спринтов корпуса, в порядке выборки.",
+          "items": {
+            "type": "string",
+            "pattern": "\\S"
+          }
+        },
+        "reference_page_id": {
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ],
+          "pattern": "\\S",
+          "description": "id страницы эталона Story Points; null — эталон не зафиксирован."
+        },
+        "reference_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "\\S",
+          "description": "Ссылка на страницу эталона; null — ссылки нет."
+        }
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rows",
+        "sprints",
+        "insufficient_buckets"
+      ],
+      "description": "Состав корпуса, на котором обучена модель: сколько строк, спринтов и бакетов с недостаточной выборкой.",
+      "properties": {
+        "rows": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Число строк выборки спринтов (norm/sprint-sample.json → rows)."
+        },
+        "sprints": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Число спринтов корпуса."
+        },
+        "insufficient_buckets": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Сколько бакетов статистики помечены insufficient (n < min_sample_n)."
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Файлы бандла (кроме manifest.json) с контрольными суммами. Порядок фиксирован: norm/reference-estimates.json, norm/sprint-sample.json (если включён), norm/task-texts.json (если есть), norm/sprint-stats.json, norm/task-vectors.json (если есть), model/estimation-model.json, model/estimation-model.md.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256",
+          "bytes"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Путь внутри бандла, относительно корня .task-readiness/."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "sha256 содержимого файла (без префикса)."
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Размер файла в байтах — вторая проверка целостности."
+          }
+        }
+      }
+    },
+    "published_page": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "url",
+        "hash"
+      ],
+      "description": "Опубликованная страница модели на момент сборки бандла; null — модель ещё не публиковалась. При распаковке из неё восстанавливается state.model_page, но только если hash совпадает с checksum модели.",
+      "properties": {
+        "system": {
+          "enum": [
+            "confluence",
+            "jira",
+            "obsidian",
+            "file"
+          ],
+          "description": "Система, где опубликована страница модели."
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "\\S",
+          "description": "Идентификатор страницы/заметки; null — берётся из url (pageId) при распаковке."
+        },
+        "url": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Ссылка на страницу модели."
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "sha256 канонического JSON модели на момент публикации, с префиксом sha256:. Совпадение с checksum модели — условие восстановления state.model_page."
+        }
+      }
+    }
+  }
+}
